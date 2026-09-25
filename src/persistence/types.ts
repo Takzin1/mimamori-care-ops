@@ -25,5 +25,6 @@ export interface AppendCaseEventInput {
 export interface CaseRepository {
   create(event: CaseCreatedEvent): Promise<CreateCaseResult>;
   load(tenantId: string, caseId: string): Promise<StoredCase | null>;
+  list(tenantId: string): Promise<StoredCase[]>;
   append(input: AppendCaseEventInput): Promise<CaseAggregate>;
 }

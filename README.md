@@ -24,6 +24,7 @@ What is already implemented and tested:
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
+- authorized, explainable Case Queue projection
 - Postgres/Supabase Case Store contract with RLS and fail-closed RPC access
 - Time to Completion and supporting operational metrics
 
@@ -31,7 +32,6 @@ Not yet production-ready:
 
 - production authentication provider integration
 - production Postgres repository adapter
-- Responder Console
 - deployment / observability / incident runbook
 
 See [Project Status](docs/project-status.md) and the open GitHub Issues for the active roadmap.
@@ -139,7 +139,7 @@ tests/
   core, persistence, authorization, E2E and SQL invariants
 
 docs/
-  architecture, reviewer guide, demo scenario, ADRs and release readiness
+  architecture, Case Queue contract, reviewer guide, demo scenario, ADRs and release readiness
 ```
 
 ## Review this repository in 10 minutes
