@@ -6,18 +6,37 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  core:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
       - uses: actions/setup-node@v5
         with:
           node-version: 24
 
-      - name: Typecheck core
+      - name: Reject whitespace errors
+        run: git diff --check HEAD^
+
+      - name: Typecheck
         run: npm run typecheck
 
-      - name: Core tests
+      - name: Tests
         run: npm test
+
+      - name: Coverage report
+        run: npm run test:coverage
+
+      - name: Package dry run
+        run: npm pack --dry-run --ignore-scripts
