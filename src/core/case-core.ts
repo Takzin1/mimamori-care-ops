@@ -1,6 +1,7 @@
 import {
   type CaseAggregate,
   type CaseCommand,
+  type CaseCreatedEvent,
   type CaseEvent,
   type NewCaseInput,
 } from "./types.ts";
@@ -41,13 +42,13 @@ function requireCurrentAssignee(
 
 export function createCase(input: NewCaseInput): {
   aggregate: CaseAggregate;
-  event: CaseEvent;
+  event: CaseCreatedEvent;
 } {
   requireText(input.id, "case id");
   requireText(input.tenantId, "tenant id");
   requireText(input.subjectId, "subject id");
 
-  const event: CaseEvent = {
+  const event: CaseCreatedEvent = {
     type: "case_created",
     sequence: 1,
     at: input.createdAt,
