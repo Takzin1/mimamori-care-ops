@@ -481,7 +481,7 @@ returns jsonb
 language plpgsql
 security invoker
 set search_path = public
-as $
+as $$
 declare
   v_id bigint;
   v_created boolean := false;
@@ -560,7 +560,7 @@ returns jsonb
 language plpgsql
 security invoker
 set search_path = public
-as $
+as $$
 declare
   v_result jsonb;
 begin
@@ -654,7 +654,7 @@ returns jsonb
 language plpgsql
 security invoker
 set search_path = public
-as $
+as $$
 declare
   v_updated bigint;
 begin
@@ -688,7 +688,7 @@ returns jsonb
 language plpgsql
 security invoker
 set search_path = public
-as $
+as $$
 declare
   v_updated bigint;
   v_status text;
