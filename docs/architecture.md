@@ -211,3 +211,22 @@ Workers claim outbox work with bounded leases and `FOR UPDATE SKIP LOCKED`, then
 Delivery is at-least-once. Stable `deliveryKey` values are the logical idempotency boundary for downstream providers.
 
 SLA evaluation remains pure; derived escalation recommendations are enqueued separately through the same outbox infrastructure.
+
+
+## Production identity invariant
+
+Human-facing application requests do not accept a trusted `principalId` from the caller.
+
+The server path is:
+
+```
+access token
+  -> PrincipalAuthenticator
+  -> verified principalId
+  -> persistent tenant membership
+  -> Care Ops authorization
+```
+
+Authentication proves identity; it does not grant tenant access.
+
+Care Ops actor identity and roles are resolved from `care_tenant_memberships`, not user-editable profile metadata. Invalid authentication fails before Case/Queue access.
