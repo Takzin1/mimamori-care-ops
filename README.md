@@ -167,6 +167,8 @@ NEW
 
 The demo is intentionally disconnected from production data until production identity integration is implemented.
 
+Deployment guide: [Reviewer Demo Deployment](docs/reviewer-demo-deployment.md). A dedicated Vercel project is required; do not reuse legacy Mimamori projects.
+
 ## Review this repository in 10 minutes
 
 Start here:
