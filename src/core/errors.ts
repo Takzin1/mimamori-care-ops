@@ -1,14 +1,15 @@
 export class CaseConflictError extends Error {
   readonly code = "CASE_VERSION_CONFLICT";
+  readonly expectedVersion: number;
+  readonly actualVersion: number;
 
-  constructor(
-    readonly expectedVersion: number,
-    readonly actualVersion: number,
-  ) {
+  constructor(expectedVersion: number, actualVersion: number) {
     super(
       `Case version conflict: expected ${expectedVersion}, actual ${actualVersion}`,
     );
     this.name = "CaseConflictError";
+    this.expectedVersion = expectedVersion;
+    this.actualVersion = actualVersion;
   }
 }
 
