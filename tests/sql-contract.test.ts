@@ -82,11 +82,33 @@ test("Data API access is fail-closed to server-side service role", async () => {
     false,
     "persistence RPCs must remain security-invoker",
   );
-  assert.equal(
-    source.match(/security invoker/g)?.length,
-    2,
-    "both persistence RPCs must explicitly remain security-invoker",
-  );
+  for (const name of [
+    "create_care_case",
+    "append_care_case_event",
+    "enqueue_care_outbox",
+    "claim_care_outbox",
+    "complete_care_outbox",
+    "fail_care_outbox",
+  ]) {
+    const start = source.indexOf(
+      "create or replace function public." + name,
+    );
+    assert.ok(start >= 0, name + " must exist");
+
+    const next = source.indexOf(
+      "create or replace function public.",
+      start + 1,
+    );
+    const body = source.slice(
+      start,
+      next >= 0 ? next : source.length,
+    );
+
+    assert.ok(
+      body.includes("security invoker"),
+      name + " must explicitly remain security-invoker",
+    );
+  }
 });
 
 
@@ -173,5 +195,102 @@ test("Postgres snapshot persists priority changes as operational state", async (
     append.includes(
       "set priority = p_snapshot->>'priority'",
     ),
+  );
+});
+
+
+test("transactional outbox is durable, idempotent, and lease-based", async () => {
+  const source = await sql();
+
+  assert.ok(
+    source.includes(
+      "create table if not exists public.care_outbox",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "unique (tenant_id, delivery_key)",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "'case.event.committed'",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "'case-event:' || v_case_id || ':' || v_event_sequence",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "'case-event:' || p_case_id || ':' || v_event_sequence",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "for update skip locked",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "status = 'dead_letter'",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "'delivery_key_reuse'",
+    ),
+  );
+});
+
+test("outbox RPC access is server-only", async () => {
+  const source = await sql();
+
+  assert.ok(
+    source.includes(
+      "revoke all on table public.care_outbox from public, anon, authenticated",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "revoke execute on function public.claim_care_outbox",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant execute on function public.claim_care_outbox",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "revoke delete on table public.care_outbox from service_role",
+    ),
+  );
+});
+
+
+test("PLpgSQL function delimiters remain balanced", async () => {
+  const source = await sql();
+
+  assert.equal(
+    source.match(/\nas \$\n/g)?.length ?? 0,
+    0,
+    "single-dollar function openers are invalid",
+  );
+  assert.equal(
+    source.match(/\nas \$\$\n/g)?.length ?? 0,
+    6,
+    "all six persistence RPCs must open with double-dollar delimiters",
+  );
+  assert.equal(
+    source.match(/\n\$;\n/g)?.length ?? 0,
+    0,
+    "single-dollar function terminators are invalid",
+  );
+  assert.equal(
+    source.match(/\n\$\$;\n/g)?.length ?? 0,
+    6,
+    "all six persistence RPCs must close with double-dollar delimiters",
   );
 });

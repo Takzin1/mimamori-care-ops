@@ -198,3 +198,16 @@ The operational worklist is a derived read model, not another Case state machine
 Responder-only scopes expose current ownership and incoming handoffs. Dispatcher, supervisor, and auditor read scopes may see the tenant-wide queue.
 
 UI clients must not reproduce queue ranking or SLA logic independently.
+
+
+## External side-effect invariant
+
+Case transactions do not call external notification providers.
+
+A committed Case event and its durable `case.event.committed` outbox message are written in the same database transaction.
+
+Workers claim outbox work with bounded leases and `FOR UPDATE SKIP LOCKED`, then invoke provider-specific adapters after the transaction has committed.
+
+Delivery is at-least-once. Stable `deliveryKey` values are the logical idempotency boundary for downstream providers.
+
+SLA evaluation remains pure; derived escalation recommendations are enqueued separately through the same outbox infrastructure.

@@ -9,6 +9,7 @@ ADRs document decisions that change the meaning or safety boundary of the Care O
 | [0003](0003-tenant-staff-command-authorization.md) | Tenant staff command authorization | Accepted |
 | [0004](0004-signal-idempotency.md) | Signal idempotency and immutable lineage | Accepted |
 | [0005](0005-priority-sla-aging.md) | Explicit priority and deterministic SLA aging | Accepted |
+| [0006](0006-transactional-outbox.md) | Transactional outbox for external side effects | Accepted |
 
 ## When to add an ADR
 

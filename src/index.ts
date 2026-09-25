@@ -3,3 +3,4 @@ export * from "./persistence/index.ts";
 export * from "./access/index.ts";
 export * from "./application/index.ts";
 export * from "./operations/index.ts";
+export * from "./outbox/index.ts";

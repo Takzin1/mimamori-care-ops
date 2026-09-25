@@ -48,6 +48,9 @@ Do not treat completion of the Core as production approval.
 
 - [ ] structured logs
 - [ ] metrics / alerting
+- [ ] outbox worker identity / credentials separated
+- [ ] dead-letter queue monitoring and response owner
+- [ ] delivery-key idempotency strategy validated per provider
 - [ ] incident response runbook
 - [ ] on-call / escalation ownership
 - [ ] health checks
