@@ -121,6 +121,21 @@ export class InMemoryCaseRepository implements CaseRepository {
     };
   }
 
+  async list(tenantId: string): Promise<StoredCase[]> {
+    const results: StoredCase[] = [];
+
+    for (const record of this.records.values()) {
+      if (record.aggregate.tenantId !== tenantId) continue;
+
+      results.push({
+        aggregate: clone(record.aggregate),
+        events: clone(record.events),
+      });
+    }
+
+    return results;
+  }
+
   async append(input: AppendCaseEventInput): Promise<CaseAggregate> {
     const storageKey = key(input.tenantId, input.caseId);
     const record = this.records.get(storageKey);
