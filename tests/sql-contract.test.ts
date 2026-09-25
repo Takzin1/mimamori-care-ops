@@ -175,3 +175,74 @@ test("Postgres snapshot persists priority changes as operational state", async (
     ),
   );
 });
+
+
+test("transactional outbox is durable, idempotent, and lease-based", async () => {
+  const source = await sql();
+
+  assert.ok(
+    source.includes(
+      "create table if not exists public.care_outbox",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "unique (tenant_id, delivery_key)",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "'case.event.committed'",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "'case-event:' || v_case_id || ':' || v_event_sequence",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "'case-event:' || p_case_id || ':' || v_event_sequence",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "for update skip locked",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "status = 'dead_letter'",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "'delivery_key_reuse'",
+    ),
+  );
+});
+
+test("outbox RPC access is server-only", async () => {
+  const source = await sql();
+
+  assert.ok(
+    source.includes(
+      "revoke all on table public.care_outbox from public, anon, authenticated",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "revoke execute on function public.claim_care_outbox",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant execute on function public.claim_care_outbox",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "revoke delete on table public.care_outbox from service_role",
+    ),
+  );
+});
