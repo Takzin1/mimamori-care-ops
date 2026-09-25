@@ -2,6 +2,7 @@ import type {
   CaseAggregate,
   CaseCommand,
   CaseEvent,
+  CasePriority,
   SignalType,
 } from "../core/types.ts";
 
@@ -11,6 +12,7 @@ export interface AttentionSignal {
   sourceAdapter: string;
   subjectId: string;
   type: SignalType;
+  priority: CasePriority;
 }
 
 type WithoutActor<T> = T extends { actorId: string }
