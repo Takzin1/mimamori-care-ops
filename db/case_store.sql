@@ -80,6 +80,34 @@ create table if not exists public.care_case_events (
     on delete restrict
 );
 
+create table if not exists public.care_outbox (
+  id bigint generated always as identity primary key,
+  tenant_id text not null,
+  topic text not null,
+  delivery_key text not null,
+  payload jsonb not null,
+  status text not null default 'pending' check (
+    status in (
+      'pending',
+      'processing',
+      'failed',
+      'delivered',
+      'dead_letter'
+    )
+  ),
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  max_attempts integer not null default 8 check (max_attempts >= 1),
+  available_at timestamptz not null default now(),
+  claimed_at timestamptz,
+  lease_until timestamptz,
+  worker_id text,
+  delivered_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (tenant_id, delivery_key)
+);
+
 create index if not exists care_cases_tenant_status_idx
   on public.care_cases (tenant_id, status, created_at);
 
@@ -93,17 +121,31 @@ create index if not exists care_cases_tenant_assignee_idx
 create index if not exists care_events_tenant_case_time_idx
   on public.care_case_events (tenant_id, case_id, occurred_at);
 
+create index if not exists care_outbox_ready_idx
+  on public.care_outbox (
+    tenant_id,
+    status,
+    available_at,
+    id
+  )
+  where status in ('pending', 'failed', 'processing');
+
 alter table public.care_cases enable row level security;
 alter table public.care_case_events enable row level security;
+alter table public.care_outbox enable row level security;
 
 revoke all on table public.care_cases from public, anon, authenticated;
 revoke all on table public.care_case_events from public, anon, authenticated;
+revoke all on table public.care_outbox from public, anon, authenticated;
 
 revoke delete on table public.care_cases from service_role;
 revoke update, delete on table public.care_case_events from service_role;
+revoke delete on table public.care_outbox from service_role;
 
 grant select, insert, update on table public.care_cases to service_role;
 grant select, insert on table public.care_case_events to service_role;
+grant select, insert, update on table public.care_outbox to service_role;
+grant usage, select on sequence public.care_outbox_id_seq to service_role;
 
 create or replace function public.create_care_case(
   p_snapshot jsonb,
@@ -263,6 +305,25 @@ begin
     p_event
   );
 
+  insert into public.care_outbox (
+    tenant_id,
+    topic,
+    delivery_key,
+    payload
+  )
+  values (
+    v_tenant_id,
+    'case.event.committed',
+    'case-event:' || v_case_id || ':' || v_event_sequence,
+    jsonb_build_object(
+      'tenantId', v_tenant_id,
+      'caseId', v_case_id,
+      'sequence', v_event_sequence,
+      'event', p_event
+    )
+  )
+  on conflict (tenant_id, delivery_key) do nothing;
+
   return jsonb_build_object(
     'ok', true,
     'created', true,
@@ -271,7 +332,7 @@ begin
     'snapshot', p_snapshot
   );
 end;
-$$;
+$;
 
 create or replace function public.append_care_case_event(
   p_tenant_id text,
@@ -382,12 +443,267 @@ begin
     p_event
   );
 
+  insert into public.care_outbox (
+    tenant_id,
+    topic,
+    delivery_key,
+    payload
+  )
+  values (
+    p_tenant_id,
+    'case.event.committed',
+    'case-event:' || p_case_id || ':' || v_event_sequence,
+    jsonb_build_object(
+      'tenantId', p_tenant_id,
+      'caseId', p_case_id,
+      'sequence', v_event_sequence,
+      'event', p_event
+    )
+  )
+  on conflict (tenant_id, delivery_key) do nothing;
+
   return jsonb_build_object(
     'ok', true,
     'version', v_next_version
   );
 end;
-$$;
+$;
+
+create or replace function public.enqueue_care_outbox(
+  p_tenant_id text,
+  p_topic text,
+  p_delivery_key text,
+  p_payload jsonb,
+  p_available_at timestamptz default now(),
+  p_max_attempts integer default 8
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $
+declare
+  v_id bigint;
+  v_created boolean := false;
+begin
+  if nullif(trim(p_tenant_id), '') is null
+     or nullif(trim(p_topic), '') is null
+     or nullif(trim(p_delivery_key), '') is null then
+    raise exception 'tenant, topic, and delivery key are required';
+  end if;
+
+  if p_max_attempts < 1 then
+    raise exception 'max attempts must be positive';
+  end if;
+
+  insert into public.care_outbox (
+    tenant_id,
+    topic,
+    delivery_key,
+    payload,
+    available_at,
+    max_attempts
+  )
+  values (
+    p_tenant_id,
+    p_topic,
+    p_delivery_key,
+    p_payload,
+    coalesce(p_available_at, now()),
+    p_max_attempts
+  )
+  on conflict (tenant_id, delivery_key) do nothing
+  returning id into v_id;
+
+  if v_id is not null then
+    v_created := true;
+  else
+    select id
+      into v_id
+      from public.care_outbox
+     where tenant_id = p_tenant_id
+       and delivery_key = p_delivery_key;
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'created', v_created,
+    'id', v_id
+  );
+end;
+$;
+
+create or replace function public.claim_care_outbox(
+  p_tenant_id text,
+  p_worker_id text,
+  p_limit integer default 50,
+  p_lease_seconds integer default 60
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $
+declare
+  v_result jsonb;
+begin
+  if nullif(trim(p_tenant_id), '') is null
+     or nullif(trim(p_worker_id), '') is null then
+    raise exception 'tenant and worker are required';
+  end if;
+
+  if p_limit < 1 or p_limit > 100 then
+    raise exception 'claim limit must be between 1 and 100';
+  end if;
+
+  if p_lease_seconds < 1 or p_lease_seconds > 3600 then
+    raise exception 'lease seconds must be between 1 and 3600';
+  end if;
+
+  update public.care_outbox
+     set status = 'dead_letter',
+         worker_id = null,
+         lease_until = null,
+         updated_at = now()
+   where tenant_id = p_tenant_id
+     and status = 'processing'
+     and lease_until < now()
+     and attempt_count >= max_attempts;
+
+  with candidates as (
+    select id
+      from public.care_outbox
+     where tenant_id = p_tenant_id
+       and attempt_count < max_attempts
+       and (
+         (
+           status in ('pending', 'failed')
+           and available_at <= now()
+         )
+         or (
+           status = 'processing'
+           and lease_until < now()
+         )
+       )
+     order by available_at, id
+     for update skip locked
+     limit p_limit
+  ),
+  claimed as (
+    update public.care_outbox o
+       set status = 'processing',
+           attempt_count = o.attempt_count + 1,
+           claimed_at = now(),
+           lease_until = now() + make_interval(secs => p_lease_seconds),
+           worker_id = p_worker_id,
+           updated_at = now()
+      from candidates c
+     where o.id = c.id
+    returning o.*
+  )
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', id,
+        'tenantId', tenant_id,
+        'topic', topic,
+        'deliveryKey', delivery_key,
+        'payload', payload,
+        'status', status,
+        'attemptCount', attempt_count,
+        'maxAttempts', max_attempts,
+        'availableAt', available_at,
+        'claimedAt', claimed_at,
+        'leaseUntil', lease_until,
+        'workerId', worker_id
+      )
+      order by id
+    ),
+    '[]'::jsonb
+  )
+    into v_result
+    from claimed;
+
+  return v_result;
+end;
+$;
+
+create or replace function public.complete_care_outbox(
+  p_tenant_id text,
+  p_id bigint,
+  p_worker_id text
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $
+declare
+  v_updated bigint;
+begin
+  update public.care_outbox
+     set status = 'delivered',
+         delivered_at = now(),
+         lease_until = null,
+         last_error = null,
+         updated_at = now()
+   where tenant_id = p_tenant_id
+     and id = p_id
+     and status = 'processing'
+     and worker_id = p_worker_id
+  returning id into v_updated;
+
+  return jsonb_build_object(
+    'ok', v_updated is not null,
+    'id', p_id
+  );
+end;
+$;
+
+create or replace function public.fail_care_outbox(
+  p_tenant_id text,
+  p_id bigint,
+  p_worker_id text,
+  p_error text,
+  p_retry_at timestamptz default now()
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $
+declare
+  v_updated bigint;
+  v_status text;
+begin
+  update public.care_outbox
+     set status = case
+           when attempt_count >= max_attempts
+             then 'dead_letter'
+           else 'failed'
+         end,
+         available_at = case
+           when attempt_count >= max_attempts
+             then available_at
+           else coalesce(p_retry_at, now())
+         end,
+         worker_id = null,
+         lease_until = null,
+         last_error = left(coalesce(p_error, 'delivery failed'), 1000),
+         updated_at = now()
+   where tenant_id = p_tenant_id
+     and id = p_id
+     and status = 'processing'
+     and worker_id = p_worker_id
+  returning id, status into v_updated, v_status;
+
+  return jsonb_build_object(
+    'ok', v_updated is not null,
+    'id', p_id,
+    'status', v_status
+  );
+end;
+$;
 
 revoke execute on function public.create_care_case(jsonb, jsonb)
   from public, anon, authenticated;
@@ -397,4 +713,22 @@ revoke execute on function public.append_care_case_event(text, text, bigint, jso
 grant execute on function public.create_care_case(jsonb, jsonb)
   to service_role;
 grant execute on function public.append_care_case_event(text, text, bigint, jsonb, jsonb)
+  to service_role;
+
+revoke execute on function public.enqueue_care_outbox(text, text, text, jsonb, timestamptz, integer)
+  from public, anon, authenticated;
+revoke execute on function public.claim_care_outbox(text, text, integer, integer)
+  from public, anon, authenticated;
+revoke execute on function public.complete_care_outbox(text, bigint, text)
+  from public, anon, authenticated;
+revoke execute on function public.fail_care_outbox(text, bigint, text, text, timestamptz)
+  from public, anon, authenticated;
+
+grant execute on function public.enqueue_care_outbox(text, text, text, jsonb, timestamptz, integer)
+  to service_role;
+grant execute on function public.claim_care_outbox(text, text, integer, integer)
+  to service_role;
+grant execute on function public.complete_care_outbox(text, bigint, text)
+  to service_role;
+grant execute on function public.fail_care_outbox(text, bigint, text, text, timestamptz)
   to service_role;
