@@ -44,9 +44,11 @@ export function createCase(input: NewCaseInput): {
   aggregate: CaseAggregate;
   event: CaseCreatedEvent;
 } {
-  requireText(input.id, "case id");
-  requireText(input.tenantId, "tenant id");
-  requireText(input.subjectId, "subject id");
+  const caseId = requireText(input.id, "case id");
+  const tenantId = requireText(input.tenantId, "tenant id");
+  const subjectId = requireText(input.subjectId, "subject id");
+  const sourceAdapter = requireText(input.sourceAdapter, "source adapter");
+  const sourceSignalId = requireText(input.sourceSignalId, "source signal id");
 
   const event: CaseCreatedEvent = {
     type: "case_created",
@@ -54,11 +56,12 @@ export function createCase(input: NewCaseInput): {
     at: input.createdAt,
     actorId: null,
     data: {
-      caseId: input.id,
-      tenantId: input.tenantId,
-      subjectId: input.subjectId,
+      caseId,
+      tenantId,
+      subjectId,
       sourceType: input.sourceType,
-      sourceSignalId: input.sourceSignalId ?? null,
+      sourceAdapter,
+      sourceSignalId,
     },
   };
 
@@ -223,6 +226,7 @@ export function applyEvent(
       tenantId: event.data.tenantId,
       subjectId: event.data.subjectId,
       sourceType: event.data.sourceType,
+      sourceAdapter: event.data.sourceAdapter,
       sourceSignalId: event.data.sourceSignalId,
       status: "NEW",
       version: 1,

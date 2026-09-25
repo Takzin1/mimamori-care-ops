@@ -88,3 +88,62 @@ test("Data API access is fail-closed to server-side service role", async () => {
     "both persistence RPCs must explicitly remain security-invoker",
   );
 });
+
+
+test("Signal identity is unique and retry-safe in Postgres", async () => {
+  const source = await sql();
+
+  assert.ok(
+    source.includes(
+      "unique (tenant_id, source_adapter, source_signal_id)",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "on conflict (tenant_id, source_adapter, source_signal_id)",
+    ),
+  );
+  assert.ok(source.includes("'created', false"));
+  assert.ok(source.includes("'created', true"));
+  assert.ok(source.includes("'signal_replay_mismatch'"));
+});
+
+test("Case append cannot rewrite immutable Signal lineage", async () => {
+  const source = await sql();
+  const appendStart = source.indexOf(
+    "create or replace function public.append_care_case_event",
+  );
+  assert.ok(appendStart >= 0);
+
+  const append = source.slice(appendStart);
+
+  assert.ok(
+    append.includes(
+      "p_snapshot->>'sourceAdapter' is distinct from v_source_adapter",
+    ),
+  );
+  assert.ok(
+    append.includes(
+      "p_snapshot->>'sourceSignalId' is distinct from v_source_signal_id",
+    ),
+  );
+  assert.ok(
+    append.includes(
+      "p_snapshot->>'subjectId' is distinct from v_subject_id",
+    ),
+  );
+  assert.ok(
+    append.includes("immutable lineage mutation"),
+  );
+
+  const updateStart = append.indexOf("update public.care_cases");
+  const eventInsert = append.indexOf(
+    "insert into public.care_case_events",
+  );
+  const updateBlock = append.slice(updateStart, eventInsert);
+
+  assert.equal(updateBlock.includes("source_adapter ="), false);
+  assert.equal(updateBlock.includes("source_signal_id ="), false);
+  assert.equal(updateBlock.includes("subject_id ="), false);
+  assert.equal(updateBlock.includes("source_type ="), false);
+});

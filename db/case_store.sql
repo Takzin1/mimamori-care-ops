@@ -19,7 +19,8 @@ create table if not exists public.care_cases (
       'external_api'
     )
   ),
-  source_signal_id text,
+  source_adapter text not null,
+  source_signal_id text not null,
   status text not null check (
     status in (
       'NEW',
@@ -44,7 +45,8 @@ create table if not exists public.care_cases (
   completion jsonb,
   snapshot jsonb not null,
   updated_at timestamptz not null default now(),
-  primary key (tenant_id, case_id)
+  primary key (tenant_id, case_id),
+  unique (tenant_id, source_adapter, source_signal_id)
 );
 
 create table if not exists public.care_case_events (
@@ -108,11 +110,22 @@ as $$
 declare
   v_tenant_id text := nullif(trim(p_snapshot->>'tenantId'), '');
   v_case_id text := nullif(trim(p_snapshot->>'id'), '');
+  v_subject_id text := nullif(trim(p_snapshot->>'subjectId'), '');
+  v_source_type text := nullif(trim(p_snapshot->>'sourceType'), '');
+  v_source_adapter text := nullif(trim(p_snapshot->>'sourceAdapter'), '');
+  v_source_signal_id text := nullif(trim(p_snapshot->>'sourceSignalId'), '');
   v_version bigint := (p_snapshot->>'version')::bigint;
   v_event_sequence bigint := (p_event->>'sequence')::bigint;
+  v_inserted_case_id text;
+  v_existing record;
 begin
-  if v_tenant_id is null or v_case_id is null then
-    raise exception 'tenantId and id are required';
+  if v_tenant_id is null
+     or v_case_id is null
+     or v_subject_id is null
+     or v_source_type is null
+     or v_source_adapter is null
+     or v_source_signal_id is null then
+    raise exception 'case and Signal lineage fields are required';
   end if;
 
   if v_version <> 1
@@ -123,8 +136,12 @@ begin
   end if;
 
   if p_event#>>'{data,tenantId}' is distinct from v_tenant_id
-     or p_event#>>'{data,caseId}' is distinct from v_case_id then
-    raise exception 'case creation tenant/id mismatch';
+     or p_event#>>'{data,caseId}' is distinct from v_case_id
+     or p_event#>>'{data,subjectId}' is distinct from v_subject_id
+     or p_event#>>'{data,sourceType}' is distinct from v_source_type
+     or p_event#>>'{data,sourceAdapter}' is distinct from v_source_adapter
+     or p_event#>>'{data,sourceSignalId}' is distinct from v_source_signal_id then
+    raise exception 'case creation lineage mismatch';
   end if;
 
   insert into public.care_cases (
@@ -132,6 +149,7 @@ begin
     case_id,
     subject_id,
     source_type,
+    source_adapter,
     source_signal_id,
     status,
     version,
@@ -151,9 +169,10 @@ begin
   values (
     v_tenant_id,
     v_case_id,
-    p_snapshot->>'subjectId',
-    p_snapshot->>'sourceType',
-    nullif(p_snapshot->>'sourceSignalId', ''),
+    v_subject_id,
+    v_source_type,
+    v_source_adapter,
+    v_source_signal_id,
     p_snapshot->>'status',
     v_version,
     nullif(p_snapshot->>'assigneeId', ''),
@@ -168,7 +187,48 @@ begin
     p_snapshot->'completion',
     p_snapshot,
     now()
-  );
+  )
+  on conflict (tenant_id, source_adapter, source_signal_id)
+  do nothing
+  returning case_id into v_inserted_case_id;
+
+  if v_inserted_case_id is null then
+    select
+      case_id,
+      subject_id,
+      source_type,
+      source_adapter,
+      source_signal_id,
+      version,
+      snapshot
+      into v_existing
+      from public.care_cases
+     where tenant_id = v_tenant_id
+       and source_adapter = v_source_adapter
+       and source_signal_id = v_source_signal_id;
+
+    if not found then
+      raise exception 'Signal idempotency index is inconsistent';
+    end if;
+
+    if v_existing.subject_id is distinct from v_subject_id
+       or v_existing.source_type is distinct from v_source_type then
+      return jsonb_build_object(
+        'ok', false,
+        'conflict', true,
+        'reason', 'signal_replay_mismatch',
+        'caseId', v_existing.case_id
+      );
+    end if;
+
+    return jsonb_build_object(
+      'ok', true,
+      'created', false,
+      'caseId', v_existing.case_id,
+      'version', v_existing.version,
+      'snapshot', v_existing.snapshot
+    );
+  end if;
 
   insert into public.care_case_events (
     tenant_id,
@@ -193,7 +253,10 @@ begin
 
   return jsonb_build_object(
     'ok', true,
-    'version', v_version
+    'created', true,
+    'caseId', v_case_id,
+    'version', v_version,
+    'snapshot', p_snapshot
   );
 end;
 $$;
@@ -212,12 +275,29 @@ set search_path = public
 as $$
 declare
   v_current_version bigint;
+  v_subject_id text;
+  v_source_type text;
+  v_source_adapter text;
+  v_source_signal_id text;
+  v_created_at timestamptz;
   v_next_version bigint := p_expected_version + 1;
   v_snapshot_version bigint := (p_snapshot->>'version')::bigint;
   v_event_sequence bigint := (p_event->>'sequence')::bigint;
 begin
-  select version
-    into v_current_version
+  select
+    version,
+    subject_id,
+    source_type,
+    source_adapter,
+    source_signal_id,
+    created_at
+    into
+      v_current_version,
+      v_subject_id,
+      v_source_type,
+      v_source_adapter,
+      v_source_signal_id,
+      v_created_at
     from public.care_cases
    where tenant_id = p_tenant_id
      and case_id = p_case_id
@@ -240,21 +320,22 @@ begin
 
   if p_snapshot->>'tenantId' is distinct from p_tenant_id
      or p_snapshot->>'id' is distinct from p_case_id
+     or p_snapshot->>'subjectId' is distinct from v_subject_id
+     or p_snapshot->>'sourceType' is distinct from v_source_type
+     or p_snapshot->>'sourceAdapter' is distinct from v_source_adapter
+     or p_snapshot->>'sourceSignalId' is distinct from v_source_signal_id
+     or (p_snapshot->>'createdAt')::timestamptz is distinct from v_created_at
      or v_snapshot_version <> v_next_version
      or v_event_sequence <> v_next_version
      or p_event->>'type' = 'case_created' then
-    raise exception 'invalid append payload';
+    raise exception 'invalid append payload or immutable lineage mutation';
   end if;
 
   update public.care_cases
-     set subject_id = p_snapshot->>'subjectId',
-         source_type = p_snapshot->>'sourceType',
-         source_signal_id = nullif(p_snapshot->>'sourceSignalId', ''),
-         status = p_snapshot->>'status',
+     set status = p_snapshot->>'status',
          version = v_next_version,
          assignee_id = nullif(p_snapshot->>'assigneeId', ''),
          handoff_target_id = nullif(p_snapshot->>'handoffTargetId', ''),
-         created_at = (p_snapshot->>'createdAt')::timestamptz,
          acknowledged_at = nullif(p_snapshot->>'acknowledgedAt', '')::timestamptz,
          assigned_at = nullif(p_snapshot->>'assignedAt', '')::timestamptz,
          first_action_at = nullif(p_snapshot->>'firstActionAt', '')::timestamptz,

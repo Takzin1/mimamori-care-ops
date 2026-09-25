@@ -17,7 +17,7 @@ They may request Case creation, but must not be able to:
 - accept a handoff
 - rewrite historical evidence
 
-Signal idempotency is tracked in Issue #6.
+Signal retries are deduplicated by `tenantId + sourceAdapter + sourceSignalId`. Compatible retries converge to the existing Case; mismatched lineage is rejected.
 
 ### 2. Authenticated principal boundary
 
@@ -84,11 +84,11 @@ The reference Supabase/Postgres contract:
 | fake completion | evidence + current-assignee requirement |
 | audit history mutation | append-only event contract |
 | snapshot drift | replay-equivalence tests |
+| Signal replay / duplicate ingestion | tenant + adapter + source signal uniqueness |
 
 ## Threats not yet fully covered
 
 - production identity provider compromise
-- Signal replay / duplicate ingestion
 - rate limiting / abuse prevention
 - production key rotation
 - infrastructure compromise

@@ -9,6 +9,12 @@ export interface StoredCase {
   events: readonly CaseEvent[];
 }
 
+export interface CreateCaseResult {
+  aggregate: CaseAggregate;
+  event: CaseCreatedEvent;
+  created: boolean;
+}
+
 export interface AppendCaseEventInput {
   tenantId: string;
   caseId: string;
@@ -17,7 +23,7 @@ export interface AppendCaseEventInput {
 }
 
 export interface CaseRepository {
-  create(event: CaseCreatedEvent): Promise<CaseAggregate>;
+  create(event: CaseCreatedEvent): Promise<CreateCaseResult>;
   load(tenantId: string, caseId: string): Promise<StoredCase | null>;
   append(input: AppendCaseEventInput): Promise<CaseAggregate>;
 }

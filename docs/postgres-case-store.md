@@ -14,6 +14,14 @@ tenant_id + case_id
 
 Operational query columns such as status, assignee, completion timestamps, and source type are indexed separately while the full aggregate is retained in `snapshot`.
 
+Signal creation is idempotent on:
+
+```
+tenant_id + source_adapter + source_signal_id
+```
+
+`create_care_case()` uses that database uniqueness boundary so concurrent upstream retries converge to one Case. A compatible retry returns the existing Case with `created: false`; a changed subject/type under the same Signal identity returns a replay mismatch.
+
 ### `care_case_events`
 
 Append-only event stream keyed by:
@@ -46,6 +54,8 @@ It calls `append_care_case_event()`, which:
 6. commits both together
 
 Any statement failure rolls back both writes.
+
+Case origin lineage (`tenant / case / subject / source type / source adapter / source signal / created time`) is immutable after creation and is validated by the append RPC.
 
 ## Access model
 

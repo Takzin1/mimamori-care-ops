@@ -22,6 +22,7 @@ What is already implemented and tested:
 - optimistic concurrency / stale-write rejection
 - tenant-scoped persistence contract
 - tenant staff membership + role-based command authorization
+- retry-safe Signal idempotency + immutable Case lineage
 - Postgres/Supabase Case Store contract with RLS and fail-closed RPC access
 - Time to Completion and supporting operational metrics
 
@@ -29,7 +30,6 @@ Not yet production-ready:
 
 - production authentication provider integration
 - production Postgres repository adapter
-- Signal idempotency / deduplication
 - SLA and escalation engine
 - Responder Console
 - deployment / observability / incident runbook
@@ -96,6 +96,9 @@ The Core intentionally does **not** know about LINE, Supabase, UI frameworks, mu
 - **No caller-controlled audit actor**
   Application commands bind `principalId -> trusted membership -> actorId`.
 
+- **No duplicate Case from Signal retry**
+  `tenantId + sourceAdapter + sourceSignalId` is the idempotency boundary.
+
 - **Replayable operations**
   Current Case state can be reconstructed from the event stream.
 
@@ -145,8 +148,9 @@ Start here:
 3. [ADR 0001 — Last-mile product boundary](docs/adr/0001-last-mile-product-boundary.md)
 4. [ADR 0002 — Tenant-scoped persistence](docs/adr/0002-tenant-scoped-persistence.md)
 5. [ADR 0003 — Tenant staff authorization](docs/adr/0003-tenant-staff-command-authorization.md)
-6. `tests/application-case-service.test.ts`
-7. `db/case_store.sql`
+6. [ADR 0004 — Signal idempotency](docs/adr/0004-signal-idempotency.md)
+7. `tests/application-case-service.test.ts`
+8. `db/case_store.sql`
 
 ## Development
 

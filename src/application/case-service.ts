@@ -27,6 +27,7 @@ import type {
 import type {
   AttentionSignal,
   CaseCommandIntent,
+  CaseOpenResult,
   CaseOperationResult,
   CaseQueryInput,
   ExecuteCaseCommandInput,
@@ -94,21 +95,23 @@ export class CaseService {
   async openFromSignal(
     signal: AttentionSignal,
     caseId: string,
-  ): Promise<CaseOperationResult> {
+  ): Promise<CaseOpenResult> {
     const created = createCase({
       id: caseId,
       tenantId: signal.tenantId,
       subjectId: signal.subjectId,
       sourceType: signal.type,
+      sourceAdapter: signal.sourceAdapter,
       sourceSignalId: signal.id,
       createdAt: this.now(),
     });
 
-    const aggregate = await this.repository.create(created.event);
+    const stored = await this.repository.create(created.event);
 
     return {
-      aggregate,
-      event: created.event,
+      aggregate: stored.aggregate,
+      event: stored.event,
+      created: stored.created,
     };
   }
 

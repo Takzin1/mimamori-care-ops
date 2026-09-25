@@ -20,9 +20,10 @@ test("last-mile case completes through claim, action, handoff, evidence, and clo
   let { aggregate, event } = createCase({
     id: "case-001",
     tenantId: "tenant-a",
+    sourceAdapter: "test-adapter",
+    sourceSignalId: "signal-001",
     subjectId: "subject-001",
     sourceType: "non_response",
-    sourceSignalId: "signal-001",
     createdAt: at(0),
   });
   events.push(event);
@@ -121,6 +122,8 @@ test("stale version is rejected before transition", () => {
   const { aggregate } = createCase({
     id: "case-002",
     tenantId: "tenant-a",
+    sourceAdapter: "test-adapter",
+    sourceSignalId: "signal-002",
     subjectId: "subject-002",
     sourceType: "sos",
     createdAt: at(0),
@@ -142,6 +145,8 @@ test("handoff cannot be accepted by anyone other than the requested target", () 
   let { aggregate } = createCase({
     id: "case-003",
     tenantId: "tenant-a",
+    sourceAdapter: "test-adapter",
+    sourceSignalId: "signal-003",
     subjectId: "subject-003",
     sourceType: "unwell",
     createdAt: at(0),
@@ -192,6 +197,8 @@ test("support completion requires evidence", () => {
   let { aggregate } = createCase({
     id: "case-004",
     tenantId: "tenant-a",
+    sourceAdapter: "test-adapter",
+    sourceSignalId: "signal-004",
     subjectId: "subject-004",
     sourceType: "welfare_need_help",
     createdAt: at(0),
@@ -238,6 +245,8 @@ test("case cannot jump directly from NEW to completion", () => {
   const { aggregate } = createCase({
     id: "case-005",
     tenantId: "tenant-a",
+    sourceAdapter: "test-adapter",
+    sourceSignalId: "signal-005",
     subjectId: "subject-005",
     sourceType: "manual",
     createdAt: at(0),
