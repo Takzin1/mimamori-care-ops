@@ -63,7 +63,8 @@ export interface CaseAggregate {
   tenantId: string;
   subjectId: string;
   sourceType: SignalType;
-  sourceSignalId: string | null;
+  sourceAdapter: string;
+  sourceSignalId: string;
   status: CaseStatus;
   version: number;
   assigneeId: string | null;
@@ -92,7 +93,8 @@ export type CaseEvent =
         tenantId: string;
         subjectId: string;
         sourceType: SignalType;
-        sourceSignalId: string | null;
+        sourceAdapter: string;
+        sourceSignalId: string;
       };
     })
   | (EventBase & {
@@ -163,6 +165,7 @@ export interface NewCaseInput {
   tenantId: string;
   subjectId: string;
   sourceType: SignalType;
-  sourceSignalId?: string | null;
+  sourceAdapter: string;
+  sourceSignalId: string;
   createdAt: string;
 }
