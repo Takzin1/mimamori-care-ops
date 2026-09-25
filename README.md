@@ -26,6 +26,7 @@ What is already implemented and tested:
 - explicit Case priority + deterministic SLA/aging evaluation
 - authorized, explainable Case Queue projection
 - production-facing Supabase/PostgREST CaseRepository adapter
+- transactional outbox with worker lease/retry/dead-letter semantics
 - real PostgreSQL 17 integration CI
 - Postgres/Supabase Case Store contract with RLS and fail-closed RPC access
 - Time to Completion and supporting operational metrics
