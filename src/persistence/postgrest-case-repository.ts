@@ -29,7 +29,7 @@ type FetchLike = (
   init?: RequestInit,
 ) => Promise<Response>;
 
-interface PostgrestCaseRepositoryOptions {
+export interface PostgrestCaseRepositoryOptions {
   baseUrl: string;
   serviceRoleKey: string;
   fetchImpl?: FetchLike;
@@ -96,7 +96,7 @@ function stableJson(value: unknown): string {
     return `{${entries.join(",")}}`;
   }
 
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "undefined";
 }
 
 function asAggregate(value: unknown): CaseAggregate {
@@ -214,12 +214,17 @@ export class PostgrestCaseRepository implements CaseRepository {
     let response: Response;
 
     try {
+      const headers = new Headers(this.headers());
+      if (init.headers) {
+        const override = new Headers(init.headers);
+        override.forEach((value, key) => {
+          headers.set(key, value);
+        });
+      }
+
       response = await this.fetchImpl(url, {
         ...init,
-        headers: {
-          ...this.headers(),
-          ...(init.headers ?? {}),
-        },
+        headers,
       });
     } catch (error) {
       throw new CaseStoreTransportError(
