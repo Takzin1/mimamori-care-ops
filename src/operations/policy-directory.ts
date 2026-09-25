@@ -1,4 +1,7 @@
-import type { CaseSlaPolicy } from "./sla.ts";
+import {
+  validateSlaPolicy,
+  type CaseSlaPolicy,
+} from "./sla.ts";
 
 export interface TenantSlaPolicyDirectory {
   findByTenant(tenantId: string): Promise<CaseSlaPolicy | null>;
@@ -14,6 +17,7 @@ implements TenantSlaPolicyDirectory {
 
   constructor(entries: Readonly<Record<string, CaseSlaPolicy>>) {
     for (const [tenantId, policy] of Object.entries(entries)) {
+      validateSlaPolicy(policy);
       this.policies.set(tenantId, clonePolicy(policy));
     }
   }
