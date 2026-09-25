@@ -8,6 +8,7 @@ ADRs document decisions that change the meaning or safety boundary of the Care O
 | [0002](0002-tenant-scoped-persistence.md) | Tenant-scoped persistence | Accepted |
 | [0003](0003-tenant-staff-command-authorization.md) | Tenant staff command authorization | Accepted |
 | [0004](0004-signal-idempotency.md) | Signal idempotency and immutable lineage | Accepted |
+| [0005](0005-priority-sla-aging.md) | Explicit priority and deterministic SLA aging | Accepted |
 
 ## When to add an ADR
 
