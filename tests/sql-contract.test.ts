@@ -274,6 +274,16 @@ test("PLpgSQL function delimiters remain balanced", async () => {
   const source = await sql();
 
   assert.equal(
+    source.match(/\nas \$\n/g)?.length ?? 0,
+    0,
+    "single-dollar function openers are invalid",
+  );
+  assert.equal(
+    source.match(/\nas \$\$\n/g)?.length ?? 0,
+    6,
+    "all six persistence RPCs must open with double-dollar delimiters",
+  );
+  assert.equal(
     source.match(/\n\$;\n/g)?.length ?? 0,
     0,
     "single-dollar function terminators are invalid",
