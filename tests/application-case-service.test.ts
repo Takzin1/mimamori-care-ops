@@ -82,6 +82,7 @@ test("application service drives the full authorized GK lifecycle", async () => 
     {
       id: "signal-001",
       tenantId: "provider-a",
+      sourceAdapter: "test-adapter",
       subjectId: "subject-001",
       type: "non_response",
     },
@@ -90,6 +91,7 @@ test("application service drives the full authorized GK lifecycle", async () => 
 
   assert.equal(result.aggregate.status, "NEW");
   assert.equal(result.aggregate.version, 1);
+  assert.equal(result.created, true);
 
   result = await service.execute({
     tenantId: "provider-a",
@@ -200,6 +202,7 @@ test("caller cannot spoof actorId because application commands do not accept it"
     {
       id: "signal-spoof",
       tenantId: "provider-a",
+      sourceAdapter: "test-adapter",
       subjectId: "subject-spoof",
       type: "manual",
     },
@@ -228,6 +231,7 @@ test("auditor is read-only and denial occurs before mutation", async () => {
     {
       id: "signal-audit",
       tenantId: "provider-a",
+      sourceAdapter: "test-adapter",
       subjectId: "subject-audit",
       type: "manual",
     },
@@ -267,6 +271,7 @@ test("dispatcher cannot assign to missing, inactive, or non-responder staff", as
     {
       id: "signal-target",
       tenantId: "provider-a",
+      sourceAdapter: "test-adapter",
       subjectId: "subject-target",
       type: "manual",
     },
@@ -318,6 +323,7 @@ test("inactive membership cannot read or mutate Cases", async () => {
     {
       id: "signal-inactive",
       tenantId: "provider-a",
+      sourceAdapter: "test-adapter",
       subjectId: "subject-inactive",
       type: "manual",
     },
@@ -345,4 +351,43 @@ test("inactive membership cannot read or mutate Cases", async () => {
     }),
     CaseAccessDeniedError,
   );
+});
+
+
+test("application Signal retry returns the original Case without duplication", async () => {
+  const service = new CaseService(
+    new InMemoryCaseRepository(),
+    memberships(),
+    () => at(0),
+  );
+
+  const signal = {
+    id: "signal-application-retry",
+    tenantId: "provider-a",
+    sourceAdapter: "line-checkin",
+    subjectId: "subject-retry",
+    type: "non_response" as const,
+  };
+
+  const first = await service.openFromSignal(signal, "case-original");
+  const retry = await service.openFromSignal(signal, "case-retry-proposal");
+
+  assert.equal(first.created, true);
+  assert.equal(retry.created, false);
+  assert.equal(retry.aggregate.id, "case-original");
+  assert.equal(retry.event.data.caseId, "case-original");
+
+  const original = await service.get({
+    tenantId: "provider-a",
+    caseId: "case-original",
+    principalId: "principal-dispatcher",
+  });
+  const duplicate = await service.get({
+    tenantId: "provider-a",
+    caseId: "case-retry-proposal",
+    principalId: "principal-dispatcher",
+  });
+
+  assert.ok(original);
+  assert.equal(duplicate, null);
 });
