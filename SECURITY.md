@@ -88,3 +88,14 @@ Do not dump full outbox payloads into public logs, CI output, analytics, screens
 Delivery adapters should log stable identifiers and status metadata rather than resident/care content.
 
 Dead-letter items require an operational review path before production use; they must not be silently ignored.
+
+
+## Production identity boundary
+
+Human Care Ops requests must authenticate before Case/Queue lookup.
+
+Do not trust client-supplied `principalId`, browser session user objects alone, or user-editable profile metadata for tenant authorization.
+
+The reference Supabase path verifies the access token against Auth, then resolves Care Ops actor identity and roles from the server-only tenant membership store.
+
+Runtime service-role access to memberships is read-only. Membership provisioning must use a separate administrative path with explicit authorization.
