@@ -2,6 +2,7 @@ import {
   CaseStoreCorruptionError,
   CaseStoreTransportError,
 } from "../persistence/errors.ts";
+import { OutboxDeliveryKeyConflictError } from "./errors.ts";
 import type {
   ClaimOutboxInput,
   CompleteOutboxInput,
@@ -228,6 +229,16 @@ export class PostgrestOutboxStore implements OutboxStore {
     const record = asRecord(
       await this.rpc("enqueue_care_outbox", body),
     );
+
+    if (
+      record.conflict === true &&
+      record.reason === "delivery_key_reuse"
+    ) {
+      throw new OutboxDeliveryKeyConflictError(
+        input.tenantId,
+        input.deliveryKey,
+      );
+    }
 
     if (record.ok !== true) {
       throw new CaseStoreCorruptionError(
