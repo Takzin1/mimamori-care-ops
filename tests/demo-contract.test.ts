@@ -58,3 +58,23 @@ test("reviewer scenario demonstrates explicit handoff ownership and evidence", a
   );
   assert.ok(source.includes('status: "CLOSED"'));
 });
+
+
+test("reviewer deployment blocks outbound browser connections", async () => {
+  const raw = await read(
+    "demo/responder-console/vercel.json",
+  );
+  const config = JSON.parse(raw);
+
+  const headers = config.headers?.[0]?.headers ?? [];
+  const csp = headers.find(
+    (item: { key?: string; value?: string }) =>
+      item.key === "Content-Security-Policy",
+  )?.value ?? "";
+
+  assert.ok(csp.includes("connect-src 'none'"));
+  assert.ok(csp.includes("form-action 'none'"));
+  assert.ok(csp.includes("frame-ancestors 'none'"));
+  assert.ok(csp.includes("object-src 'none'"));
+  assert.equal(config.framework, null);
+});
