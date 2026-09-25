@@ -88,8 +88,11 @@ Read:
 - `docs/responder-console.md`
 - `src/presentation/console.ts`
 - `demo/responder-console/index.html`
+- `docs/reviewer-demo-deployment.md`
 
 The reviewer demo is synthetic-only and intentionally disconnected from production credentials.
+
+A dedicated external reviewer URL is tracked in Issue #22. Until that one-time Vercel project import is complete, use the repository demo locally.
 
 Use it to verify that the visible UI reflects:
 
