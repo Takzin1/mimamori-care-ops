@@ -12,6 +12,7 @@ Signal:
 {
   "id": "signal-demo-001",
   "tenantId": "provider-demo",
+  "sourceAdapter": "synthetic-checkin",
   "subjectId": "subject-demo-001",
   "type": "non_response"
 }
