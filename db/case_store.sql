@@ -87,8 +87,8 @@ create index if not exists care_events_tenant_case_time_idx
 alter table public.care_cases enable row level security;
 alter table public.care_case_events enable row level security;
 
-revoke all on table public.care_cases from anon, authenticated;
-revoke all on table public.care_case_events from anon, authenticated;
+revoke all on table public.care_cases from public, anon, authenticated;
+revoke all on table public.care_case_events from public, anon, authenticated;
 
 revoke delete on table public.care_cases from service_role;
 revoke update, delete on table public.care_case_events from service_role;
@@ -102,6 +102,7 @@ create or replace function public.create_care_case(
 )
 returns jsonb
 language plpgsql
+security invoker
 set search_path = public
 as $$
 declare
@@ -206,6 +207,7 @@ create or replace function public.append_care_case_event(
 )
 returns jsonb
 language plpgsql
+security invoker
 set search_path = public
 as $$
 declare
