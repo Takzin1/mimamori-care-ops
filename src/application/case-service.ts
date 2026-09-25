@@ -5,8 +5,18 @@ import {
 } from "../core/index.ts";
 import type {
   CaseAggregate,
+  CaseCommand,
   CaseMetrics,
 } from "../core/index.ts";
+import {
+  assertAssignableTarget,
+  assertCanExecuteCommand,
+  assertCanReadCase,
+} from "../access/policy.ts";
+import type {
+  TenantMembership,
+  TenantMembershipDirectory,
+} from "../access/types.ts";
 import {
   CaseNotFoundError,
 } from "../persistence/errors.ts";
@@ -16,21 +26,68 @@ import type {
 } from "../persistence/types.ts";
 import type {
   AttentionSignal,
+  CaseCommandIntent,
   CaseOperationResult,
+  CaseQueryInput,
   ExecuteCaseCommandInput,
 } from "./types.ts";
 
 export type Clock = () => string;
 
+function bindActor(
+  command: CaseCommandIntent,
+  actorId: string,
+): CaseCommand {
+  switch (command.type) {
+    case "acknowledge":
+      return { type: "acknowledge", actorId };
+    case "assign":
+      return {
+        type: "assign",
+        actorId,
+        assigneeId: command.assigneeId,
+      };
+    case "start_action":
+      return { type: "start_action", actorId };
+    case "request_handoff":
+      return {
+        type: "request_handoff",
+        actorId,
+        targetAssigneeId: command.targetAssigneeId,
+      };
+    case "accept_handoff":
+      return { type: "accept_handoff", actorId };
+    case "complete":
+      return {
+        type: "complete",
+        actorId,
+        outcome: command.outcome,
+        summary: command.summary,
+        evidence: command.evidence,
+      };
+    case "close":
+      return { type: "close", actorId };
+    case "reopen":
+      return {
+        type: "reopen",
+        actorId,
+        reason: command.reason,
+      };
+  }
+}
+
 export class CaseService {
   private readonly repository: CaseRepository;
+  private readonly memberships: TenantMembershipDirectory;
   private readonly now: Clock;
 
   constructor(
     repository: CaseRepository,
+    memberships: TenantMembershipDirectory,
     now: Clock = () => new Date().toISOString(),
   ) {
     this.repository = repository;
+    this.memberships = memberships;
     this.now = now;
   }
 
@@ -55,9 +112,47 @@ export class CaseService {
     };
   }
 
+  private async membershipFor(
+    tenantId: string,
+    principalId: string,
+  ): Promise<TenantMembership | null> {
+    return this.memberships.findByPrincipal(tenantId, principalId);
+  }
+
+  private async assertTargetAssignable(
+    tenantId: string,
+    actorId: string,
+  ): Promise<void> {
+    const target = await this.memberships.findByActorId(
+      tenantId,
+      actorId,
+    );
+    assertAssignableTarget(target);
+  }
+
   async execute(
     input: ExecuteCaseCommandInput,
   ): Promise<CaseOperationResult> {
+    const membership = await this.membershipFor(
+      input.tenantId,
+      input.principalId,
+    );
+    assertCanExecuteCommand(membership, input.command);
+
+    if (input.command.type === "assign") {
+      await this.assertTargetAssignable(
+        input.tenantId,
+        input.command.assigneeId,
+      );
+    }
+
+    if (input.command.type === "request_handoff") {
+      await this.assertTargetAssignable(
+        input.tenantId,
+        input.command.targetAssigneeId,
+      );
+    }
+
     const stored = await this.repository.load(
       input.tenantId,
       input.caseId,
@@ -70,7 +165,7 @@ export class CaseService {
     const transition = executeCommand(
       stored.aggregate,
       input.expectedVersion,
-      input.command,
+      bindActor(input.command, membership.actorId),
       this.now(),
     );
 
@@ -87,34 +182,49 @@ export class CaseService {
     };
   }
 
-  async get(
-    tenantId: string,
-    caseId: string,
-  ): Promise<StoredCase | null> {
-    return this.repository.load(tenantId, caseId);
+  async get(input: CaseQueryInput): Promise<StoredCase | null> {
+    const membership = await this.membershipFor(
+      input.tenantId,
+      input.principalId,
+    );
+    assertCanReadCase(membership);
+
+    return this.repository.load(input.tenantId, input.caseId);
   }
 
-  async metrics(
-    tenantId: string,
-    caseId: string,
-  ): Promise<CaseMetrics> {
-    const stored = await this.repository.load(tenantId, caseId);
+  async metrics(input: CaseQueryInput): Promise<CaseMetrics> {
+    const membership = await this.membershipFor(
+      input.tenantId,
+      input.principalId,
+    );
+    assertCanReadCase(membership);
+
+    const stored = await this.repository.load(
+      input.tenantId,
+      input.caseId,
+    );
 
     if (!stored) {
-      throw new CaseNotFoundError(tenantId, caseId);
+      throw new CaseNotFoundError(input.tenantId, input.caseId);
     }
 
     return calculateCaseMetrics(stored.events);
   }
 
-  async current(
-    tenantId: string,
-    caseId: string,
-  ): Promise<CaseAggregate> {
-    const stored = await this.repository.load(tenantId, caseId);
+  async current(input: CaseQueryInput): Promise<CaseAggregate> {
+    const membership = await this.membershipFor(
+      input.tenantId,
+      input.principalId,
+    );
+    assertCanReadCase(membership);
+
+    const stored = await this.repository.load(
+      input.tenantId,
+      input.caseId,
+    );
 
     if (!stored) {
-      throw new CaseNotFoundError(tenantId, caseId);
+      throw new CaseNotFoundError(input.tenantId, input.caseId);
     }
 
     return stored.aggregate;
