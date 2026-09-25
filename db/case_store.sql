@@ -332,7 +332,7 @@ begin
     'snapshot', p_snapshot
   );
 end;
-$;
+$$;
 
 create or replace function public.append_care_case_event(
   p_tenant_id text,
@@ -467,7 +467,7 @@ begin
     'version', v_next_version
   );
 end;
-$;
+$$;
 
 create or replace function public.enqueue_care_outbox(
   p_tenant_id text,
@@ -548,7 +548,7 @@ begin
     'id', v_id
   );
 end;
-$;
+$$;
 
 create or replace function public.claim_care_outbox(
   p_tenant_id text,
@@ -643,7 +643,7 @@ begin
 
   return v_result;
 end;
-$;
+$$;
 
 create or replace function public.complete_care_outbox(
   p_tenant_id text,
@@ -675,7 +675,7 @@ begin
     'id', p_id
   );
 end;
-$;
+$$;
 
 create or replace function public.fail_care_outbox(
   p_tenant_id text,
@@ -720,7 +720,7 @@ begin
     'status', v_status
   );
 end;
-$;
+$$;
 
 revoke execute on function public.create_care_case(jsonb, jsonb)
   from public, anon, authenticated;
