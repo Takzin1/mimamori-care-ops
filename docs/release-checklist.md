@@ -15,7 +15,9 @@ Do not treat completion of the Core as production approval.
 
 ## Identity and authorization
 
-- [ ] production identity provider integrated
+- [ ] production identity provider/environment intentionally provisioned
+- [ ] verified-token-to-principal boundary configured
+- [ ] membership provisioning/admin workflow implemented
 - [ ] tenant membership source defined
 - [ ] role provisioning / revocation process documented
 - [ ] inactive user access verified fail-closed
