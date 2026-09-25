@@ -25,13 +25,14 @@ What is already implemented and tested:
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
 - authorized, explainable Case Queue projection
+- production-facing Supabase/PostgREST CaseRepository adapter
+- real PostgreSQL 17 integration CI
 - Postgres/Supabase Case Store contract with RLS and fail-closed RPC access
 - Time to Completion and supporting operational metrics
 
 Not yet production-ready:
 
 - production authentication provider integration
-- production Postgres repository adapter
 - deployment / observability / incident runbook
 
 See [Project Status](docs/project-status.md) and the open GitHub Issues for the active roadmap.

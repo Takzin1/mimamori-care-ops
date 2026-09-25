@@ -68,3 +68,12 @@ Before production use, the project still requires at minimum:
 - backup and recovery tests
 
 See `docs/release-checklist.md`.
+
+
+## Service-role key boundary
+
+`PostgrestCaseRepository` uses a Supabase/PostgREST service-role key and is **server-side only**.
+
+Never expose that key to LIFF, browser/mobile bundles, public environment variables, screenshots, client logs, or demo payloads.
+
+Clients must call a trusted application/API boundary; only that trusted server boundary may instantiate the production repository adapter.
