@@ -187,3 +187,14 @@ Case snapshot + event stream + tenant SLA policy + explicit now
 ```
 
 The evaluator does not send notifications. Durable external escalation delivery belongs to the outbox boundary.
+
+
+## Queue projection boundary
+
+The operational worklist is a derived read model, not another Case state machine.
+
+`projectCaseQueue()` combines active tenant Cases with the trusted SLA policy and produces an explainable, deterministic order for the control room.
+
+Responder-only scopes expose current ownership and incoming handoffs. Dispatcher, supervisor, and auditor read scopes may see the tenant-wide queue.
+
+UI clients must not reproduce queue ranking or SLA logic independently.
