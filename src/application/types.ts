@@ -8,6 +8,7 @@ import type {
 export interface AttentionSignal {
   id: string;
   tenantId: string;
+  sourceAdapter: string;
   subjectId: string;
   type: SignalType;
 }
@@ -30,6 +31,12 @@ export interface CaseQueryInput {
   tenantId: string;
   caseId: string;
   principalId: string;
+}
+
+export interface CaseOpenResult {
+  aggregate: CaseAggregate;
+  event: Extract<CaseEvent, { type: "case_created" }>;
+  created: boolean;
 }
 
 export interface CaseOperationResult {
