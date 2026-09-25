@@ -23,10 +23,16 @@ import type {
 export type Clock = () => string;
 
 export class CaseService {
+  private readonly repository: CaseRepository;
+  private readonly now: Clock;
+
   constructor(
-    private readonly repository: CaseRepository,
-    private readonly now: Clock = () => new Date().toISOString(),
-  ) {}
+    repository: CaseRepository,
+    now: Clock = () => new Date().toISOString(),
+  ) {
+    this.repository = repository;
+    this.now = now;
+  }
 
   async openFromSignal(
     signal: AttentionSignal,
