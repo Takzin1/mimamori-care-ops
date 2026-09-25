@@ -17,10 +17,10 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Tenant-scoped persistence contract | Implemented + tested | `src/persistence/` |
 | Staff membership / RBAC | Implemented + tested | `src/access/` |
 | Signal idempotency / dedup | Implemented + tested | persistence + SQL contract tests |
+| Priority / SLA / aging engine | Implemented + tested | `src/operations/` + SLA tests |
 | Postgres Case Store SQL contract | Implemented + static-tested | `db/case_store.sql` |
 | Production identity provider | Not implemented | roadmap |
 | Production Postgres adapter | Planned | Issue #8 |
-| SLA / aging / escalation | Planned | Issue #7 |
 | Responder Console | Planned | Issue #9 |
 | Production deployment | Not implemented | release checklist |
 | Production PII / care data | **Not allowed** | security policy |
@@ -40,7 +40,8 @@ It does **not** yet demonstrate a production-grade healthcare/care-service syste
 
 ## Next sequence
 
-1. production Postgres repository adapter — #8
-2. SLA / aging / escalation primitives — #7
-3. Responder Console v0.1 — #9
-4. production identity/deployment/privacy hardening
+1. Case Queue projection — #14
+2. production Postgres repository adapter — #8
+3. transactional notification / escalation outbox — #15
+4. Responder Console v0.1 — #9
+5. production identity/deployment/privacy hardening
