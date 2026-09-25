@@ -63,12 +63,12 @@ test("Data API access is fail-closed to server-side service role", async () => {
   );
   assert.ok(
     source.includes(
-      "revoke all on table public.care_cases from anon, authenticated;",
+      "revoke all on table public.care_cases from public, anon, authenticated;",
     ),
   );
   assert.ok(
     source.includes(
-      "revoke all on table public.care_case_events from anon, authenticated;",
+      "revoke all on table public.care_case_events from public, anon, authenticated;",
     ),
   );
   assert.ok(
@@ -81,5 +81,10 @@ test("Data API access is fail-closed to server-side service role", async () => {
     source.toLowerCase().includes("security definer"),
     false,
     "persistence RPCs must remain security-invoker",
+  );
+  assert.equal(
+    source.match(/security invoker/g)?.length,
+    2,
+    "both persistence RPCs must explicitly remain security-invoker",
   );
 });
