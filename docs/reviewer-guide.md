@@ -81,13 +81,31 @@ Signal
 
 and validates Time to Completion.
 
-## 6. Know what is not implemented yet
+## 6. Inspect the Responder Console
+
+Read:
+
+- `docs/responder-console.md`
+- `src/presentation/console.ts`
+- `demo/responder-console/index.html`
+
+The reviewer demo is synthetic-only and intentionally disconnected from production credentials.
+
+Use it to verify that the visible UI reflects:
+
+- explainable queue order
+- explicit responsibility
+- handoff acceptance before ownership transfer
+- completion evidence
+- TTC-oriented metrics
+
+## 7. Know what is not implemented yet
 
 See `docs/project-status.md`.
 
 Do not infer production readiness from the strength of the Core invariants. Production auth integration, runtime Postgres adapter, Signal idempotency, SLA engine, responder UI, deployment hardening and privacy operations are still roadmap items.
 
-## 7. Suggested reviewer questions
+## 8. Suggested reviewer questions
 
 - Can responsibility disappear during handoff?
 - Can a stale client silently overwrite a newer Case?

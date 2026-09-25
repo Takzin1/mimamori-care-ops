@@ -144,6 +144,29 @@ docs/
   architecture, Case Queue contract, reviewer guide, demo scenario, ADRs and release readiness
 ```
 
+## Responder Console reviewer demo
+
+A browser-only synthetic demo is included at:
+
+```
+demo/responder-console/index.html
+```
+
+It demonstrates the GK workflow without production credentials or real resident data:
+
+```
+NEW
+→ ACKNOWLEDGED
+→ ASSIGNED
+→ IN_PROGRESS
+→ HANDOFF_PENDING
+→ IN_PROGRESS
+→ COMPLETED + evidence
+→ CLOSED
+```
+
+The demo is intentionally disconnected from production data until production identity integration is implemented.
+
 ## Review this repository in 10 minutes
 
 Start here:
@@ -157,7 +180,9 @@ Start here:
 7. [ADR 0005 — Priority and SLA aging](docs/adr/0005-priority-sla-aging.md)
 8. `tests/application-case-service.test.ts`
 9. `tests/sla.test.ts`
-10. `db/case_store.sql`
+10. [Responder Console contract](docs/responder-console.md)
+11. `demo/responder-console/index.html`
+12. `db/case_store.sql`
 
 ## Development
 
