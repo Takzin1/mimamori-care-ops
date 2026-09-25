@@ -2,15 +2,64 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CaseAccessDeniedError,
   CaseService,
   InMemoryCaseRepository,
+  InMemoryTenantMembershipDirectory,
 } from "../src/index.ts";
 
 function at(minute: number): string {
   return new Date(Date.UTC(2026, 8, 25, 2, minute, 0)).toISOString();
 }
 
-test("application service drives the full GK last-mile lifecycle", async () => {
+function memberships() {
+  return new InMemoryTenantMembershipDirectory([
+    {
+      tenantId: "provider-a",
+      principalId: "principal-dispatcher",
+      actorId: "dispatcher",
+      roles: ["dispatcher"],
+      active: true,
+    },
+    {
+      tenantId: "provider-a",
+      principalId: "principal-responder-a",
+      actorId: "responder-a",
+      roles: ["responder"],
+      active: true,
+    },
+    {
+      tenantId: "provider-a",
+      principalId: "principal-responder-b",
+      actorId: "responder-b",
+      roles: ["responder"],
+      active: true,
+    },
+    {
+      tenantId: "provider-a",
+      principalId: "principal-supervisor",
+      actorId: "supervisor",
+      roles: ["supervisor"],
+      active: true,
+    },
+    {
+      tenantId: "provider-a",
+      principalId: "principal-auditor",
+      actorId: "auditor",
+      roles: ["auditor"],
+      active: true,
+    },
+    {
+      tenantId: "provider-a",
+      principalId: "principal-inactive",
+      actorId: "inactive-responder",
+      roles: ["responder"],
+      active: false,
+    },
+  ]);
+}
+
+test("application service drives the full authorized GK lifecycle", async () => {
   const times = [
     at(0),
     at(2),
@@ -25,6 +74,7 @@ test("application service drives the full GK last-mile lifecycle", async () => {
 
   const service = new CaseService(
     new InMemoryCaseRepository(),
+    memberships(),
     () => times[tick++] ?? at(99),
   );
 
@@ -44,17 +94,19 @@ test("application service drives the full GK last-mile lifecycle", async () => {
   result = await service.execute({
     tenantId: "provider-a",
     caseId: "case-001",
+    principalId: "principal-dispatcher",
     expectedVersion: 1,
-    command: { type: "acknowledge", actorId: "dispatcher" },
+    command: { type: "acknowledge" },
   });
+  assert.equal(result.event.actorId, "dispatcher");
 
   result = await service.execute({
     tenantId: "provider-a",
     caseId: "case-001",
+    principalId: "principal-dispatcher",
     expectedVersion: 2,
     command: {
       type: "assign",
-      actorId: "dispatcher",
       assigneeId: "responder-a",
     },
   });
@@ -62,17 +114,18 @@ test("application service drives the full GK last-mile lifecycle", async () => {
   result = await service.execute({
     tenantId: "provider-a",
     caseId: "case-001",
+    principalId: "principal-responder-a",
     expectedVersion: 3,
-    command: { type: "start_action", actorId: "responder-a" },
+    command: { type: "start_action" },
   });
 
   result = await service.execute({
     tenantId: "provider-a",
     caseId: "case-001",
+    principalId: "principal-responder-a",
     expectedVersion: 4,
     command: {
       type: "request_handoff",
-      actorId: "responder-a",
       targetAssigneeId: "responder-b",
     },
   });
@@ -84,17 +137,18 @@ test("application service drives the full GK last-mile lifecycle", async () => {
   result = await service.execute({
     tenantId: "provider-a",
     caseId: "case-001",
+    principalId: "principal-responder-b",
     expectedVersion: 5,
-    command: { type: "accept_handoff", actorId: "responder-b" },
+    command: { type: "accept_handoff" },
   });
 
   result = await service.execute({
     tenantId: "provider-a",
     caseId: "case-001",
+    principalId: "principal-responder-b",
     expectedVersion: 6,
     command: {
       type: "complete",
-      actorId: "responder-b",
       outcome: "confirmed_safe",
       summary: "電話で本人の安全を確認",
       evidence: [{ kind: "call", ref: "call:001" }],
@@ -107,22 +161,188 @@ test("application service drives the full GK last-mile lifecycle", async () => {
   result = await service.execute({
     tenantId: "provider-a",
     caseId: "case-001",
+    principalId: "principal-supervisor",
     expectedVersion: 7,
-    command: { type: "close", actorId: "supervisor" },
+    command: { type: "close" },
   });
 
   assert.equal(result.aggregate.status, "CLOSED");
 
-  const metrics = await service.metrics("provider-a", "case-001");
+  const metrics = await service.metrics({
+    tenantId: "provider-a",
+    caseId: "case-001",
+    principalId: "principal-dispatcher",
+  });
   assert.equal(metrics.timeToAcknowledgeMs, 2 * 60_000);
   assert.equal(metrics.timeToAssignmentMs, 4 * 60_000);
   assert.equal(metrics.timeToFirstActionMs, 5 * 60_000);
   assert.equal(metrics.timeToCompletionMs, 20 * 60_000);
   assert.equal(metrics.handoffCount, 1);
 
-  assert.equal(
-    await service.get("provider-b", "case-001"),
-    null,
-    "wrong tenant must not observe the case",
+  await assert.rejects(
+    service.get({
+      tenantId: "provider-b",
+      caseId: "case-001",
+      principalId: "principal-dispatcher",
+    }),
+    CaseAccessDeniedError,
+  );
+});
+
+test("caller cannot spoof actorId because application commands do not accept it", async () => {
+  const service = new CaseService(
+    new InMemoryCaseRepository(),
+    memberships(),
+    () => at(0),
+  );
+
+  await service.openFromSignal(
+    {
+      id: "signal-spoof",
+      tenantId: "provider-a",
+      subjectId: "subject-spoof",
+      type: "manual",
+    },
+    "case-spoof",
+  );
+
+  const result = await service.execute({
+    tenantId: "provider-a",
+    caseId: "case-spoof",
+    principalId: "principal-dispatcher",
+    expectedVersion: 1,
+    command: { type: "acknowledge" },
+  });
+
+  assert.equal(result.event.actorId, "dispatcher");
+});
+
+test("auditor is read-only and denial occurs before mutation", async () => {
+  const service = new CaseService(
+    new InMemoryCaseRepository(),
+    memberships(),
+    () => at(0),
+  );
+
+  await service.openFromSignal(
+    {
+      id: "signal-audit",
+      tenantId: "provider-a",
+      subjectId: "subject-audit",
+      type: "manual",
+    },
+    "case-audit",
+  );
+
+  await assert.rejects(
+    service.execute({
+      tenantId: "provider-a",
+      caseId: "case-audit",
+      principalId: "principal-auditor",
+      expectedVersion: 1,
+      command: { type: "acknowledge" },
+    }),
+    (error: unknown) =>
+      error instanceof CaseAccessDeniedError &&
+      error.reason === "command_forbidden",
+  );
+
+  const stored = await service.get({
+    tenantId: "provider-a",
+    caseId: "case-audit",
+    principalId: "principal-auditor",
+  });
+  assert.equal(stored?.aggregate.version, 1);
+  assert.equal(stored?.aggregate.status, "NEW");
+});
+
+test("dispatcher cannot assign to missing, inactive, or non-responder staff", async () => {
+  const service = new CaseService(
+    new InMemoryCaseRepository(),
+    memberships(),
+    () => at(0),
+  );
+
+  await service.openFromSignal(
+    {
+      id: "signal-target",
+      tenantId: "provider-a",
+      subjectId: "subject-target",
+      type: "manual",
+    },
+    "case-target",
+  );
+
+  await service.execute({
+    tenantId: "provider-a",
+    caseId: "case-target",
+    principalId: "principal-dispatcher",
+    expectedVersion: 1,
+    command: { type: "acknowledge" },
+  });
+
+  for (const assigneeId of [
+    "missing",
+    "inactive-responder",
+    "auditor",
+  ]) {
+    await assert.rejects(
+      service.execute({
+        tenantId: "provider-a",
+        caseId: "case-target",
+        principalId: "principal-dispatcher",
+        expectedVersion: 2,
+        command: { type: "assign", assigneeId },
+      }),
+      CaseAccessDeniedError,
+    );
+  }
+
+  const stored = await service.get({
+    tenantId: "provider-a",
+    caseId: "case-target",
+    principalId: "principal-dispatcher",
+  });
+  assert.equal(stored?.aggregate.version, 2);
+  assert.equal(stored?.aggregate.status, "ACKNOWLEDGED");
+});
+
+test("inactive membership cannot read or mutate Cases", async () => {
+  const service = new CaseService(
+    new InMemoryCaseRepository(),
+    memberships(),
+    () => at(0),
+  );
+
+  await service.openFromSignal(
+    {
+      id: "signal-inactive",
+      tenantId: "provider-a",
+      subjectId: "subject-inactive",
+      type: "manual",
+    },
+    "case-inactive",
+  );
+
+  await assert.rejects(
+    service.get({
+      tenantId: "provider-a",
+      caseId: "case-inactive",
+      principalId: "principal-inactive",
+    }),
+    (error: unknown) =>
+      error instanceof CaseAccessDeniedError &&
+      error.reason === "membership_inactive",
+  );
+
+  await assert.rejects(
+    service.execute({
+      tenantId: "provider-a",
+      caseId: "case-inactive",
+      principalId: "principal-inactive",
+      expectedVersion: 1,
+      command: { type: "acknowledge" },
+    }),
+    CaseAccessDeniedError,
   );
 });

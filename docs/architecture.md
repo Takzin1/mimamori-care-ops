@@ -118,3 +118,27 @@ A Case belongs to exactly one `tenantId` from the moment `case_created` is emitt
 Persistence keys are scoped by `tenantId + caseId`, never by `caseId` alone. This allows provider organizations to operate independently even when identifiers collide, and prevents cross-tenant reads or writes by construction.
 
 Tenant scope is immutable for the lifetime of a Case. Moving a Case between providers is modeled as an explicit transfer workflow, not by rewriting `tenantId`.
+
+
+## Authorization invariant
+
+A caller never supplies the audit actor identity directly.
+
+The application boundary resolves:
+
+```
+tenantId + authenticated principalId
+  -> active TenantMembership
+  -> actorId + roles
+```
+
+before loading or mutating a Case.
+
+Command authorization is role-based, while ownership-sensitive transitions remain enforced by the pure Case Core. Assignment and handoff targets must resolve to active responder/supervisor memberships in the same tenant.
+
+This creates two independent checks:
+
+1. **Application authorization** — may this principal perform this class of operation?
+2. **Core responsibility invariant** — is this actor the accountable assignee/target for this specific Case state?
+
+Both must pass.
