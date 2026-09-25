@@ -10,6 +10,7 @@ ADRs document decisions that change the meaning or safety boundary of the Care O
 | [0004](0004-signal-idempotency.md) | Signal idempotency and immutable lineage | Accepted |
 | [0005](0005-priority-sla-aging.md) | Explicit priority and deterministic SLA aging | Accepted |
 | [0006](0006-transactional-outbox.md) | Transactional outbox for external side effects | Accepted |
+| [0007](0007-production-identity-boundary.md) | Production identity boundary and tenant membership | Accepted |
 
 ## When to add an ADR
 
