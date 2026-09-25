@@ -82,11 +82,33 @@ test("Data API access is fail-closed to server-side service role", async () => {
     false,
     "persistence RPCs must remain security-invoker",
   );
-  assert.equal(
-    source.match(/security invoker/g)?.length,
-    2,
-    "both persistence RPCs must explicitly remain security-invoker",
-  );
+  for (const name of [
+    "create_care_case",
+    "append_care_case_event",
+    "enqueue_care_outbox",
+    "claim_care_outbox",
+    "complete_care_outbox",
+    "fail_care_outbox",
+  ]) {
+    const start = source.indexOf(
+      "create or replace function public." + name,
+    );
+    assert.ok(start >= 0, name + " must exist");
+
+    const next = source.indexOf(
+      "create or replace function public.",
+      start + 1,
+    );
+    const body = source.slice(
+      start,
+      next >= 0 ? next : source.length,
+    );
+
+    assert.ok(
+      body.includes("security invoker"),
+      name + " must explicitly remain security-invoker",
+    );
+  }
 });
 
 
