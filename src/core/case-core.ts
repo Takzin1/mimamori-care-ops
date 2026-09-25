@@ -62,6 +62,7 @@ export function createCase(input: NewCaseInput): {
       sourceType: input.sourceType,
       sourceAdapter,
       sourceSignalId,
+      priority: input.priority,
     },
   };
 
@@ -83,6 +84,32 @@ export function executeCommand(
   let event: CaseEvent;
 
   switch (command.type) {
+    case "set_priority":
+      requireStatus(
+        aggregate,
+        "NEW",
+        "ACKNOWLEDGED",
+        "ASSIGNED",
+        "IN_PROGRESS",
+        "HANDOFF_PENDING",
+      );
+      if (command.priority === aggregate.priority) {
+        throw new InvalidTransitionError(
+          "Priority change must select a different priority",
+        );
+      }
+      event = {
+        type: "priority_changed",
+        sequence,
+        at,
+        actorId,
+        data: {
+          previousPriority: aggregate.priority,
+          priority: command.priority,
+        },
+      };
+      break;
+
     case "acknowledge":
       requireStatus(aggregate, "NEW");
       event = {
@@ -228,6 +255,7 @@ export function applyEvent(
       sourceType: event.data.sourceType,
       sourceAdapter: event.data.sourceAdapter,
       sourceSignalId: event.data.sourceSignalId,
+      priority: event.data.priority,
       status: "NEW",
       version: 1,
       assigneeId: null,
@@ -260,6 +288,30 @@ export function applyEvent(
   };
 
   switch (event.type) {
+    case "priority_changed":
+      requireStatus(
+        aggregate,
+        "NEW",
+        "ACKNOWLEDGED",
+        "ASSIGNED",
+        "IN_PROGRESS",
+        "HANDOFF_PENDING",
+      );
+      if (event.data.previousPriority !== aggregate.priority) {
+        throw new InvalidTransitionError(
+          "Priority change previous value does not match aggregate",
+        );
+      }
+      if (event.data.priority === aggregate.priority) {
+        throw new InvalidTransitionError(
+          "Priority change must select a different priority",
+        );
+      }
+      return {
+        ...next,
+        priority: event.data.priority,
+      };
+
     case "acknowledged":
       requireStatus(aggregate, "NEW");
       return {

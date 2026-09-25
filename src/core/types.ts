@@ -10,6 +10,15 @@ export const CASE_STATUSES = [
 
 export type CaseStatus = (typeof CASE_STATUSES)[number];
 
+export const CASE_PRIORITIES = [
+  "critical",
+  "high",
+  "normal",
+  "low",
+] as const;
+
+export type CasePriority = (typeof CASE_PRIORITIES)[number];
+
 export const SIGNAL_TYPES = [
   "non_response",
   "unwell",
@@ -65,6 +74,7 @@ export interface CaseAggregate {
   sourceType: SignalType;
   sourceAdapter: string;
   sourceSignalId: string;
+  priority: CasePriority;
   status: CaseStatus;
   version: number;
   assigneeId: string | null;
@@ -95,6 +105,15 @@ export type CaseEvent =
         sourceType: SignalType;
         sourceAdapter: string;
         sourceSignalId: string;
+        priority: CasePriority;
+      };
+    })
+  | (EventBase & {
+      type: "priority_changed";
+      actorId: string;
+      data: {
+        previousPriority: CasePriority;
+        priority: CasePriority;
       };
     })
   | (EventBase & {
@@ -145,6 +164,7 @@ export type CaseEvent =
 export type CaseCreatedEvent = Extract<CaseEvent, { type: "case_created" }>;
 
 export type CaseCommand =
+  | { type: "set_priority"; actorId: string; priority: CasePriority }
   | { type: "acknowledge"; actorId: string }
   | { type: "assign"; actorId: string; assigneeId: string }
   | { type: "start_action"; actorId: string }
@@ -167,5 +187,6 @@ export interface NewCaseInput {
   sourceType: SignalType;
   sourceAdapter: string;
   sourceSignalId: string;
+  priority: CasePriority;
   createdAt: string;
 }

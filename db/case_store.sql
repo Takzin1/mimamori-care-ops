@@ -21,6 +21,9 @@ create table if not exists public.care_cases (
   ),
   source_adapter text not null,
   source_signal_id text not null,
+  priority text not null check (
+    priority in ('critical', 'high', 'normal', 'low')
+  ),
   status text not null check (
     status in (
       'NEW',
@@ -56,6 +59,7 @@ create table if not exists public.care_case_events (
   event_type text not null check (
     event_type in (
       'case_created',
+      'priority_changed',
       'acknowledged',
       'assigned',
       'action_started',
@@ -78,6 +82,9 @@ create table if not exists public.care_case_events (
 
 create index if not exists care_cases_tenant_status_idx
   on public.care_cases (tenant_id, status, created_at);
+
+create index if not exists care_cases_tenant_priority_status_idx
+  on public.care_cases (tenant_id, priority, status, created_at);
 
 create index if not exists care_cases_tenant_assignee_idx
   on public.care_cases (tenant_id, assignee_id, status)
@@ -114,6 +121,7 @@ declare
   v_source_type text := nullif(trim(p_snapshot->>'sourceType'), '');
   v_source_adapter text := nullif(trim(p_snapshot->>'sourceAdapter'), '');
   v_source_signal_id text := nullif(trim(p_snapshot->>'sourceSignalId'), '');
+  v_priority text := nullif(trim(p_snapshot->>'priority'), '');
   v_version bigint := (p_snapshot->>'version')::bigint;
   v_event_sequence bigint := (p_event->>'sequence')::bigint;
   v_inserted_case_id text;
@@ -124,7 +132,8 @@ begin
      or v_subject_id is null
      or v_source_type is null
      or v_source_adapter is null
-     or v_source_signal_id is null then
+     or v_source_signal_id is null
+     or v_priority is null then
     raise exception 'case and Signal lineage fields are required';
   end if;
 
@@ -140,7 +149,8 @@ begin
      or p_event#>>'{data,subjectId}' is distinct from v_subject_id
      or p_event#>>'{data,sourceType}' is distinct from v_source_type
      or p_event#>>'{data,sourceAdapter}' is distinct from v_source_adapter
-     or p_event#>>'{data,sourceSignalId}' is distinct from v_source_signal_id then
+     or p_event#>>'{data,sourceSignalId}' is distinct from v_source_signal_id
+     or p_event#>>'{data,priority}' is distinct from v_priority then
     raise exception 'case creation lineage mismatch';
   end if;
 
@@ -151,6 +161,7 @@ begin
     source_type,
     source_adapter,
     source_signal_id,
+    priority,
     status,
     version,
     assignee_id,
@@ -173,6 +184,7 @@ begin
     v_source_type,
     v_source_adapter,
     v_source_signal_id,
+    v_priority,
     p_snapshot->>'status',
     v_version,
     nullif(p_snapshot->>'assigneeId', ''),
@@ -332,7 +344,8 @@ begin
   end if;
 
   update public.care_cases
-     set status = p_snapshot->>'status',
+     set priority = p_snapshot->>'priority',
+         status = p_snapshot->>'status',
          version = v_next_version,
          assignee_id = nullif(p_snapshot->>'assigneeId', ''),
          handoff_target_id = nullif(p_snapshot->>'handoffTargetId', ''),

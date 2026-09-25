@@ -40,6 +40,12 @@ function bindActor(
   actorId: string,
 ): CaseCommand {
   switch (command.type) {
+    case "set_priority":
+      return {
+        type: "set_priority",
+        actorId,
+        priority: command.priority,
+      };
     case "acknowledge":
       return { type: "acknowledge", actorId };
     case "assign":
@@ -103,6 +109,7 @@ export class CaseService {
       sourceType: signal.type,
       sourceAdapter: signal.sourceAdapter,
       sourceSignalId: signal.id,
+      priority: signal.priority,
       createdAt: this.now(),
     });
 

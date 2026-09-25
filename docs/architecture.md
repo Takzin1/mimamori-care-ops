@@ -167,3 +167,23 @@ After `case_created`, origin lineage is immutable:
 - createdAt
 
 Operational state can change; provenance cannot.
+
+
+## Priority and SLA invariant
+
+Each Case carries an explicit `critical / high / normal / low` priority.
+
+Priority changes are append-only `priority_changed` events. They do not reset acknowledgement, assignment, action, handoff, or completion clocks.
+
+SLA evaluation is pure and deterministic:
+
+```
+Case snapshot + event stream + tenant SLA policy + explicit now
+  -> current stalled stage
+  -> stage age
+  -> next deadline
+  -> active breaches
+  -> escalation recommendations
+```
+
+The evaluator does not send notifications. Durable external escalation delivery belongs to the outbox boundary.

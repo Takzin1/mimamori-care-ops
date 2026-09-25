@@ -6,6 +6,7 @@ import type {
 } from "./types.ts";
 
 const COMMAND_ROLES: Record<CaseCommandIntent["type"], readonly StaffRole[]> = {
+  set_priority: ["dispatcher", "supervisor"],
   acknowledge: ["dispatcher", "responder", "supervisor"],
   assign: ["dispatcher", "supervisor"],
   start_action: ["responder", "supervisor"],

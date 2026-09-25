@@ -83,6 +83,7 @@ test("application service drives the full authorized GK lifecycle", async () => 
       id: "signal-001",
       tenantId: "provider-a",
       sourceAdapter: "test-adapter",
+      priority: "normal",
       subjectId: "subject-001",
       type: "non_response",
     },
@@ -203,6 +204,7 @@ test("caller cannot spoof actorId because application commands do not accept it"
       id: "signal-spoof",
       tenantId: "provider-a",
       sourceAdapter: "test-adapter",
+      priority: "normal",
       subjectId: "subject-spoof",
       type: "manual",
     },
@@ -232,6 +234,7 @@ test("auditor is read-only and denial occurs before mutation", async () => {
       id: "signal-audit",
       tenantId: "provider-a",
       sourceAdapter: "test-adapter",
+      priority: "normal",
       subjectId: "subject-audit",
       type: "manual",
     },
@@ -272,6 +275,7 @@ test("dispatcher cannot assign to missing, inactive, or non-responder staff", as
       id: "signal-target",
       tenantId: "provider-a",
       sourceAdapter: "test-adapter",
+      priority: "normal",
       subjectId: "subject-target",
       type: "manual",
     },
@@ -324,6 +328,7 @@ test("inactive membership cannot read or mutate Cases", async () => {
       id: "signal-inactive",
       tenantId: "provider-a",
       sourceAdapter: "test-adapter",
+      priority: "normal",
       subjectId: "subject-inactive",
       type: "manual",
     },
@@ -365,7 +370,8 @@ test("application Signal retry returns the original Case without duplication", a
     id: "signal-application-retry",
     tenantId: "provider-a",
     sourceAdapter: "line-checkin",
-    subjectId: "subject-retry",
+    priority: "normal",
+      subjectId: "subject-retry",
     type: "non_response" as const,
   };
 
@@ -390,4 +396,58 @@ test("application Signal retry returns the original Case without duplication", a
 
   assert.ok(original);
   assert.equal(duplicate, null);
+});
+
+
+test("priority changes are authorized and audited", async () => {
+  const service = new CaseService(
+    new InMemoryCaseRepository(),
+    memberships(),
+    () => at(1),
+  );
+
+  await service.openFromSignal(
+    {
+      id: "signal-priority",
+      tenantId: "provider-a",
+      sourceAdapter: "test-adapter",
+      priority: "normal",
+      subjectId: "subject-priority",
+      type: "non_response",
+    },
+    "case-priority",
+  );
+
+  await assert.rejects(
+    service.execute({
+      tenantId: "provider-a",
+      caseId: "case-priority",
+      principalId: "principal-responder-a",
+      expectedVersion: 1,
+      command: {
+        type: "set_priority",
+        priority: "critical",
+      },
+    }),
+    CaseAccessDeniedError,
+  );
+
+  const changed = await service.execute({
+    tenantId: "provider-a",
+    caseId: "case-priority",
+    principalId: "principal-dispatcher",
+    expectedVersion: 1,
+    command: {
+      type: "set_priority",
+      priority: "critical",
+    },
+  });
+
+  assert.equal(changed.aggregate.priority, "critical");
+  assert.equal(changed.event.type, "priority_changed");
+  assert.equal(changed.event.actorId, "dispatcher");
+  if (changed.event.type === "priority_changed") {
+    assert.equal(changed.event.data.previousPriority, "normal");
+    assert.equal(changed.event.data.priority, "critical");
+  }
 });

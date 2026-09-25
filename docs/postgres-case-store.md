@@ -12,7 +12,9 @@ Current materialized Case snapshot, keyed by:
 tenant_id + case_id
 ```
 
-Operational query columns such as status, assignee, completion timestamps, and source type are indexed separately while the full aggregate is retained in `snapshot`.
+Operational query columns such as status, priority, assignee, completion timestamps, and source type are indexed separately while the full aggregate is retained in `snapshot`.
+
+Priority is mutable operational state and is persisted on every authorized `priority_changed` transition. Signal lineage remains immutable.
 
 Signal creation is idempotent on:
 

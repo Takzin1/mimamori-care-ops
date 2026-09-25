@@ -147,3 +147,31 @@ test("Case append cannot rewrite immutable Signal lineage", async () => {
   assert.equal(updateBlock.includes("subject_id ="), false);
   assert.equal(updateBlock.includes("source_type ="), false);
 });
+
+
+test("Postgres snapshot persists priority changes as operational state", async () => {
+  const source = await sql();
+
+  assert.ok(
+    source.includes(
+      "priority in ('critical', 'high', 'normal', 'low')",
+    ),
+  );
+  assert.ok(source.includes("'priority_changed'"));
+  assert.ok(
+    source.includes(
+      "care_cases_tenant_priority_status_idx",
+    ),
+  );
+
+  const appendStart = source.indexOf(
+    "create or replace function public.append_care_case_event",
+  );
+  const append = source.slice(appendStart);
+
+  assert.ok(
+    append.includes(
+      "set priority = p_snapshot->>'priority'",
+    ),
+  );
+});

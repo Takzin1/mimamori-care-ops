@@ -23,6 +23,7 @@ What is already implemented and tested:
 - tenant-scoped persistence contract
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
+- explicit Case priority + deterministic SLA/aging evaluation
 - Postgres/Supabase Case Store contract with RLS and fail-closed RPC access
 - Time to Completion and supporting operational metrics
 
@@ -30,7 +31,6 @@ Not yet production-ready:
 
 - production authentication provider integration
 - production Postgres repository adapter
-- SLA and escalation engine
 - Responder Console
 - deployment / observability / incident runbook
 
@@ -99,6 +99,9 @@ The Core intentionally does **not** know about LINE, Supabase, UI frameworks, mu
 - **No duplicate Case from Signal retry**
   `tenantId + sourceAdapter + sourceSignalId` is the idempotency boundary.
 
+- **No hidden SLA clock reset**
+  Priority changes are explicit events and do not reset elapsed operational time.
+
 - **Replayable operations**
   Current Case state can be reconstructed from the event stream.
 
@@ -149,8 +152,10 @@ Start here:
 4. [ADR 0002 — Tenant-scoped persistence](docs/adr/0002-tenant-scoped-persistence.md)
 5. [ADR 0003 — Tenant staff authorization](docs/adr/0003-tenant-staff-command-authorization.md)
 6. [ADR 0004 — Signal idempotency](docs/adr/0004-signal-idempotency.md)
-7. `tests/application-case-service.test.ts`
-8. `db/case_store.sql`
+7. [ADR 0005 — Priority and SLA aging](docs/adr/0005-priority-sla-aging.md)
+8. `tests/application-case-service.test.ts`
+9. `tests/sla.test.ts`
+10. `db/case_store.sql`
 
 ## Development
 
