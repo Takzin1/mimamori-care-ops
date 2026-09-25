@@ -36,6 +36,7 @@ Application commands never accept `actorId` from the caller. `CaseService` binds
 
 | Command | dispatcher | responder | supervisor | auditor |
 |---|---:|---:|---:|---:|
+| set_priority | yes | no | yes | no |
 | acknowledge | yes | yes | yes | no |
 | assign | yes | no | yes | no |
 | start_action | no | yes | yes | no |
