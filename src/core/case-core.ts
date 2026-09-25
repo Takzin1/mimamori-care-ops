@@ -44,6 +44,7 @@ export function createCase(input: NewCaseInput): {
   event: CaseEvent;
 } {
   requireText(input.id, "case id");
+  requireText(input.tenantId, "tenant id");
   requireText(input.subjectId, "subject id");
 
   const event: CaseEvent = {
@@ -53,6 +54,7 @@ export function createCase(input: NewCaseInput): {
     actorId: null,
     data: {
       caseId: input.id,
+      tenantId: input.tenantId,
       subjectId: input.subjectId,
       sourceType: input.sourceType,
       sourceSignalId: input.sourceSignalId ?? null,
@@ -217,6 +219,7 @@ export function applyEvent(
 
     return {
       id: event.data.caseId,
+      tenantId: event.data.tenantId,
       subjectId: event.data.subjectId,
       sourceType: event.data.sourceType,
       sourceSignalId: event.data.sourceSignalId,

@@ -109,3 +109,12 @@ AI must not silently:
 - accept a handoff
 - replace accountable human ownership
 - erase or rewrite operational evidence
+
+
+## Tenant invariant
+
+A Case belongs to exactly one `tenantId` from the moment `case_created` is emitted.
+
+Persistence keys are scoped by `tenantId + caseId`, never by `caseId` alone. This allows provider organizations to operate independently even when identifiers collide, and prevents cross-tenant reads or writes by construction.
+
+Tenant scope is immutable for the lifetime of a Case. Moving a Case between providers is modeled as an explicit transfer workflow, not by rewriting `tenantId`.

@@ -60,6 +60,7 @@ export interface CompletionRecord {
 
 export interface CaseAggregate {
   id: string;
+  tenantId: string;
   subjectId: string;
   sourceType: SignalType;
   sourceSignalId: string | null;
@@ -88,6 +89,7 @@ export type CaseEvent =
       type: "case_created";
       data: {
         caseId: string;
+        tenantId: string;
         subjectId: string;
         sourceType: SignalType;
         sourceSignalId: string | null;
@@ -138,6 +140,8 @@ export type CaseEvent =
       data: { reason: string };
     });
 
+export type CaseCreatedEvent = Extract<CaseEvent, { type: "case_created" }>;
+
 export type CaseCommand =
   | { type: "acknowledge"; actorId: string }
   | { type: "assign"; actorId: string; assigneeId: string }
@@ -156,6 +160,7 @@ export type CaseCommand =
 
 export interface NewCaseInput {
   id: string;
+  tenantId: string;
   subjectId: string;
   sourceType: SignalType;
   sourceSignalId?: string | null;
