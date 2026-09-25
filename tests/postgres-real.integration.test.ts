@@ -57,8 +57,8 @@ test(
     applyFile("db/case_store.sql");
 
     sql(
-      "truncate table public.care_case_events, public.care_cases " +
-      "restart identity cascade;",
+      "truncate table public.care_outbox, public.care_case_events, " +
+      "public.care_cases restart identity cascade;",
     );
 
     const created = createCase({
@@ -115,6 +115,8 @@ test(
         "'cases',(select count(*) from public.care_cases " +
         "where tenant_id='provider-db')," +
         "'events',(select count(*) from public.care_case_events " +
+        "where tenant_id='provider-db')," +
+        "'outbox',(select count(*) from public.care_outbox " +
         "where tenant_id='provider-db'))::text;",
       ),
     );
@@ -122,6 +124,7 @@ test(
     assert.deepEqual(countsAfterRetry, {
       cases: 1,
       events: 1,
+      outbox: 1,
     });
 
     const acknowledged = executeCommand(
@@ -207,7 +210,9 @@ test(
         "select json_build_object(" +
         "'version',version,'status',status," +
         "'events',(select count(*) from public.care_case_events e " +
-        "where e.tenant_id=c.tenant_id and e.case_id=c.case_id)" +
+        "where e.tenant_id=c.tenant_id and e.case_id=c.case_id)," +
+        "'outbox',(select count(*) from public.care_outbox o " +
+        "where o.tenant_id=c.tenant_id)" +
         ")::text from public.care_cases c " +
         "where tenant_id='provider-db' and case_id='case-db-001';",
       ),
@@ -217,6 +222,7 @@ test(
       version: 2,
       status: "ACKNOWLEDGED",
       events: 2,
+      outbox: 2,
     });
 
     const stored = JSON.parse(
@@ -235,6 +241,135 @@ test(
       replayCase(stored.events),
       stored.snapshot,
     );
+
+    const initialOutboxKeys = JSON.parse(
+      sql(
+        "select coalesce(json_agg(delivery_key order by id),'[]'::json)::text " +
+        "from public.care_outbox where tenant_id='provider-db';",
+      ),
+    );
+    assert.deepEqual(initialOutboxKeys, [
+      "case-event:case-db-001:1",
+      "case-event:case-db-001:2",
+    ]);
+
+    const firstClaim = JSON.parse(
+      sql(
+        "set role service_role; select public.claim_care_outbox(" +
+        "'provider-db','worker-a',1,60)::text;",
+      ),
+    );
+    assert.equal(firstClaim.length, 1);
+    assert.equal(firstClaim[0].attemptCount, 1);
+    assert.equal(firstClaim[0].workerId, "worker-a");
+
+    const secondClaim = JSON.parse(
+      sql(
+        "set role service_role; select public.claim_care_outbox(" +
+        "'provider-db','worker-b',10,60)::text;",
+      ),
+    );
+    assert.equal(secondClaim.length, 1);
+    assert.notEqual(secondClaim[0].id, firstClaim[0].id);
+
+    const completeFirst = JSON.parse(
+      sql(
+        "set role service_role; select public.complete_care_outbox(" +
+        "'provider-db'," + firstClaim[0].id + ",'worker-a')::text;",
+      ),
+    );
+    assert.equal(completeFirst.ok, true);
+
+    const failSecond = JSON.parse(
+      sql(
+        "set role service_role; select public.fail_care_outbox(" +
+        "'provider-db'," + secondClaim[0].id +
+        ",'worker-b','synthetic failure',now())::text;",
+      ),
+    );
+    assert.equal(failSecond.ok, true);
+    assert.equal(failSecond.status, "failed");
+
+    const retryClaim = JSON.parse(
+      sql(
+        "set role service_role; select public.claim_care_outbox(" +
+        "'provider-db','worker-c',1,60)::text;",
+      ),
+    );
+    assert.equal(retryClaim.length, 1);
+    assert.equal(retryClaim[0].id, secondClaim[0].id);
+    assert.equal(retryClaim[0].attemptCount, 2);
+
+    const completeRetry = JSON.parse(
+      sql(
+        "set role service_role; select public.complete_care_outbox(" +
+        "'provider-db'," + retryClaim[0].id + ",'worker-c')::text;",
+      ),
+    );
+    assert.equal(completeRetry.ok, true);
+
+    const escalationPayload = {
+      caseId: "case-db-001",
+      stage: "acknowledge",
+      dueAt: "2026-09-25T06:01:00.000Z",
+    };
+
+    const enqueueFirst = JSON.parse(
+      sql(
+        "set role service_role; select public.enqueue_care_outbox(" +
+        "'provider-db','sla.breach','sla:case-db-001:ack'," +
+        jsonLiteral(escalationPayload) + ",now(),1)::text;",
+      ),
+    );
+    assert.equal(enqueueFirst.ok, true);
+    assert.equal(enqueueFirst.created, true);
+
+    const enqueueRetry = JSON.parse(
+      sql(
+        "set role service_role; select public.enqueue_care_outbox(" +
+        "'provider-db','sla.breach','sla:case-db-001:ack'," +
+        jsonLiteral(escalationPayload) + ",now(),1)::text;",
+      ),
+    );
+    assert.equal(enqueueRetry.ok, true);
+    assert.equal(enqueueRetry.created, false);
+    assert.equal(enqueueRetry.id, enqueueFirst.id);
+
+    const enqueueConflict = JSON.parse(
+      sql(
+        "set role service_role; select public.enqueue_care_outbox(" +
+        "'provider-db','sla.breach','sla:case-db-001:ack'," +
+        jsonLiteral({
+          ...escalationPayload,
+          stage: "assign",
+        }) + ",now(),1)::text;",
+      ),
+    );
+    assert.equal(enqueueConflict.ok, false);
+    assert.equal(enqueueConflict.conflict, true);
+    assert.equal(
+      enqueueConflict.reason,
+      "delivery_key_reuse",
+    );
+
+    const deadLetterClaim = JSON.parse(
+      sql(
+        "set role service_role; select public.claim_care_outbox(" +
+        "'provider-db','worker-d',10,60)::text;",
+      ),
+    );
+    assert.equal(deadLetterClaim.length, 1);
+    assert.equal(deadLetterClaim[0].id, enqueueFirst.id);
+
+    const deadLetterResult = JSON.parse(
+      sql(
+        "set role service_role; select public.fail_care_outbox(" +
+        "'provider-db'," + enqueueFirst.id +
+        ",'worker-d','permanent synthetic failure',now())::text;",
+      ),
+    );
+    assert.equal(deadLetterResult.ok, true);
+    assert.equal(deadLetterResult.status, "dead_letter");
 
     const eventUpdatePrivilege = sql(
       "select has_table_privilege(" +
