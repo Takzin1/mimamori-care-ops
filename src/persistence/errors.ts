@@ -15,3 +15,19 @@ export class DuplicateCaseError extends Error {
     this.name = "DuplicateCaseError";
   }
 }
+
+
+export class SignalReplayMismatchError extends Error {
+  readonly code = "SIGNAL_REPLAY_MISMATCH";
+
+  constructor(
+    tenantId: string,
+    sourceAdapter: string,
+    sourceSignalId: string,
+  ) {
+    super(
+      `Signal replay payload mismatch: ${tenantId}/${sourceAdapter}/${sourceSignalId}`,
+    );
+    this.name = "SignalReplayMismatchError";
+  }
+}
