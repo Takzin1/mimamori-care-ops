@@ -6,7 +6,7 @@
 
 Mimamori Care Ops is a **Care Operations Engine** for turning a signal that requires human attention into a **verifiably completed support case**.
 
-> Detection is upstream. Notification is upstream.  
+> Detection is upstream. Notification is upstream.
 > The product boundary starts where accountable human action begins.
 
 ## Status
@@ -81,22 +81,22 @@ The Core intentionally does **not** know about LINE, Supabase, UI frameworks, mu
 
 ### Core invariants
 
-- **No ownership gap during handoff**  
+- **No ownership gap during handoff**
   The outgoing responder remains accountable until the target explicitly accepts.
 
-- **No status-only completion**  
+- **No status-only completion**
   Completion requires an outcome, summary, accountable actor, timestamp, and evidence.
 
-- **No stale overwrite**  
+- **No stale overwrite**
   Commands carry `expectedVersion`; stale writes fail instead of winning silently.
 
-- **No cross-tenant addressing by Case ID alone**  
+- **No cross-tenant addressing by Case ID alone**
   Persistence is scoped by `tenantId + caseId`.
 
-- **No caller-controlled audit actor**  
+- **No caller-controlled audit actor**
   Application commands bind `principalId -> trusted membership -> actorId`.
 
-- **Replayable operations**  
+- **Replayable operations**
   Current Case state can be reconstructed from the event stream.
 
 Read the full [Architecture](docs/architecture.md).
