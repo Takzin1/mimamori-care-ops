@@ -397,3 +397,57 @@ test("application Signal retry returns the original Case without duplication", a
   assert.ok(original);
   assert.equal(duplicate, null);
 });
+
+
+test("priority changes are authorized and audited", async () => {
+  const service = new CaseService(
+    new InMemoryCaseRepository(),
+    memberships(),
+    () => at(1),
+  );
+
+  await service.openFromSignal(
+    {
+      id: "signal-priority",
+      tenantId: "provider-a",
+      sourceAdapter: "test-adapter",
+      priority: "normal",
+      subjectId: "subject-priority",
+      type: "non_response",
+    },
+    "case-priority",
+  );
+
+  await assert.rejects(
+    service.execute({
+      tenantId: "provider-a",
+      caseId: "case-priority",
+      principalId: "principal-responder-a",
+      expectedVersion: 1,
+      command: {
+        type: "set_priority",
+        priority: "critical",
+      },
+    }),
+    CaseAccessDeniedError,
+  );
+
+  const changed = await service.execute({
+    tenantId: "provider-a",
+    caseId: "case-priority",
+    principalId: "principal-dispatcher",
+    expectedVersion: 1,
+    command: {
+      type: "set_priority",
+      priority: "critical",
+    },
+  });
+
+  assert.equal(changed.aggregate.priority, "critical");
+  assert.equal(changed.event.type, "priority_changed");
+  assert.equal(changed.event.actorId, "dispatcher");
+  if (changed.event.type === "priority_changed") {
+    assert.equal(changed.event.data.previousPriority, "normal");
+    assert.equal(changed.event.data.priority, "critical");
+  }
+});
