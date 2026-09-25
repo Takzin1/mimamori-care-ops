@@ -23,7 +23,8 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Transactional outbox / delivery worker | Implemented + tested | outbox tests + real Postgres CI |
 | Postgres Case Store SQL contract | Implemented + static-tested | `db/case_store.sql` |
 | Production identity provider | Not implemented | roadmap |
-| Responder Console UI | Planned | Issue #9 |
+| Responder Console presenter + synthetic reviewer demo | Implemented + tested | `src/presentation/` + `demo/responder-console/` |
+| Live authenticated Responder Console | Not implemented | identity integration required |
 | Production deployment | Not implemented | release checklist |
 | Production PII / care data | **Not allowed** | security policy |
 
@@ -42,6 +43,6 @@ It does **not** yet demonstrate a production-grade healthcare/care-service syste
 
 ## Next sequence
 
-1. Responder Console v0.1 — #9
-2. production identity integration
+1. production identity integration
+2. live authenticated Console API boundary
 3. deployment / observability / privacy hardening
