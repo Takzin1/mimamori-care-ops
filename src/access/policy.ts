@@ -59,9 +59,11 @@ export function assertCanExecuteCommand(
 export function assertAssignableTarget(
   membership: TenantMembership | null,
 ): asserts membership is TenantMembership {
-  assertActiveMembership(membership);
-
-  if (!hasAnyRole(membership, ["responder", "supervisor"])) {
+  if (
+    !membership ||
+    !membership.active ||
+    !hasAnyRole(membership, ["responder", "supervisor"])
+  ) {
     throw new CaseAccessDeniedError("target_not_assignable");
   }
 }
