@@ -77,3 +77,14 @@ See `docs/release-checklist.md`.
 Never expose that key to LIFF, browser/mobile bundles, public environment variables, screenshots, client logs, or demo payloads.
 
 Clients must call a trusted application/API boundary; only that trusted server boundary may instantiate the production repository adapter.
+
+
+## Outbox data boundary
+
+Outbox payloads may reference operational Case data and must be treated with the same sensitivity as the originating Case event.
+
+Do not dump full outbox payloads into public logs, CI output, analytics, screenshots, or provider error messages.
+
+Delivery adapters should log stable identifiers and status metadata rather than resident/care content.
+
+Dead-letter items require an operational review path before production use; they must not be silently ignored.
