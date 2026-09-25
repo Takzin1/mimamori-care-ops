@@ -7,7 +7,7 @@ import {
   createCase,
   executeCommand,
   replayCase,
-} from "../src/core/index.ts";
+} from "../src/index.ts";
 
 function at(minute: number): string {
   return new Date(Date.UTC(2026, 8, 25, 1, minute, 0)).toISOString();
