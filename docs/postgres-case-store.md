@@ -1,0 +1,61 @@
+# Postgres Case Store
+
+`db/case_store.sql` maps the in-memory persistence contract to Postgres/Supabase semantics.
+
+## Tables
+
+### `care_cases`
+
+Current materialized Case snapshot, keyed by:
+
+```
+tenant_id + case_id
+```
+
+Operational query columns such as status, assignee, completion timestamps, and source type are indexed separately while the full aggregate is retained in `snapshot`.
+
+### `care_case_events`
+
+Append-only event stream keyed by:
+
+```
+tenant_id + case_id + sequence
+```
+
+The full event is retained in `event`, with event type, actor, time, and data duplicated into queryable columns.
+
+## Atomic write path
+
+Application code does not perform:
+
+```
+UPDATE case
+then
+INSERT event
+```
+
+as separate calls.
+
+It calls `append_care_case_event()`, which:
+
+1. locks the Case row with `FOR UPDATE`
+2. compares `expectedVersion`
+3. validates next snapshot/event sequence
+4. updates the Case snapshot
+5. appends the event
+6. commits both together
+
+Any statement failure rolls back both writes.
+
+## Access model
+
+- RLS enabled on both public tables
+- `anon` and `authenticated` have no direct table access
+- RPC execute is revoked from PUBLIC, anon, and authenticated
+- only server-side `service_role` is granted RPC execution
+
+The functions remain security-invoker functions.
+
+## Deployment state
+
+This SQL is a reference persistence contract and has **not** yet been applied to a new Mimamori Care Ops Supabase project.
