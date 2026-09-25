@@ -24,7 +24,6 @@ test("last-mile case completes through claim, action, handoff, evidence, and clo
     sourceSignalId: "signal-001",
     subjectId: "subject-001",
     sourceType: "non_response",
-    sourceSignalId: "signal-001",
     createdAt: at(0),
   });
   events.push(event);
