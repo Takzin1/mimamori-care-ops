@@ -142,3 +142,28 @@ This creates two independent checks:
 2. **Core responsibility invariant** — is this actor the accountable assignee/target for this specific Case state?
 
 Both must pass.
+
+
+## Signal lineage invariant
+
+Signal delivery is retryable, but Case creation is idempotent.
+
+The stable source identity is:
+
+```
+tenantId + sourceAdapter + sourceSignalId
+```
+
+Compatible retries return the existing Case rather than creating another workload item. Replays that reuse the same identity with a different subject or source type are rejected.
+
+After `case_created`, origin lineage is immutable:
+
+- tenantId
+- caseId
+- subjectId
+- sourceType
+- sourceAdapter
+- sourceSignalId
+- createdAt
+
+Operational state can change; provenance cannot.
