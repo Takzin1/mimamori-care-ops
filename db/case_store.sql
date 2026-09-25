@@ -485,6 +485,7 @@ as $
 declare
   v_id bigint;
   v_created boolean := false;
+  v_existing record;
 begin
   if nullif(trim(p_tenant_id), '') is null
      or nullif(trim(p_topic), '') is null
@@ -518,11 +519,27 @@ begin
   if v_id is not null then
     v_created := true;
   else
-    select id
-      into v_id
+    select id, topic, payload
+      into v_existing
       from public.care_outbox
      where tenant_id = p_tenant_id
        and delivery_key = p_delivery_key;
+
+    if not found then
+      raise exception 'outbox idempotency index is inconsistent';
+    end if;
+
+    v_id := v_existing.id;
+
+    if v_existing.topic is distinct from p_topic
+       or v_existing.payload is distinct from p_payload then
+      return jsonb_build_object(
+        'ok', false,
+        'conflict', true,
+        'reason', 'delivery_key_reuse',
+        'id', v_id
+      );
+    end if;
   end if;
 
   return jsonb_build_object(
