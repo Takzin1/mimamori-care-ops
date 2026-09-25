@@ -38,6 +38,9 @@ jobs:
       - name: Coverage report
         run: npm run test:coverage
 
+      - name: Reviewer demo syntax
+        run: npm run test:demo
+
       - name: Package dry run
         run: npm pack --dry-run --ignore-scripts
 
