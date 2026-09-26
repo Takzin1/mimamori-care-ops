@@ -382,9 +382,11 @@ function commandParams(
 
 export class PostgresMembershipAdminRepository
 implements MembershipAdminRepository {
-  constructor(
-    private readonly sql: AdminSqlExecutor,
-  ) {}
+  private readonly sql: AdminSqlExecutor;
+
+  constructor(sql: AdminSqlExecutor) {
+    this.sql = sql;
+  }
 
   async load(
     tenantId: string,
