@@ -22,6 +22,28 @@ Evidence may live in a restricted system. This document records only safe refere
 - Restricted evidence location/reference:
 - Overall result: `PASS / FAIL / BLOCKED`
 
+## Safe automated boundary preflight
+
+After the staging API and exact Console origin are provisioned, run:
+
+```bash
+npm run preflight:staging -- \
+  --base-url https://api.example.test \
+  --console-origin https://console.example.test
+```
+
+This credential-free check sends no access token, resident data, Case payload, or completion evidence. It verifies:
+
+- `GET /healthz`
+- `GET /readyz`
+- unexpected browser Origin -> 403 `ORIGIN_NOT_ALLOWED`
+- allowed exact-origin CORS preflight -> narrow 204 response
+- allowed browser Origin without a token -> 401 `AUTHENTICATION_REQUIRED`
+
+Record only the command result and a safe execution reference. Do not paste secrets or sensitive runtime logs into GitHub.
+
+The preflight does **not** prove rate-limit thresholds, authenticated RBAC, database grants/RLS, provider delivery, backup/restore, incident handling, or human workflow validation. Those still require the checks below.
+
 ## 1. Environment separation
 
 | Check | Result | Safe evidence reference | Notes |
@@ -51,6 +73,7 @@ Evidence may live in a restricted system. This document records only safe refere
 | Check | Result | Safe evidence reference | Notes |
 |---|---|---|---|
 | Exact Console origin is configured |  |  |  |
+| Staging boundary preflight passes |  |  | `npm run preflight:staging` |
 | Unexpected Origin fails closed |  |  |  |
 | CORS preflight allows only intended method/header set |  |  |  |
 | Browser contains no service-role/admin secret |  |  |  |
