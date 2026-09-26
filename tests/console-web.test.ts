@@ -384,3 +384,56 @@ test("DOM renderer source has no dynamic HTML injection, credential, storage or 
     ),
   );
 });
+
+
+test("command builder mirrors server input length limits", () => {
+  assert.throws(
+    () =>
+      buildConsoleCommandIntent(
+        "assign",
+        {
+          assigneeId: "a".repeat(129),
+        },
+      ),
+    ConsoleWebInputError,
+  );
+
+  assert.throws(
+    () =>
+      buildConsoleCommandIntent(
+        "complete",
+        {
+          outcome: "confirmed_safe",
+          summary: "s".repeat(4001),
+          evidenceKind: "call",
+          evidenceRef: "ref",
+        },
+      ),
+    ConsoleWebInputError,
+  );
+
+  assert.throws(
+    () =>
+      buildConsoleCommandIntent(
+        "complete",
+        {
+          outcome: "confirmed_safe",
+          summary: "ok",
+          evidenceKind: "call",
+          evidenceRef: "e".repeat(1001),
+        },
+      ),
+    ConsoleWebInputError,
+  );
+
+  assert.throws(
+    () =>
+      buildConsoleCommandIntent(
+        "reopen",
+        {
+          reason: "r".repeat(1001),
+        },
+      ),
+    ConsoleWebInputError,
+  );
+});
