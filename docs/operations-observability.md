@@ -177,6 +177,35 @@ to combine:
 - metrics
 - required request admission
 
+## Outbox health monitoring
+
+Use `PostgrestOutboxMonitor` for payload-free operational monitoring.
+
+It calls the read-only `get_care_outbox_health` RPC and exposes only:
+
+- status counts
+- oldest actionable timestamp
+- oldest dead-letter timestamp
+- maximum attempt count
+- optional delivered count
+
+The projection contains no outbox payload, delivery key, last error, Case ID, subject ID, or resident/care content.
+
+The RPC runs as `SECURITY INVOKER`, so the caller must already hold read access to the outbox table. It does not elevate the runtime role.
+
+See [Outbox and Dead-Letter Operations](outbox-operations.md).
+
+## Resilience runbooks
+
+Operational references:
+
+- [Incident Response](incident-response.md)
+- [Backup, Restore, and Rollback](backup-restore-rollback.md)
+- [Outbox and Dead-Letter Operations](outbox-operations.md)
+- [Deployment Environment Contract](deployment-environment.md)
+
+These documents define the required process, but production owners, alert thresholds, backup provider, RPO/RTO, on-call roster, and drills are still deployment work.
+
 ## Still required in production
 
 The repository does not choose an observability vendor.
