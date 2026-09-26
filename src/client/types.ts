@@ -1,4 +1,8 @@
 import type {
+  CaseCapabilitiesProjection,
+  OperatorContextProjection,
+} from "../application/capabilities.ts";
+import type {
   CaseMetrics,
 } from "../core/metrics.ts";
 import type {
@@ -22,6 +26,15 @@ export interface CareOpsHttpClientOptions {
 }
 
 export interface CareOpsClient {
+  operatorContext(
+    tenantId: string,
+  ): Promise<OperatorContextProjection>;
+
+  caseCapabilities(
+    tenantId: string,
+    caseId: string,
+  ): Promise<CaseCapabilitiesProjection>;
+
   queue(
     tenantId: string,
   ): Promise<CaseQueueProjection>;
