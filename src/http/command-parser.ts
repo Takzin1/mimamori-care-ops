@@ -1,5 +1,8 @@
 import type { CaseCommandIntent } from "../application/types.ts";
 import {
+  isCareOpsIdentifier,
+} from "../identifiers.ts";
+import {
   CASE_PRIORITIES,
   COMPLETION_OUTCOMES,
   type CompletionEvidenceItem,
@@ -74,6 +77,25 @@ function requiredText(
 
   if (normalized.length > maxLength) {
     invalid(`${label} is too long`);
+  }
+
+  return normalized;
+}
+
+function requiredIdentifier(
+  value: unknown,
+  label: string,
+): string {
+  const normalized = requiredText(
+    value,
+    label,
+    128,
+  );
+
+  if (!isCareOpsIdentifier(normalized)) {
+    invalid(
+      `${label} is not a valid Care Ops identifier`,
+    );
   }
 
   return normalized;
@@ -222,10 +244,9 @@ function parseCommand(
       );
       return {
         type,
-        assigneeId: requiredText(
+        assigneeId: requiredIdentifier(
           value.assigneeId,
           "assigneeId",
-          128,
         ),
       };
 
@@ -237,10 +258,9 @@ function parseCommand(
       );
       return {
         type,
-        targetAssigneeId: requiredText(
+        targetAssigneeId: requiredIdentifier(
           value.targetAssigneeId,
           "targetAssigneeId",
-          128,
         ),
       };
 
