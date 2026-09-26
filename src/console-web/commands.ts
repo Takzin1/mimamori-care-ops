@@ -1,3 +1,6 @@
+import {
+  isOperationalActorId,
+} from "../access/actor-id.ts";
 import type {
   CaseCommandIntent,
 } from "../application/types.ts";
@@ -83,10 +86,9 @@ export function buildConsoleCommandIntent(
     case "assign":
       return {
         type,
-        assigneeId: required(
+        assigneeId: actorId(
           values.assigneeId,
           "assigneeId",
-          128,
         ),
       };
 
@@ -96,10 +98,9 @@ export function buildConsoleCommandIntent(
     case "request_handoff":
       return {
         type,
-        targetAssigneeId: required(
+        targetAssigneeId: actorId(
           values.targetAssigneeId,
           "targetAssigneeId",
-          128,
         ),
       };
 
