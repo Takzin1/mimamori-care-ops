@@ -1,4 +1,8 @@
 import {
+  normalizeOutboundRequestTimeoutMs,
+  outboundRequestSignal,
+} from "../transport/outbound-timeout.ts";
+import {
   AuthenticationError,
   type AuthenticatedPrincipal,
   type PrincipalAuthenticator,
@@ -13,6 +17,7 @@ export interface SupabaseAuthAuthenticatorOptions {
   baseUrl: string;
   publishableKey: string;
   fetchImpl?: FetchLike;
+  requestTimeoutMs?: number;
 }
 
 interface SupabaseUserResponse {
@@ -32,6 +37,7 @@ implements PrincipalAuthenticator {
   private readonly baseUrl: string;
   private readonly publishableKey: string;
   private readonly fetchImpl: FetchLike;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: SupabaseAuthAuthenticatorOptions) {
     const baseUrl = requireText(
@@ -47,6 +53,10 @@ implements PrincipalAuthenticator {
       "Supabase publishable key",
     );
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.requestTimeoutMs =
+      normalizeOutboundRequestTimeoutMs(
+        options.requestTimeoutMs,
+      );
   }
 
   async authenticate(
@@ -64,6 +74,9 @@ implements PrincipalAuthenticator {
         new URL(`${this.baseUrl}/auth/v1/user`),
         {
           method: "GET",
+          signal: outboundRequestSignal(
+            this.requestTimeoutMs,
+          ),
           headers: {
             apikey: this.publishableKey,
             authorization: `Bearer ${token}`,
