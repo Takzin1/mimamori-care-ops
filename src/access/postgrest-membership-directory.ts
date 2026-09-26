@@ -2,6 +2,10 @@ import {
   isCareOpsIdentifier,
 } from "../identifiers.ts";
 import {
+  outboundAbortSignal,
+  outboundTimeoutMs,
+} from "../outbound.ts";
+import {
   STAFF_ROLES,
   type StaffRole,
   type TenantMembership,
@@ -21,6 +25,7 @@ export interface PostgrestMembershipDirectoryOptions {
   baseUrl: string;
   serviceRoleKey: string;
   fetchImpl?: FetchLike;
+  requestTimeoutMs?: number;
 }
 
 interface MembershipRow {
@@ -90,6 +95,7 @@ implements TenantMembershipDirectory {
   private readonly baseUrl: string;
   private readonly serviceRoleKey: string;
   private readonly fetchImpl: FetchLike;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: PostgrestMembershipDirectoryOptions) {
     const baseUrl = requireText(
@@ -104,6 +110,9 @@ implements TenantMembershipDirectory {
       "service role key",
     );
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.requestTimeoutMs = outboundTimeoutMs(
+      options.requestTimeoutMs,
+    );
   }
 
   private async find(
@@ -126,6 +135,9 @@ implements TenantMembershipDirectory {
     try {
       response = await this.fetchImpl(url, {
         method: "GET",
+        signal: outboundAbortSignal(
+          this.requestTimeoutMs,
+        ),
         headers: {
           apikey: this.serviceRoleKey,
           authorization: `Bearer ${this.serviceRoleKey}`,
