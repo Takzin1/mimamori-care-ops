@@ -733,7 +733,7 @@ create or replace function public.get_care_outbox_health(
 )
 returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path = pg_catalog
 as $
 declare
