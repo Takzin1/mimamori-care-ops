@@ -219,3 +219,23 @@ The grammar is enforced at HTTP command parsing, membership actor lookup, member
 This prevents assignment/handoff identifiers from introducing PostgREST filter metacharacters or ambiguous whitespace into trusted lookup paths.
 
 Human-readable staff names belong in a separate presentation/profile field and must not be encoded into `actorId`.
+
+
+## Outbound dependency timeout
+
+Trusted server calls to Supabase Auth and PostgREST are time-bounded.
+
+The reference adapters use one bounded timeout policy:
+
+- default: 10 seconds
+- configurable range: 1–60000 ms
+- server runtime override: `outboundTimeoutMs`
+
+Covered adapters:
+
+- Supabase Auth verifier
+- tenant membership directory
+- Case Store repository
+- Outbox Store
+
+Timeout or abort is treated as an authentication/transport failure. There is no fail-open fallback.
