@@ -163,6 +163,21 @@ export type CaseEvent =
 
 export type CaseCreatedEvent = Extract<CaseEvent, { type: "case_created" }>;
 
+export const CASE_COMMAND_TYPES = [
+  "set_priority",
+  "acknowledge",
+  "assign",
+  "start_action",
+  "request_handoff",
+  "accept_handoff",
+  "complete",
+  "close",
+  "reopen",
+] as const;
+
+export type CaseCommandType =
+  (typeof CASE_COMMAND_TYPES)[number];
+
 export type CaseCommand =
   | { type: "set_priority"; actorId: string; priority: CasePriority }
   | { type: "acknowledge"; actorId: string }
