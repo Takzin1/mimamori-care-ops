@@ -1,4 +1,8 @@
 import {
+  outboundAbortSignal,
+  outboundTimeoutMs,
+} from "../outbound.ts";
+import {
   CaseStoreCorruptionError,
   CaseStoreTransportError,
 } from "../persistence/errors.ts";
@@ -24,6 +28,7 @@ export interface PostgrestOutboxStoreOptions {
   baseUrl: string;
   serviceRoleKey: string;
   fetchImpl?: FetchLike;
+  requestTimeoutMs?: number;
 }
 
 const OUTBOX_STATUSES = new Set<OutboxStatus>([
@@ -134,6 +139,7 @@ export class PostgrestOutboxStore implements OutboxStore {
   private readonly baseUrl: string;
   private readonly serviceRoleKey: string;
   private readonly fetchImpl: FetchLike;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: PostgrestOutboxStoreOptions) {
     const baseUrl = requireText(
@@ -148,6 +154,9 @@ export class PostgrestOutboxStore implements OutboxStore {
       "service role key",
     );
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.requestTimeoutMs = outboundTimeoutMs(
+      options.requestTimeoutMs,
+    );
   }
 
   private rpcUrl(name: string): URL {
@@ -175,6 +184,9 @@ export class PostgrestOutboxStore implements OutboxStore {
         this.rpcUrl(name),
         {
           method: "POST",
+          signal: outboundAbortSignal(
+            this.requestTimeoutMs,
+          ),
           headers,
           body: JSON.stringify(body),
         },
