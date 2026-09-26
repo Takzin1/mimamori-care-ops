@@ -169,6 +169,27 @@ This is deliberate: the ordinary Care Ops API runtime must not silently become t
 
 The environment parser never logs secret values and validation errors must not echo them.
 
+### Pre-deployment config doctor
+
+Before deploying a staging/production API runtime, validate the provider environment **without making network requests**:
+
+```bash
+npm run config:validate
+```
+
+The command reads only `process.env`, runs the same fail-closed deployment parser, and emits a deliberately secret-safe summary containing only:
+
+- environment stage
+- Supabase host
+- Console origin count
+- tenant SLA policy count
+- effective outbound timeout
+- effective command body limit
+
+It never prints publishable/service-role key values. A tracked `.env.example` documents the variable names while leaving credential values blank.
+
+A successful config-doctor result proves only that the repository's configuration contract is satisfied; it does not prove that credentials work, that the deployed database has correct grants/RLS, or that the environment is operational.
+
 ### Deployment adapter rule
 
 A framework/provider adapter should do only this:
