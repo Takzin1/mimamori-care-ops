@@ -12,7 +12,8 @@
     "test:coverage": "node --test --experimental-test-coverage tests/*.test.ts",
     "test:postgres": "node --test tests/postgres-real.integration.test.ts tests/identity-postgres.integration.test.ts",
     "test:demo": "node --check demo/responder-console/app.js",
-    "preflight:staging": "node scripts/staging-preflight.ts"
+    "preflight:staging": "node scripts/staging-preflight.ts",
+    "config:validate": "node scripts/deployment-config-validate.ts"
   },
   "devDependencies": {
     "typescript": "5.9.2"

@@ -41,6 +41,7 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Operational health/readiness + structured observability boundary | Implemented + tested | `src/ops/` + operational runtime tests |
 | Operational Supabase runtime composition | Implemented + tested | `src/runtime/operational-supabase-care-ops-runtime.ts` |
 | Fail-closed deployment environment + composition root | Implemented + tested | `src/deployment/` + deployment composition tests; provider environment not yet provisioned |
+| Secret-safe deployment config doctor + environment template | Implemented + tested | `npm run config:validate` + `.env.example` + CLI/output regression tests |
 | Provider-neutral request admission boundary | Implemented + tested | `src/ops/` + `tests/request-admission.test.ts`; production provider not provisioned |
 | Strict browser origin / CORS boundary | Implemented + tested | exact-origin policy + narrow preflight; production hostname not provisioned |
 | Synthetic staging boundary preflight | Implemented + tested | `src/ops/staging-preflight.ts` + CLI + manual GitHub Actions workflow + regression tests; requires provisioned staging endpoint/origin |

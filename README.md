@@ -263,6 +263,14 @@ npm test
 npm run test:coverage
 ```
 
+Before deployment, copy `.env.example` to a local ignored environment file or configure the same variables in the provider, then validate the configuration without making network requests:
+
+```bash
+npm run config:validate
+```
+
+The config doctor emits only non-secret metadata and never prints credential values.
+
 After a synthetic staging API and exact Console origin are provisioned, run the credential-free boundary preflight:
 
 ```bash

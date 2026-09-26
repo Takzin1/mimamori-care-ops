@@ -64,6 +64,8 @@ Do not place secret values, resident/care payloads, access tokens, or raw sensit
 - [ ] runtime composition credential-routing test passing
 - [ ] deployment adapter uses `createCareOpsDeployment` / operational server runtime instead of direct repository access
 - [ ] deployment environment parser regression tests passing
+- [ ] `npm run config:validate` passes in the target runtime environment
+- [ ] config-doctor output reviewed to contain no credential values
 - [ ] API runtime environment contains no membership-admin / provider-delivery / backup-operator secret class
 - [ ] request-admission boundary regression tests passing
 - [ ] production shared/edge rate limiter configured
