@@ -82,3 +82,12 @@ Explain:
 3. what is deliberately out of scope
 4. how it was tested
 5. whether it changes security, data, or deployment assumptions
+
+
+## Repository governance
+
+The expected integration path is branch -> pull request -> CI -> squash merge -> main.
+
+See `docs/repository-governance.md` for the required `main` protection/ruleset and status-check policy.
+
+See `docs/release-policy.md` for pre-1.0 release semantics.
