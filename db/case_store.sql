@@ -727,6 +727,64 @@ begin
 end;
 $$;
 
+create or replace function public.get_care_outbox_health(
+  p_tenant_id text,
+  p_include_delivered boolean default false
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $
+declare
+  v_result jsonb;
+begin
+  if nullif(trim(p_tenant_id), '') is null then
+    raise exception 'tenant is required';
+  end if;
+
+  select jsonb_build_object(
+    'tenantId', p_tenant_id,
+    'evaluatedAt', now(),
+    'counts', jsonb_build_object(
+      'pending', count(*) filter (where status = 'pending'),
+      'processing', count(*) filter (where status = 'processing'),
+      'failed', count(*) filter (where status = 'failed'),
+      'deadLetter', count(*) filter (where status = 'dead_letter'),
+      'delivered',
+        case
+          when p_include_delivered
+            then count(*) filter (where status = 'delivered')
+          else null
+        end
+    ),
+    'oldestActionableAt',
+      min(
+        case
+          when status in ('pending', 'failed', 'processing')
+            then available_at
+          else null
+        end
+      ),
+    'oldestDeadLetterAt',
+      min(
+        case
+          when status = 'dead_letter'
+            then updated_at
+          else null
+        end
+      ),
+    'maxAttemptCount',
+      coalesce(max(attempt_count), 0)
+  )
+    into v_result
+    from public.care_outbox
+   where tenant_id = p_tenant_id;
+
+  return v_result;
+end;
+$;
+
 revoke execute on function public.create_care_case(jsonb, jsonb)
   from public, anon, authenticated;
 revoke execute on function public.append_care_case_event(text, text, bigint, jsonb, jsonb)
@@ -735,6 +793,12 @@ revoke execute on function public.append_care_case_event(text, text, bigint, jso
 grant execute on function public.create_care_case(jsonb, jsonb)
   to service_role;
 grant execute on function public.append_care_case_event(text, text, bigint, jsonb, jsonb)
+  to service_role;
+
+revoke execute on function public.get_care_outbox_health(text, boolean)
+  from public, anon, authenticated;
+
+grant execute on function public.get_care_outbox_health(text, boolean)
   to service_role;
 
 revoke execute on function public.enqueue_care_outbox(text, text, text, jsonb, timestamptz, integer)
