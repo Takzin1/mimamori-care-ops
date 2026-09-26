@@ -116,3 +116,76 @@ Maintain a restricted inventory of:
 - on-call/incident owner
 
 Do not place secret values in this inventory.
+
+
+## Care Ops API runtime environment contract
+
+The repository provides:
+
+- `parseCareOpsDeploymentEnvironment(...)`
+- `createCareOpsDeployment(...)`
+
+The parser is provider-neutral and consumes a string environment map. The composition root then builds the existing `OperationalSupabaseCareOpsRuntime`; deployment adapters must not instantiate the database repository directly.
+
+Required API runtime variables:
+
+| Variable | Meaning |
+|---|---|
+| `CARE_OPS_ENVIRONMENT` | exactly `staging` or `production` |
+| `SUPABASE_URL` | HTTPS Supabase project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | browser/auth verification publishable key |
+| `SUPABASE_SERVICE_ROLE_KEY` | server-only Care Ops runtime credential |
+| `CARE_OPS_CONSOLE_ORIGINS` | comma-separated canonical exact Console origins |
+| `CARE_OPS_SLA_POLICIES_JSON` | tenant -> priority SLA policy JSON |
+
+Optional bounded values:
+
+| Variable | Default | Bounds |
+|---|---:|---:|
+| `CARE_OPS_OUTBOUND_TIMEOUT_MS` | 5000 | 100..60000 |
+| `CARE_OPS_MAX_COMMAND_BODY_BYTES` | 32768 | 1024..1048576 |
+
+The parser rejects:
+
+- non-HTTPS Supabase URLs in staging/production
+- Supabase URLs containing credentials/query/fragment
+- equal publishable and service-role keys
+- wildcard/non-canonical/path-bearing Console origins
+- duplicate Console origins
+- malformed or incomplete SLA policy JSON
+- out-of-range timeout/body limits
+
+### Secret-class separation
+
+These secret classes must **not** be present in the Care Ops API runtime environment:
+
+- `CARE_OPS_MEMBERSHIP_ADMIN_SECRET`
+- `CARE_OPS_OUTBOX_PROVIDER_SECRET`
+- `CARE_OPS_BACKUP_OPERATOR_SECRET`
+
+Their presence causes deployment configuration parsing to fail closed.
+
+This is deliberate: the ordinary Care Ops API runtime must not silently become the membership-administration, external-delivery, or backup-operator control plane.
+
+The environment parser never logs secret values and validation errors must not echo them.
+
+### Deployment adapter rule
+
+A framework/provider adapter should do only this:
+
+```text
+provider env
+  -> parseCareOpsDeploymentEnvironment
+  -> createCareOpsDeployment
+  -> OperationalSupabaseCareOpsRuntime.handle(Request)
+```
+
+The adapter must inject a real shared/edge `CareOpsRequestAdmission`, and may inject logger, metrics, readiness checks, and fetch transport.
+
+It must not:
+
+- instantiate `PostgrestCaseRepository` in a browser/client bundle
+- bypass the authenticated gateway
+- bypass the origin/admission boundaries
+- inject membership-admin/provider/backup secrets into the API runtime
+- downgrade staging/production Supabase transport to HTTP
