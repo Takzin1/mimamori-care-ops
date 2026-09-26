@@ -21,6 +21,8 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Case Queue projection | Implemented + tested | `src/operations/queue.ts` + queue tests |
 | PostgREST/Supabase runtime repository | Implemented + tested | adapter tests + real Postgres CI |
 | Transactional outbox / delivery worker | Implemented + tested | outbox tests + real Postgres CI |
+| Payload-free outbox health projection | Implemented + tested | read-only RPC + server monitor + real Postgres CI |
+| Incident / recovery / outbox operations runbooks | Implemented | docs; production drills/owners not yet provisioned |
 | Postgres Case Store SQL contract | Implemented + static-tested | `db/case_store.sql` |
 | Production identity boundary / Supabase Auth reference verifier | Implemented + tested | `src/identity/` + identity tests |
 | Persistent tenant membership store | Implemented + tested | `db/identity_store.sql` + real Postgres CI |
