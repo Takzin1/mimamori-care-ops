@@ -94,6 +94,10 @@ export class OperationalCareOpsRuntime {
         "readinessChecks"
       ]
     >[number][];
+  readonly #admissionControl:
+    OperationalCareOpsRuntimeOptions[
+      "admissionControl"
+    ];
   readonly #now: () => string;
   readonly #nowMs: () => number;
   readonly #requestIdFactory: () => string;
@@ -106,6 +110,8 @@ export class OperationalCareOpsRuntime {
     this.#metrics = options.metrics;
     this.#readinessChecks =
       options.readinessChecks ?? [];
+    this.#admissionControl =
+      options.admissionControl;
     this.#now =
       options.now ??
       (() => new Date().toISOString());
@@ -279,6 +285,91 @@ export class OperationalCareOpsRuntime {
     );
   }
 
+  async #admitCareOps(
+    request: Request,
+    requestMethod: string,
+    startedAt: number,
+  ): Promise<Response | null> {
+    if (!this.#admissionControl) {
+      return null;
+    }
+
+    let decision;
+
+    try {
+      decision =
+        await this.#admissionControl.check({
+          request: request.clone(),
+          routeClass: "care_ops",
+          method: requestMethod,
+        });
+    } catch {
+      const requestId =
+        this.#requestIdFactory();
+      const response = json(
+        {
+          error: {
+            code:
+              "ADMISSION_CONTROL_UNAVAILABLE",
+            message:
+              "Service temporarily unavailable",
+            requestId,
+          },
+        },
+        503,
+        requestId,
+      );
+
+      return this.#finish(
+        "care_ops",
+        requestMethod,
+        response,
+        startedAt,
+      );
+    }
+
+    if (decision.allowed) {
+      return null;
+    }
+
+    const requestId =
+      this.#requestIdFactory();
+    const response = json(
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message:
+            "Too many requests",
+          requestId,
+        },
+      },
+      429,
+      requestId,
+    );
+
+    const retryAfter =
+      decision.retryAfterSeconds;
+
+    if (
+      typeof retryAfter === "number" &&
+      Number.isInteger(retryAfter) &&
+      retryAfter >= 1 &&
+      retryAfter <= 86_400
+    ) {
+      response.headers.set(
+        "retry-after",
+        String(retryAfter),
+      );
+    }
+
+    return this.#finish(
+      "care_ops",
+      requestMethod,
+      response,
+      startedAt,
+    );
+  }
+
   async handle(
     request: Request,
   ): Promise<Response> {
@@ -313,6 +404,17 @@ export class OperationalCareOpsRuntime {
         requestMethod,
         startedAt,
       );
+    }
+
+    const admissionResponse =
+      await this.#admitCareOps(
+        request,
+        requestMethod,
+        startedAt,
+      );
+
+    if (admissionResponse) {
+      return admissionResponse;
     }
 
     try {
