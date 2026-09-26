@@ -868,3 +868,55 @@ test("responder cannot directly read, inspect capabilities, or acknowledge an un
     1,
   );
 });
+
+
+test("HTTP rejects unsafe assignment actor IDs before trusted auth or lookup", async () => {
+  const {
+    api,
+    authenticator,
+  } = await fixture();
+
+  for (const command of [
+    {
+      type: "assign",
+      assigneeId:
+        "responder-a,or(actor_id.eq.attacker)",
+    },
+    {
+      type: "request_handoff",
+      targetAssigneeId:
+        "responder unsafe",
+    },
+  ]) {
+    const response = await api.handle(
+      request(
+        "/api/care-ops/tenants/provider-a/cases/case-a/commands",
+        {
+          method: "POST",
+          headers: {
+            ...authHeaders(),
+            "content-type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            expectedVersion: 1,
+            command,
+          }),
+        },
+      ),
+    );
+
+    assert.equal(response.status, 400);
+    const payload = await body(response);
+    assert.equal(
+      payload.error.code,
+      "INVALID_REQUEST",
+    );
+  }
+
+  assert.equal(
+    authenticator.calls,
+    0,
+    "unsafe actor IDs must fail before trusted auth and membership lookup",
+  );
+});

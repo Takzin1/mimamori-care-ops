@@ -345,6 +345,21 @@ test(
       ),
     );
 
+    assert.throws(() =>
+      admin(
+        "select care_admin.create_membership(" +
+          "'provider-a'," +
+          "'principal-unsafe'," +
+          "'responder-a,or(actor_id.eq.attacker)'," +
+          "array['responder']::text[]," +
+          "true," +
+          "'admin-root'," +
+          "'unsafe actor filter syntax'," +
+          "'2026-09-26T01:20:30.000Z'::timestamptz" +
+          ")::text",
+      ),
+    );
+
     const duplicateActor = JSON.parse(
       admin(
         "select care_admin.create_membership(" +
