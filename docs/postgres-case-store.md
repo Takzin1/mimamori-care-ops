@@ -61,12 +61,18 @@ Case origin lineage (`tenant / case / subject / source type / source adapter / s
 
 ## Access model
 
-- RLS enabled on both public tables
+- RLS enabled on Case, event, and outbox tables
 - `anon` and `authenticated` have no direct table access
+- runtime `service_role` has SELECT-only table access
+- runtime `service_role` cannot directly INSERT/UPDATE/DELETE Case, event, or outbox rows
 - RPC execute is revoked from PUBLIC, anon, and authenticated
-- only server-side `service_role` is granted RPC execution
+- only server-side `service_role` is granted runtime mutation RPC execution
+- runtime mutation RPCs are `SECURITY DEFINER` with `search_path = pg_catalog`
+- application tables are referenced with explicit `public.` qualification inside those RPCs
 
-The functions remain security-invoker functions.
+This keeps structural writes behind the compare-and-set / append / lease RPC contracts even if another trusted server component accidentally attempts direct table DML.
+
+The function owner is therefore part of the migration trust boundary and must remain a database owner capable of the intended writes.
 
 ## Deployment state
 

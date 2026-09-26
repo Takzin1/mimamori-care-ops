@@ -185,3 +185,21 @@ Dispatcher, supervisor, and auditor read roles remain tenant-wide.
 The application performs tenant membership authorization before Case lookup, then applies Case-level responder visibility after loading the tenant-scoped Case. This preserves cross-tenant existence protection while preventing same-tenant lateral reads.
 
 Responders do not acknowledge unassigned NEW Cases in the current lifecycle.
+
+
+## Runtime database mutation boundary
+
+Runtime `service_role` access to Care Ops persistence tables is read-only.
+
+Case, event, and outbox mutation must pass through the approved persistence RPCs.
+
+Those RPCs use a tightly scoped `SECURITY DEFINER` boundary with:
+
+- fixed `search_path = pg_catalog`
+- explicit `public.` table qualification
+- execution revoked from PUBLIC / anon / authenticated
+- execution granted only to the trusted server-side runtime role
+
+The runtime role cannot directly INSERT/UPDATE/DELETE Case, event, or outbox rows and does not receive direct outbox sequence usage.
+
+This does not make compromise of a trusted runtime credential harmless: the credential can still invoke approved mutation RPCs. The boundary exists to prevent direct SQL/PostgREST writes from bypassing compare-and-set, append-only event sequencing, atomic outbox enqueue, and worker lease rules.
