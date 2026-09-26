@@ -58,6 +58,29 @@ export interface CareOpsMetricsSink {
   ): void | Promise<void>;
 }
 
+export interface CareOpsAdmissionInput {
+  request: Request;
+  routeClass: "care_ops";
+  method: string;
+}
+
+export type CareOpsAdmissionDecision =
+  | {
+      allowed: true;
+    }
+  | {
+      allowed: false;
+      retryAfterSeconds?: number;
+    };
+
+export interface CareOpsAdmissionControl {
+  check(
+    input: Readonly<CareOpsAdmissionInput>,
+  ):
+    | CareOpsAdmissionDecision
+    | Promise<CareOpsAdmissionDecision>;
+}
+
 export interface CareOpsReadinessCheck {
   readonly name: string;
   check(): boolean | Promise<boolean>;
@@ -68,6 +91,7 @@ export interface OperationalCareOpsRuntimeOptions {
   logger?: CareOpsStructuredLogger;
   metrics?: CareOpsMetricsSink;
   readinessChecks?: readonly CareOpsReadinessCheck[];
+  admissionControl?: CareOpsAdmissionControl;
   now?: () => string;
   nowMs?: () => number;
   requestIdFactory?: () => string;
