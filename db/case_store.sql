@@ -138,14 +138,19 @@ revoke all on table public.care_cases from public, anon, authenticated;
 revoke all on table public.care_case_events from public, anon, authenticated;
 revoke all on table public.care_outbox from public, anon, authenticated;
 
-revoke delete on table public.care_cases from service_role;
-revoke update, delete on table public.care_case_events from service_role;
-revoke delete on table public.care_outbox from service_role;
+revoke insert, update, delete on table public.care_cases
+  from service_role;
+revoke insert, update, delete on table public.care_case_events
+  from service_role;
+revoke insert, update, delete on table public.care_outbox
+  from service_role;
 
-grant select, insert, update on table public.care_cases to service_role;
-grant select, insert on table public.care_case_events to service_role;
-grant select, insert, update on table public.care_outbox to service_role;
-grant usage, select on sequence public.care_outbox_id_seq to service_role;
+grant select on table public.care_cases to service_role;
+grant select on table public.care_case_events to service_role;
+grant select on table public.care_outbox to service_role;
+
+revoke usage, select on sequence public.care_outbox_id_seq
+  from service_role;
 
 create or replace function public.create_care_case(
   p_snapshot jsonb,
@@ -153,8 +158,8 @@ create or replace function public.create_care_case(
 )
 returns jsonb
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = pg_catalog
 as $$
 declare
   v_tenant_id text := nullif(trim(p_snapshot->>'tenantId'), '');
@@ -343,8 +348,8 @@ create or replace function public.append_care_case_event(
 )
 returns jsonb
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = pg_catalog
 as $$
 declare
   v_current_version bigint;
@@ -479,8 +484,8 @@ create or replace function public.enqueue_care_outbox(
 )
 returns jsonb
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = pg_catalog
 as $$
 declare
   v_id bigint;
@@ -558,8 +563,8 @@ create or replace function public.claim_care_outbox(
 )
 returns jsonb
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = pg_catalog
 as $$
 declare
   v_result jsonb;
@@ -652,8 +657,8 @@ create or replace function public.complete_care_outbox(
 )
 returns jsonb
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = pg_catalog
 as $$
 declare
   v_updated bigint;
@@ -686,8 +691,8 @@ create or replace function public.fail_care_outbox(
 )
 returns jsonb
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = pg_catalog
 as $$
 declare
   v_updated bigint;
