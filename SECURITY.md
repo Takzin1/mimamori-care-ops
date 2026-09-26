@@ -117,3 +117,21 @@ Membership lifecycle changes use a separate database control plane with:
 The runtime `service_role` remains SELECT-only for membership data and cannot execute membership mutation functions.
 
 The dedicated `care_membership_admin` database role is NOLOGIN and must not be granted to runtime/browser credentials. The audit trigger function is private, not publicly executable, and exists only to guarantee audit insertion that the admin role itself cannot forge directly.
+
+
+## HTTP transport boundary
+
+Responder-facing HTTP requests use the trusted `AuthenticatedCareOpsGateway`.
+
+The HTTP transport:
+
+- accepts identity only as a Bearer access token
+- never accepts trusted `principalId` or `actorId` from JSON
+- strictly rejects unknown command fields
+- resolves tenant and Case identifiers from bounded route segments
+- returns `Cache-Control: no-store`
+- emits no permissive CORS header
+- does not expose database/service-role credentials
+- maps internal failures to safe response bodies without database details
+
+Cross-tenant access is denied by membership before Case existence is disclosed.

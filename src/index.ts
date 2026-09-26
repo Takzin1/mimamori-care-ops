@@ -7,3 +7,4 @@ export * from "./outbox/index.ts";
 export * from "./presentation/index.ts";
 export * from "./identity/index.ts";
 export * from "./membership-admin/index.ts";
+export * from "./http/index.ts";

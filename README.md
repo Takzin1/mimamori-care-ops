@@ -23,6 +23,7 @@ What is already implemented and tested:
 - tenant-scoped persistence contract
 - production identity boundary + persistent tenant membership
 - audited membership provisioning / revocation control plane
+- authenticated Care Ops HTTP boundary for Queue / Case / metrics / commands
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
@@ -36,7 +37,8 @@ What is already implemented and tested:
 Not yet production-ready:
 
 - intentionally provisioned production Auth environment and login/session UX
-- membership provisioning/admin workflow
+- production admin identity / membership control-plane runbook
+- live Console shell/session UX and deployment
 - deployment / observability / incident runbook
 
 See [Project Status](docs/project-status.md) and the open GitHub Issues for the active roadmap.
@@ -135,6 +137,7 @@ src/
   core/          pure Case state machine and metrics
   access/        tenant staff membership and authorization
   application/   operational orchestration
+  http/          authenticated Web Request/Response transport
   persistence/   repository contracts and in-memory reference adapter
 
 db/
@@ -186,12 +189,15 @@ Start here:
 8. [ADR 0006 — Transactional outbox](docs/adr/0006-transactional-outbox.md)
 9. [ADR 0007 — Production identity boundary](docs/adr/0007-production-identity-boundary.md)
 10. [ADR 0008 — Audited membership control plane](docs/adr/0008-audited-membership-control-plane.md)
-10. `tests/application-case-service.test.ts`
-11. `tests/identity.test.ts`
-12. `tests/sla.test.ts`
-13. [Responder Console contract](docs/responder-console.md)
-14. `demo/responder-console/index.html`
-15. `db/case_store.sql`
+11. [ADR 0009 — Authenticated HTTP boundary](docs/adr/0009-authenticated-http-boundary.md)
+12. [HTTP API](docs/http-api.md)
+13. `tests/application-case-service.test.ts`
+14. `tests/identity.test.ts`
+15. `tests/http-api.test.ts`
+16. `tests/sla.test.ts`
+17. [Responder Console contract](docs/responder-console.md)
+18. `demo/responder-console/index.html`
+19. `db/case_store.sql`
 
 ## Development
 

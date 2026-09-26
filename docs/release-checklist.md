@@ -25,6 +25,8 @@ Do not treat completion of the Core as production approval.
 - [ ] role provisioning / revocation process documented
 - [ ] inactive user access verified fail-closed
 - [ ] service accounts separated from human principals
+- [ ] authenticated HTTP boundary regression tests passing
+- [ ] browser/client cannot submit trusted principalId or actorId
 - [ ] least-privilege database/service credentials reviewed
 
 ## Data protection
@@ -44,6 +46,8 @@ Do not treat completion of the Core as production approval.
 - [ ] PUBLIC / anon / authenticated grants reviewed
 - [ ] service-role usage confined to trusted server environment
 - [ ] rate limiting / abuse prevention implemented
+- [ ] CORS/origin policy reviewed for live Console host
+- [ ] command body/request-size limits reviewed
 - [ ] audit actor spoofing regression tests passing
 - [ ] cross-tenant access tests passing
 - [ ] stale-write / concurrency tests passing
