@@ -252,7 +252,10 @@ export function executeCommand(
         sequence,
         at,
         actorId,
-        data: { previousAssigneeId: aggregate.assigneeId },
+        data: {
+          previousAssigneeId:
+            aggregate.assigneeId!,
+        },
       };
       break;
 
