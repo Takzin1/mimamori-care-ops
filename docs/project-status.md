@@ -28,10 +28,11 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Authenticated Care Ops HTTP boundary | Implemented + tested | `src/http/` + `tests/http-api.test.ts` |
 | Server-only Supabase runtime composition | Implemented + tested | `src/runtime/` + `tests/runtime.test.ts` |
 | Browser-safe Care Ops API client | Implemented + tested | `src/client/` + `tests/client.test.ts` |
+| Ephemeral browser session coordinator | Implemented + tested | `src/session/` + `tests/session-controller.test.ts` |
 | Provisioned production Auth/login flow | Not implemented | deployment roadmap |
 | Responder Console presenter + synthetic reviewer demo | Implemented + tested | `src/presentation/` + `demo/responder-console/` |
 | Reviewer demo deployment config | Implemented + tested | `demo/responder-console/vercel.json`; project import tracked in #22 |
-| Live authenticated Responder Console UI/session shell | Not implemented | HTTP boundary ready; framework/session wiring remains |
+| Live authenticated Responder Console UI | Not implemented | session + HTTP boundaries ready; framework/UI wiring remains |
 | Production deployment | Not implemented | release checklist |
 | Production PII / care data | **Not allowed** | security policy |
 
@@ -50,6 +51,6 @@ It does **not** yet demonstrate a production-grade healthcare/care-service syste
 
 ## Next sequence
 
-1. live Console session/auth shell supplying tokens to the browser client
+1. live Console UI shell over session/client boundaries
 2. admin identity / operational runbook for membership control plane
 3. deployment / observability / privacy hardening
