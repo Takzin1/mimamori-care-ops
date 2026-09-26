@@ -104,6 +104,48 @@ alter table public.care_tenant_memberships
 alter table public.care_membership_admin_events
   enable row level security;
 
+
+drop policy if exists
+  care_membership_admin_select_memberships
+  on public.care_tenant_memberships;
+
+create policy care_membership_admin_select_memberships
+  on public.care_tenant_memberships
+  for select
+  to care_membership_admin
+  using (true);
+
+drop policy if exists
+  care_membership_admin_insert_memberships
+  on public.care_tenant_memberships;
+
+create policy care_membership_admin_insert_memberships
+  on public.care_tenant_memberships
+  for insert
+  to care_membership_admin
+  with check (true);
+
+drop policy if exists
+  care_membership_admin_update_memberships
+  on public.care_tenant_memberships;
+
+create policy care_membership_admin_update_memberships
+  on public.care_tenant_memberships
+  for update
+  to care_membership_admin
+  using (true)
+  with check (true);
+
+drop policy if exists
+  care_membership_admin_select_events
+  on public.care_membership_admin_events;
+
+create policy care_membership_admin_select_events
+  on public.care_membership_admin_events
+  for select
+  to care_membership_admin
+  using (true);
+
 revoke all on table public.care_tenant_memberships
   from public, anon, authenticated;
 
@@ -339,6 +381,11 @@ $$;
 revoke all on function
   care_admin.membership_context_text(text)
   from public;
+
+
+grant execute on function
+  care_admin.membership_context_text(text)
+  to care_membership_admin;
 
 revoke all on function
   care_admin.validate_membership_mutation()
