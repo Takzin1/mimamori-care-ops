@@ -203,3 +203,19 @@ Those RPCs use a tightly scoped `SECURITY DEFINER` boundary with:
 The runtime role cannot directly INSERT/UPDATE/DELETE Case, event, or outbox rows and does not receive direct outbox sequence usage.
 
 This does not make compromise of a trusted runtime credential harmless: the credential can still invoke approved mutation RPCs. The boundary exists to prevent direct SQL/PostgREST writes from bypassing compare-and-set, append-only event sequencing, atomic outbox enqueue, and worker lease rules.
+
+## Operational actor identifiers
+
+Care Ops actor IDs are machine identifiers, not display names.
+
+They use the canonical grammar:
+
+```
+^[A-Za-z0-9._:-]{1,128}$
+```
+
+The grammar is enforced at HTTP command parsing, membership actor lookup, membership administration, and the persistent membership table.
+
+This prevents assignment/handoff identifiers from introducing PostgREST filter metacharacters or ambiguous whitespace into trusted lookup paths.
+
+Human-readable staff names belong in a separate presentation/profile field and must not be encoded into `actorId`.
