@@ -54,7 +54,10 @@ Do not treat completion of the Core as production approval.
 - [ ] service-role usage confined to trusted server environment
 - [ ] runtime composition credential-routing test passing
 - [ ] deployment adapter uses server runtime instead of direct repository access
-- [ ] rate limiting / abuse prevention implemented
+- [ ] request-admission boundary regression tests passing
+- [ ] production shared/edge rate limiter configured
+- [ ] trusted admission key/source derivation reviewed
+- [ ] rate-limit thresholds and abuse-response owner defined
 - [ ] outbound dependency timeout configured and reviewed
 - [ ] CORS/origin policy reviewed for live Console host
 - [ ] command body/request-size limits reviewed
