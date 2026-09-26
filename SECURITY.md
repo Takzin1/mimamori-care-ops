@@ -203,3 +203,42 @@ Those RPCs use a tightly scoped `SECURITY DEFINER` boundary with:
 The runtime role cannot directly INSERT/UPDATE/DELETE Case, event, or outbox rows and does not receive direct outbox sequence usage.
 
 This does not make compromise of a trusted runtime credential harmless: the credential can still invoke approved mutation RPCs. The boundary exists to prevent direct SQL/PostgREST writes from bypassing compare-and-set, append-only event sequencing, atomic outbox enqueue, and worker lease rules.
+
+
+## Identifier input hardening
+
+Operational Care Ops identifiers use one shared contract:
+
+```
+^[A-Za-z0-9._:-]{1,128}$
+```
+
+The same actor-ID contract is enforced at:
+
+- HTTP command parsing
+- browser client/path validation
+- membership administration
+- membership-store reads
+- Postgres membership constraint
+
+Assignment and handoff targets containing whitespace, commas, parentheses, percent-encoded filter syntax, or other PostgREST filter metacharacters are rejected before lookup.
+
+## Outbound request timeout
+
+Trusted server calls to Supabase Auth and PostgREST are time-bounded.
+
+The reference adapters use a shared outbound timeout policy:
+
+- default: 10 seconds
+- minimum: 1 ms
+- maximum: 60 seconds
+- runtime-wide override through `outboundTimeoutMs`
+
+Covered adapters:
+
+- Supabase Auth verifier
+- tenant membership directory
+- Case Store repository
+- Outbox Store
+
+A timeout is an availability failure, not an authorization fallback. Requests fail closed through the existing authentication/transport error boundaries.
