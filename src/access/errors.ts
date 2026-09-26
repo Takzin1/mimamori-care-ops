@@ -2,6 +2,7 @@ export type AccessDenialReason =
   | "membership_required"
   | "membership_inactive"
   | "command_forbidden"
+  | "case_not_visible"
   | "target_not_assignable";
 
 export class CaseAccessDeniedError extends Error {
