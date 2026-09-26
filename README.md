@@ -24,6 +24,7 @@ What is already implemented and tested:
 - production identity boundary + persistent tenant membership
 - audited membership provisioning / revocation control plane
 - authenticated Care Ops HTTP boundary for Queue / Case / metrics / commands
+- server-only Supabase runtime composition with explicit credential routing
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
@@ -138,6 +139,7 @@ src/
   access/        tenant staff membership and authorization
   application/   operational orchestration
   http/          authenticated Web Request/Response transport
+  runtime/        server-only deployment composition
   persistence/   repository contracts and in-memory reference adapter
 
 db/
@@ -191,13 +193,15 @@ Start here:
 10. [ADR 0008 — Audited membership control plane](docs/adr/0008-audited-membership-control-plane.md)
 11. [ADR 0009 — Authenticated HTTP boundary](docs/adr/0009-authenticated-http-boundary.md)
 12. [HTTP API](docs/http-api.md)
-13. `tests/application-case-service.test.ts`
-14. `tests/identity.test.ts`
-15. `tests/http-api.test.ts`
-16. `tests/sla.test.ts`
-17. [Responder Console contract](docs/responder-console.md)
-18. `demo/responder-console/index.html`
-19. `db/case_store.sql`
+13. [ADR 0010 — Server runtime composition](docs/adr/0010-server-runtime-composition.md)
+14. [Server Runtime](docs/server-runtime.md)
+15. `tests/application-case-service.test.ts`
+16. `tests/identity.test.ts`
+17. `tests/http-api.test.ts`
+18. `tests/sla.test.ts`
+19. [Responder Console contract](docs/responder-console.md)
+20. `demo/responder-console/index.html`
+21. `db/case_store.sql`
 
 ## Development
 
