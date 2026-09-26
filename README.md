@@ -26,6 +26,7 @@ What is already implemented and tested:
 - authenticated Care Ops HTTP boundary for Queue / Case / metrics / commands
 - server-only Supabase runtime composition with explicit credential routing
 - browser-safe Care Ops API client with per-request token provider
+- ephemeral browser session coordinator with explicit 401/reauth handling
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
@@ -40,7 +41,7 @@ Not yet production-ready:
 
 - intentionally provisioned production Auth environment and login/session UX
 - production admin identity / membership control-plane runbook
-- live Console shell/session UX and deployment
+- live Console UI shell/auth-provider UX and deployment
 - deployment / observability / incident runbook
 
 See [Project Status](docs/project-status.md) and the open GitHub Issues for the active roadmap.
@@ -142,6 +143,7 @@ src/
   http/          authenticated Web Request/Response transport
   runtime/        server-only deployment composition
   client/         browser-safe HTTP API client
+  session/        ephemeral browser session coordination
   persistence/   repository contracts and in-memory reference adapter
 
 db/
@@ -199,6 +201,8 @@ Start here:
 14. [Server Runtime](docs/server-runtime.md)
 15. [ADR 0011 — Browser client/session boundary](docs/adr/0011-browser-client-session-boundary.md)
 16. [Browser Client](docs/browser-client.md)
+17. [ADR 0012 — Ephemeral session coordinator](docs/adr/0012-ephemeral-session-coordinator.md)
+18. [Browser Session](docs/browser-session.md)
 15. `tests/application-case-service.test.ts`
 16. `tests/identity.test.ts`
 17. `tests/http-api.test.ts`

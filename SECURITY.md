@@ -161,3 +161,14 @@ It obtains a bearer token from an injected provider for each request and does no
 Requests omit ambient credential cookies, disable caching, reject redirects, and use no-referrer behavior.
 
 Command objects are rebuilt from allowed business fields before serialization so caller-supplied `principalId` or `actorId` cannot become trusted API input.
+
+
+## Browser session boundary
+
+The Care Ops session controller stores only safe coordination state and must not retain bearer or refresh tokens.
+
+It does not access localStorage, sessionStorage, IndexedDB, or cookies.
+
+A 401 transitions the Console to reauthentication-required state. Failed Case mutations are never automatically replayed after reauthentication.
+
+Provider-specific Auth SDK/session persistence remains deployment code and requires separate review.
