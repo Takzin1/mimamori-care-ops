@@ -1,6 +1,9 @@
-import { assertCanReadCase } from "../access/policy.ts";
+import {
+  assertCanReadCase,
+  queueVisibilityForMembership,
+} from "../access/policy.ts";
 import type {
-  StaffRole,
+  TenantMembership,
   TenantMembershipDirectory,
 } from "../access/types.ts";
 import {
@@ -19,24 +22,19 @@ export interface CaseQueueRequest {
 
 export type QueueClock = () => string;
 
-const TENANT_WIDE_ROLES: readonly StaffRole[] = [
-  "dispatcher",
-  "supervisor",
-  "auditor",
-];
-
 function queueScope(
-  actorId: string,
-  roles: readonly StaffRole[],
+  membership: TenantMembership,
 ): CaseQueueScope {
-  if (roles.some((role) => TENANT_WIDE_ROLES.includes(role))) {
-    return { type: "tenant" };
-  }
-
-  return {
-    type: "responder",
-    actorId,
-  };
+  return (
+    queueVisibilityForMembership(
+      membership,
+    ) === "tenant"
+  )
+    ? { type: "tenant" }
+    : {
+        type: "responder",
+        actorId: membership.actorId,
+      };
 }
 
 export class CaseQueueService {
@@ -76,7 +74,7 @@ export class CaseQueueService {
     return projectCaseQueue(
       storedCases,
       input.tenantId,
-      queueScope(membership.actorId, membership.roles),
+      queueScope(membership),
       policy,
       this.now(),
     );
