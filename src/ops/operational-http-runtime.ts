@@ -1,3 +1,6 @@
+import {
+  canonicalBrowserOrigin,
+} from "./exact-browser-origin-policy.ts";
 import type {
   CareOpsAdmissionDecision,
   CareOpsMetricLabels,
@@ -580,12 +583,40 @@ export class OperationalCareOpsRuntime {
       };
     }
 
+    let canonical: string;
+
+    try {
+      canonical =
+        canonicalBrowserOrigin(
+          origin,
+        );
+    } catch {
+      const requestId =
+        this.#requestIdFactory();
+
+      return {
+        origin: null,
+        response:
+          await this.#finish(
+            "care_ops",
+            requestMethod,
+            careOpsError(
+              "ORIGIN_NOT_ALLOWED",
+              "Browser origin is not allowed",
+              403,
+              requestId,
+            ),
+            startedAt,
+          ),
+      };
+    }
+
     let allowed = false;
 
     try {
       allowed =
         await this.#originPolicy.allows(
-          origin,
+          canonical,
         );
     } catch {
       const requestId =
@@ -630,7 +661,7 @@ export class OperationalCareOpsRuntime {
     }
 
     return {
-      origin,
+      origin: canonical,
       response: null,
     };
   }
