@@ -40,6 +40,7 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Operational Supabase runtime composition | Implemented + tested | `src/runtime/operational-supabase-care-ops-runtime.ts` |
 | Provider-neutral request admission boundary | Implemented + tested | `src/ops/` + `tests/request-admission.test.ts`; production provider not provisioned |
 | Integrity-pinned TypeScript CI toolchain | Implemented + tested | `package-lock.json` + frozen CI install + supply-chain regression test |
+| Security Audit Round 1 | Complete | Issue #45; remediation PRs #46, #49, #50, #54, #56, #58 |
 | Live authenticated Responder Console deployment | Not implemented | renderer/Auth bridge exist; production environment + deployment remain |
 | Production deployment | Not implemented | release checklist |
 | Production PII / care data | **Not allowed** | security policy |
@@ -59,6 +60,7 @@ It does **not** yet demonstrate a production-grade healthcare/care-service syste
 
 ## Next sequence
 
-1. dedicated security audit / adversarial review
-2. one-time repository + reviewer deployment settings (#10, #22)
-3. production environment provisioning / deployment / privacy governance
+1. complete one-time repository / reviewer deployment settings (#10, #22)
+2. provision production Auth/environment and a real shared/edge request-admission provider
+3. finish production secrets, observability, incident response, backup/restore, and deployment controls
+4. complete privacy/legal/real-world PoC governance before any production PII or care data
