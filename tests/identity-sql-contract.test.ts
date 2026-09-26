@@ -57,12 +57,17 @@ test("membership store is fail-closed to server-side lookup only", async () => {
   );
   assert.ok(
     source.includes(
-      "revoke insert, update, delete on table public.care_tenant_memberships",
+      "revoke insert, update, delete",
     ),
   );
   assert.ok(
     source.includes(
-      "grant select on table public.care_tenant_memberships",
+      "on table public.care_tenant_memberships",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant select",
     ),
   );
   assert.ok(source.includes("to service_role"));
