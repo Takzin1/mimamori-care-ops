@@ -4,6 +4,7 @@ import {
 import {
   validateSlaPolicy,
   type CaseSlaPolicy,
+  type SlaDurations,
 } from "../operations/sla.ts";
 
 export type CareOpsDeploymentStage =
@@ -254,7 +255,13 @@ function parseSlaPolicy(
       `SLA policy ${tenantId}.${priority}`,
     );
 
-    const parsedRule: Record<string, number> = {};
+    const parsedRule: SlaDurations = {
+      acknowledgeWithinMs: 0,
+      assignWithinMs: 0,
+      firstActionWithinMs: 0,
+      handoffAcceptWithinMs: 0,
+      completeWithinMs: 0,
+    };
 
     for (const field of SLA_FIELDS) {
       const duration = rule[field];
@@ -272,10 +279,7 @@ function parseSlaPolicy(
       parsedRule[field] = duration;
     }
 
-    result[priority] =
-      parsedRule as CaseSlaPolicy[
-        typeof priority
-      ];
+    result[priority] = parsedRule;
   }
 
   const complete =
