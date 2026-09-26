@@ -18,6 +18,9 @@ Do not treat completion of the Core as production approval.
 - [ ] production identity provider/environment intentionally provisioned
 - [ ] verified-token-to-principal boundary configured
 - [ ] membership provisioning/admin workflow implemented
+- [ ] membership admin credential/runbook provisioned separately from runtime
+- [ ] membership change audit replay verified
+- [ ] deactivation/revocation drill completed
 - [ ] tenant membership source defined
 - [ ] role provisioning / revocation process documented
 - [ ] inactive user access verified fail-closed

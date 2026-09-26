@@ -26,3 +26,5 @@ Add an ADR when changing:
 - consistency / concurrency model
 - persistence semantics
 - AI responsibility boundary
+
+| [0008](0008-audited-membership-control-plane.md) | Audited membership control plane | Accepted |

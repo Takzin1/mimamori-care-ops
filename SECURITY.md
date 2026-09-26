@@ -99,3 +99,21 @@ Do not trust client-supplied `principalId`, browser session user objects alone, 
 The reference Supabase path verifies the access token against Auth, then resolves Care Ops actor identity and roles from the server-only tenant membership store.
 
 Runtime service-role access to memberships is read-only. Membership provisioning must use a separate administrative path with explicit authorization.
+
+
+## Membership administration control plane
+
+Operational Care Ops roles do not grant membership-provisioning authority.
+
+Membership lifecycle changes use a separate database control plane with:
+
+- expected-version conflict detection
+- mandatory administrative actor and reason
+- delete prohibition; deactivate instead
+- one access-control change per version
+- append-only audit events
+- atomic snapshot + audit behavior
+
+The runtime `service_role` remains SELECT-only for membership data and cannot execute membership mutation functions.
+
+The dedicated `care_membership_admin` database role is NOLOGIN and must not be granted to runtime/browser credentials. The audit trigger function is private, not publicly executable, and exists only to guarantee audit insertion that the admin role itself cannot forge directly.

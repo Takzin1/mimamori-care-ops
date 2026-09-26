@@ -22,6 +22,7 @@ What is already implemented and tested:
 - optimistic concurrency / stale-write rejection
 - tenant-scoped persistence contract
 - production identity boundary + persistent tenant membership
+- audited membership provisioning / revocation control plane
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
@@ -184,6 +185,7 @@ Start here:
 7. [ADR 0005 — Priority and SLA aging](docs/adr/0005-priority-sla-aging.md)
 8. [ADR 0006 — Transactional outbox](docs/adr/0006-transactional-outbox.md)
 9. [ADR 0007 — Production identity boundary](docs/adr/0007-production-identity-boundary.md)
+10. [ADR 0008 — Audited membership control plane](docs/adr/0008-audited-membership-control-plane.md)
 10. `tests/application-case-service.test.ts`
 11. `tests/identity.test.ts`
 12. `tests/sla.test.ts`
