@@ -69,7 +69,7 @@ implements CareOpsBrowserOriginPolicy {
     }
 
     this.#origins = new Set(
-      origins.map(canonicalOrigin),
+      origins.map(canonicalBrowserOrigin),
     );
   }
 
