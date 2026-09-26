@@ -82,13 +82,21 @@ function bodyless(
 }
 
 export class OperationalCareOpsRuntime {
-  readonly #handler;
-  readonly #logger;
-  readonly #metrics;
-  readonly #readinessChecks;
-  readonly #now;
-  readonly #nowMs;
-  readonly #requestIdFactory;
+  readonly #handler:
+    OperationalCareOpsRuntimeOptions["handler"];
+  readonly #logger:
+    OperationalCareOpsRuntimeOptions["logger"];
+  readonly #metrics:
+    OperationalCareOpsRuntimeOptions["metrics"];
+  readonly #readinessChecks:
+    readonly NonNullable<
+      OperationalCareOpsRuntimeOptions[
+        "readinessChecks"
+      ]
+    >[number][];
+  readonly #now: () => string;
+  readonly #nowMs: () => number;
+  readonly #requestIdFactory: () => string;
 
   constructor(
     options: OperationalCareOpsRuntimeOptions,
