@@ -28,6 +28,7 @@ What is already implemented and tested:
 - browser-safe Care Ops API client with per-request token provider
 - ephemeral browser session coordinator with explicit 401/reauth handling
 - renderer-neutral live Console workspace with race/conflict handling
+- server-projected operator / Case capabilities from shared Core + RBAC rules
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
@@ -207,6 +208,8 @@ Start here:
 18. [Browser Session](docs/browser-session.md)
 19. [ADR 0013 — Live Console workspace](docs/adr/0013-live-console-workspace.md)
 20. [Live Console Workspace](docs/live-console-workspace.md)
+21. [ADR 0014 — Server-projected Console capabilities](docs/adr/0014-server-projected-console-capabilities.md)
+22. [Console Capabilities](docs/console-capabilities.md)
 15. `tests/application-case-service.test.ts`
 16. `tests/identity.test.ts`
 17. `tests/http-api.test.ts`
