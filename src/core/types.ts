@@ -47,12 +47,16 @@ export const COMPLETION_OUTCOMES = [
 
 export type CompletionOutcome = (typeof COMPLETION_OUTCOMES)[number];
 
+export const EVIDENCE_KINDS = [
+  "note",
+  "call",
+  "visit",
+  "message",
+  "external_ref",
+] as const;
+
 export type EvidenceKind =
-  | "note"
-  | "call"
-  | "visit"
-  | "message"
-  | "external_ref";
+  (typeof EVIDENCE_KINDS)[number];
 
 export interface CompletionEvidenceItem {
   kind: EvidenceKind;
