@@ -1,4 +1,5 @@
 import type { CaseCommandIntent } from "../application/types.ts";
+import type { CaseCommandType } from "../core/types.ts";
 import { CaseAccessDeniedError } from "./errors.ts";
 import type {
   StaffRole,
@@ -45,14 +46,32 @@ export function assertCanReadCase(
   }
 }
 
+export function canExecuteCommandType(
+  membership: TenantMembership | null,
+  type: CaseCommandType,
+): membership is TenantMembership {
+  return Boolean(
+    membership &&
+    membership.active &&
+    hasAnyRole(
+      membership,
+      COMMAND_ROLES[type],
+    ),
+  );
+}
+
 export function assertCanExecuteCommand(
   membership: TenantMembership | null,
   command: CaseCommandIntent,
 ): asserts membership is TenantMembership {
   assertActiveMembership(membership);
 
-  const allowed = COMMAND_ROLES[command.type];
-  if (!hasAnyRole(membership, allowed)) {
+  if (
+    !canExecuteCommandType(
+      membership,
+      command.type,
+    )
+  ) {
     throw new CaseAccessDeniedError("command_forbidden");
   }
 }
