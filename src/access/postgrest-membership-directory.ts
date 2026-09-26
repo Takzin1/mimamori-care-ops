@@ -8,6 +8,10 @@ import {
   type TenantMembershipDirectory,
 } from "./types.ts";
 import {
+  normalizeOutboundRequestTimeoutMs,
+  outboundRequestSignal,
+} from "../transport/outbound-timeout.ts";
+import {
   CaseStoreCorruptionError,
   CaseStoreTransportError,
 } from "../persistence/errors.ts";
@@ -21,6 +25,7 @@ export interface PostgrestMembershipDirectoryOptions {
   baseUrl: string;
   serviceRoleKey: string;
   fetchImpl?: FetchLike;
+  requestTimeoutMs?: number;
 }
 
 interface MembershipRow {
@@ -90,6 +95,7 @@ implements TenantMembershipDirectory {
   private readonly baseUrl: string;
   private readonly serviceRoleKey: string;
   private readonly fetchImpl: FetchLike;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: PostgrestMembershipDirectoryOptions) {
     const baseUrl = requireText(
@@ -104,6 +110,10 @@ implements TenantMembershipDirectory {
       "service role key",
     );
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.requestTimeoutMs =
+      normalizeOutboundRequestTimeoutMs(
+        options.requestTimeoutMs,
+      );
   }
 
   private async find(
@@ -126,6 +136,9 @@ implements TenantMembershipDirectory {
     try {
       response = await this.fetchImpl(url, {
         method: "GET",
+        signal: outboundRequestSignal(
+          this.requestTimeoutMs,
+        ),
         headers: {
           apikey: this.serviceRoleKey,
           authorization: `Bearer ${this.serviceRoleKey}`,
@@ -133,9 +146,9 @@ implements TenantMembershipDirectory {
           "accept-profile": "public",
         },
       });
-    } catch (error) {
+    } catch {
       throw new CaseStoreTransportError(
-        `Membership lookup failed: ${error instanceof Error ? error.message : "network error"}`,
+        "Membership lookup failed",
       );
     }
 
