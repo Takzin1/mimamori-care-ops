@@ -493,7 +493,7 @@ exception
 
     raise;
 end;
-$;
+$$;
 
 create or replace function care_admin.transition_membership(
   p_tenant_id text,
@@ -640,7 +640,7 @@ exception
 
     raise;
 end;
-$;
+$$;
 
 revoke all on function care_admin.create_membership(
   text,
