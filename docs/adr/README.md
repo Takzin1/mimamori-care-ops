@@ -16,6 +16,7 @@ ADRs document decisions that change the meaning or safety boundary of the Care O
 | [0012](0012-ephemeral-session-coordinator.md) | Ephemeral browser session coordinator | Accepted |
 | [0013](0013-live-console-workspace.md) | Live Console workspace state model | Accepted |
 | [0014](0014-server-projected-console-capabilities.md) | Server-projected Console capabilities | Accepted |
+| [0015](0015-dependency-free-console-renderer.md) | Dependency-free live Console web renderer | Accepted |
 
 ## When to add an ADR
 

@@ -476,6 +476,11 @@ implements LiveConsoleWorkspaceClient {
     };
   }
 
+  async signOut(): Promise<void> {
+    this.#assertActive();
+    await this.#session.signOut();
+  }
+
   async refreshOperator(): Promise<void> {
     this.#assertActive();
     if (!this.#ready()) return;

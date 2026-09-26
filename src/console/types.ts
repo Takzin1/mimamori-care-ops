@@ -82,6 +82,8 @@ export interface LiveConsoleWorkspaceClient {
     listener: LiveConsoleWorkspaceListener,
   ): () => void;
 
+  signOut(): Promise<void>;
+
   refreshOperator(): Promise<void>;
 
   refreshQueue(): Promise<void>;
