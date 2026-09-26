@@ -1,3 +1,6 @@
+import {
+  isCareOpsIdentifier,
+} from "../identifiers.ts";
 import type {
   CaseCapabilitiesProjection,
   OperatorContextProjection,
@@ -28,7 +31,6 @@ import type {
   CareOpsHttpClientOptions,
 } from "./types.ts";
 
-const SAFE_IDENTIFIER = /^[A-Za-z0-9._:-]{1,128}$/;
 const MAX_ACCESS_TOKEN_LENGTH = 8 * 1024;
 
 function asRecord(
@@ -86,7 +88,7 @@ function identifier(
   value: string,
   label: string,
 ): string {
-  if (!SAFE_IDENTIFIER.test(value)) {
+  if (!isCareOpsIdentifier(value)) {
     throw new CareOpsClientConfigurationError(
       `${label} is not a valid Care Ops identifier`,
     );
