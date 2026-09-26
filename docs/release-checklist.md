@@ -29,6 +29,8 @@ Do not treat completion of the Core as production approval.
 - [ ] browser/client cannot submit trusted principalId or actorId
 - [ ] browser client token-persistence review completed
 - [ ] session shell refresh/sign-out behavior tested
+- [ ] 401 -> reauthentication-required behavior tested
+- [ ] failed mutation is not auto-replayed after reauthentication
 - [ ] least-privilege database/service credentials reviewed
 
 ## Data protection
