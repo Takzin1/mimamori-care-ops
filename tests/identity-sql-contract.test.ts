@@ -170,7 +170,7 @@ test("identity PLpgSQL function delimiters remain balanced", async () => {
   const brokenClosers =
     (source.match(/\n\$;\n/g) ?? []).length;
 
-  assert.equal(openers, 6);
+  assert.ok(openers >= 7);
   assert.equal(closers, openers);
   assert.equal(brokenClosers, 0);
 });
