@@ -11,6 +11,10 @@ import type {
   CaseEvent,
 } from "../core/types.ts";
 import {
+  normalizeOutboundRequestTimeoutMs,
+  outboundRequestSignal,
+} from "../transport/outbound-timeout.ts";
+import {
   CaseNotFoundError,
   CaseStoreCorruptionError,
   CaseStoreTransportError,
@@ -34,6 +38,7 @@ export interface PostgrestCaseRepositoryOptions {
   serviceRoleKey: string;
   fetchImpl?: FetchLike;
   pageSize?: number;
+  requestTimeoutMs?: number;
 }
 
 interface CaseRow {
@@ -177,6 +182,7 @@ export class PostgrestCaseRepository implements CaseRepository {
   private readonly serviceRoleKey: string;
   private readonly fetchImpl: FetchLike;
   private readonly pageSize: number;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: PostgrestCaseRepositoryOptions) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl);
@@ -186,6 +192,10 @@ export class PostgrestCaseRepository implements CaseRepository {
     );
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.pageSize = options.pageSize ?? 500;
+    this.requestTimeoutMs =
+      normalizeOutboundRequestTimeoutMs(
+        options.requestTimeoutMs,
+      );
 
     if (
       !Number.isInteger(this.pageSize) ||
@@ -225,10 +235,14 @@ export class PostgrestCaseRepository implements CaseRepository {
       response = await this.fetchImpl(url, {
         ...init,
         headers,
+        signal: outboundRequestSignal(
+          this.requestTimeoutMs,
+          init.signal,
+        ),
       });
-    } catch (error) {
+    } catch {
       throw new CaseStoreTransportError(
-        `Case Store request failed: ${error instanceof Error ? error.message : "network error"}`,
+        "Case Store request failed",
       );
     }
 
