@@ -35,3 +35,5 @@ Add an ADR when changing:
 
 | [0008](0008-audited-membership-control-plane.md) | Audited membership control plane | Accepted |
 | [0009](0009-authenticated-http-boundary.md) | Authenticated Care Ops HTTP boundary | Accepted |
+
+| [0016](0016-rpc-only-runtime-database-mutation.md) | RPC-only runtime database mutation | Accepted |
