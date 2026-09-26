@@ -37,3 +37,4 @@ Add an ADR when changing:
 | [0009](0009-authenticated-http-boundary.md) | Authenticated Care Ops HTTP boundary | Accepted |
 
 | [0016](0016-rpc-only-runtime-database-mutation.md) | RPC-only runtime database mutation | Accepted |
+| [0017](0017-production-request-admission.md) | Production request admission boundary | Accepted |
