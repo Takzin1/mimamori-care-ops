@@ -13,10 +13,13 @@ class QueueSql implements AdminSqlExecutor {
     sql: string;
     params: readonly unknown[];
   }> = [];
+  private readonly results: AdminSqlQueryResult[];
 
   constructor(
-    private readonly results: AdminSqlQueryResult[],
-  ) {}
+    results: AdminSqlQueryResult[],
+  ) {
+    this.results = results;
+  }
 
   async query(
     sql: string,
