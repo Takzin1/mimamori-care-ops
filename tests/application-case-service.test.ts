@@ -451,3 +451,164 @@ test("priority changes are authorized and audited", async () => {
     assert.equal(changed.event.data.priority, "critical");
   }
 });
+
+
+test("responder cannot read or mutate a Case outside current ownership/handoff scope", async () => {
+  const service = new CaseService(
+    new InMemoryCaseRepository(),
+    memberships(),
+    () => at(0),
+  );
+
+  await service.openFromSignal(
+    {
+      id: "signal-hidden",
+      tenantId: "provider-a",
+      sourceAdapter: "test-adapter",
+      priority: "normal",
+      subjectId: "subject-hidden",
+      type: "non_response",
+    },
+    "case-hidden",
+  );
+
+  await assert.rejects(
+    service.get({
+      tenantId: "provider-a",
+      caseId: "case-hidden",
+      principalId: "principal-responder-a",
+    }),
+    (error: unknown) =>
+      error instanceof CaseAccessDeniedError &&
+      error.reason === "case_not_visible",
+  );
+
+  await assert.rejects(
+    service.metrics({
+      tenantId: "provider-a",
+      caseId: "case-hidden",
+      principalId: "principal-responder-a",
+    }),
+    (error: unknown) =>
+      error instanceof CaseAccessDeniedError &&
+      error.reason === "case_not_visible",
+  );
+
+  await assert.rejects(
+    service.capabilities({
+      tenantId: "provider-a",
+      caseId: "case-hidden",
+      principalId: "principal-responder-a",
+    }),
+    (error: unknown) =>
+      error instanceof CaseAccessDeniedError &&
+      error.reason === "case_not_visible",
+  );
+
+  await assert.rejects(
+    service.execute({
+      tenantId: "provider-a",
+      caseId: "case-hidden",
+      principalId: "principal-responder-a",
+      expectedVersion: 1,
+      command: { type: "acknowledge" },
+    }),
+    CaseAccessDeniedError,
+  );
+
+  const stored = await service.get({
+    tenantId: "provider-a",
+    caseId: "case-hidden",
+    principalId: "principal-dispatcher",
+  });
+
+  assert.equal(stored?.aggregate.status, "NEW");
+  assert.equal(stored?.aggregate.version, 1);
+});
+
+test("responder Case reads follow current assignment and incoming handoff scope", async () => {
+  const service = new CaseService(
+    new InMemoryCaseRepository(),
+    memberships(),
+    () => at(0),
+  );
+
+  await service.openFromSignal(
+    {
+      id: "signal-visible",
+      tenantId: "provider-a",
+      sourceAdapter: "test-adapter",
+      priority: "normal",
+      subjectId: "subject-visible",
+      type: "manual",
+    },
+    "case-visible",
+  );
+
+  await service.execute({
+    tenantId: "provider-a",
+    caseId: "case-visible",
+    principalId: "principal-dispatcher",
+    expectedVersion: 1,
+    command: { type: "acknowledge" },
+  });
+
+  await service.execute({
+    tenantId: "provider-a",
+    caseId: "case-visible",
+    principalId: "principal-dispatcher",
+    expectedVersion: 2,
+    command: {
+      type: "assign",
+      assigneeId: "responder-a",
+    },
+  });
+
+  const assigned = await service.get({
+    tenantId: "provider-a",
+    caseId: "case-visible",
+    principalId: "principal-responder-a",
+  });
+  assert.equal(
+    assigned?.aggregate.assigneeId,
+    "responder-a",
+  );
+
+  await assert.rejects(
+    service.get({
+      tenantId: "provider-a",
+      caseId: "case-visible",
+      principalId: "principal-responder-b",
+    }),
+    CaseAccessDeniedError,
+  );
+
+  await service.execute({
+    tenantId: "provider-a",
+    caseId: "case-visible",
+    principalId: "principal-responder-a",
+    expectedVersion: 3,
+    command: { type: "start_action" },
+  });
+
+  await service.execute({
+    tenantId: "provider-a",
+    caseId: "case-visible",
+    principalId: "principal-responder-a",
+    expectedVersion: 4,
+    command: {
+      type: "request_handoff",
+      targetAssigneeId: "responder-b",
+    },
+  });
+
+  const incoming = await service.get({
+    tenantId: "provider-a",
+    caseId: "case-visible",
+    principalId: "principal-responder-b",
+  });
+  assert.equal(
+    incoming?.aggregate.handoffTargetId,
+    "responder-b",
+  );
+});
