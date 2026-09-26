@@ -63,11 +63,35 @@ export interface CareOpsReadinessCheck {
   check(): boolean | Promise<boolean>;
 }
 
+export interface CareOpsAdmissionInput {
+  request: Request;
+  method: string;
+  routeClass: "care_ops";
+}
+
+export type CareOpsAdmissionDecision =
+  | {
+      allowed: true;
+    }
+  | {
+      allowed: false;
+      retryAfterSeconds?: number;
+    };
+
+export interface CareOpsRequestAdmission {
+  admit(
+    input: Readonly<CareOpsAdmissionInput>,
+  ):
+    | CareOpsAdmissionDecision
+    | Promise<CareOpsAdmissionDecision>;
+}
+
 export interface OperationalCareOpsRuntimeOptions {
   handler: CareOpsHttpHandler;
   logger?: CareOpsStructuredLogger;
   metrics?: CareOpsMetricsSink;
   readinessChecks?: readonly CareOpsReadinessCheck[];
+  admission?: CareOpsRequestAdmission;
   now?: () => string;
   nowMs?: () => number;
   requestIdFactory?: () => string;
