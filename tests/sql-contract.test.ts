@@ -77,11 +77,6 @@ test("Data API access is fail-closed to server-side service role", async () => {
     ),
   );
   assert.ok(source.includes("to service_role;"));
-  assert.equal(
-    source.toLowerCase().includes("security definer"),
-    false,
-    "persistence RPCs must remain security-invoker",
-  );
   for (const name of [
     "create_care_case",
     "append_care_case_event",
@@ -105,10 +100,50 @@ test("Data API access is fail-closed to server-side service role", async () => {
     );
 
     assert.ok(
-      body.includes("security invoker"),
-      name + " must explicitly remain security-invoker",
+      body.includes("security definer"),
+      name + " must run with the migration-owner write boundary",
+    );
+    assert.ok(
+      body.includes("set search_path = pg_catalog"),
+      name + " must use a locked search_path",
     );
   }
+
+  assert.ok(
+    source.includes(
+      "revoke insert, update, delete on table public.care_cases",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "revoke insert, update, delete on table public.care_case_events",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "revoke insert, update, delete on table public.care_outbox",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant select on table public.care_cases to service_role",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant select on table public.care_case_events to service_role",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant select on table public.care_outbox to service_role",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "revoke usage, select on sequence public.care_outbox_id_seq",
+    ),
+  );
 });
 
 
