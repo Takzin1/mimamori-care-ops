@@ -695,3 +695,108 @@ test("authorized missing Case is 404 without leaking internal identifiers", asyn
     false,
   );
 });
+
+
+test("HTTP operator context exposes safe operational identity without principalId", async () => {
+  const { api } = await fixture();
+
+  const response = await api.handle(
+    request(
+      "/api/care-ops/tenants/provider-a/operator",
+      {
+        headers: authHeaders(),
+      },
+    ),
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await body(response);
+
+  assert.deepEqual(payload, {
+    tenantId: "provider-a",
+    actorId: "dispatcher",
+    roles: ["dispatcher"],
+    queueVisibility: "tenant",
+  });
+
+  assert.equal(
+    Object.hasOwn(payload, "principalId"),
+    false,
+  );
+});
+
+test("HTTP Case capabilities combine verified RBAC and lifecycle state", async () => {
+  const { api } = await fixture();
+
+  const dispatcher = await api.handle(
+    request(
+      "/api/care-ops/tenants/provider-a/cases/case-a/capabilities",
+      {
+        headers: authHeaders(),
+      },
+    ),
+  );
+
+  assert.equal(dispatcher.status, 200);
+  const payload = await body(dispatcher);
+
+  assert.equal(payload.caseId, "case-a");
+  assert.equal(payload.version, 1);
+  assert.equal(payload.status, "NEW");
+  assert.deepEqual(
+    payload.commands.map(
+      (item: { type: string }) =>
+        item.type,
+    ),
+    ["set_priority", "acknowledge"],
+  );
+  assert.equal(
+    Object.hasOwn(
+      payload.operator,
+      "principalId",
+    ),
+    false,
+  );
+
+  const responder = await api.handle(
+    request(
+      "/api/care-ops/tenants/provider-a/cases/case-a/capabilities",
+      {
+        headers:
+          authHeaders("token-responder"),
+      },
+    ),
+  );
+
+  assert.equal(responder.status, 200);
+  const responderPayload =
+    await body(responder);
+
+  assert.deepEqual(
+    responderPayload.commands.map(
+      (item: { type: string }) =>
+        item.type,
+    ),
+    ["acknowledge"],
+  );
+});
+
+test("HTTP capabilities deny cross-tenant access before Case disclosure", async () => {
+  const { api } = await fixture();
+
+  const response = await api.handle(
+    request(
+      "/api/care-ops/tenants/provider-b/cases/case-b/capabilities",
+      {
+        headers: authHeaders(),
+      },
+    ),
+  );
+
+  assert.equal(response.status, 403);
+  const payload = await body(response);
+  assert.equal(
+    payload.error.code,
+    "FORBIDDEN",
+  );
+});
