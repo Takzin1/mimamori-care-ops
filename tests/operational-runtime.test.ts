@@ -157,7 +157,7 @@ test("request observability logs only generic route metadata and no identifiers 
           return new Response(
             JSON.stringify({ ok: true }),
             {
-              status: 204,
+              status: 200,
               headers: {
                 "x-request-id":
                   "req-safe-001",
@@ -218,7 +218,7 @@ test("request observability logs only generic route metadata and no identifiers 
       ),
     );
 
-  assert.equal(response.status, 204);
+  assert.equal(response.status, 200);
   assert.equal(logs.length, 1);
 
   const serialized =
