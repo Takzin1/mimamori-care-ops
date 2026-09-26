@@ -158,3 +158,19 @@ test("membership mutation contract is versioned and append-only audited", async 
     ),
   );
 });
+
+
+test("identity PLpgSQL function delimiters remain balanced", async () => {
+  const source = await sql();
+
+  const openers =
+    (source.match(/(?:do|as) \$\$/g) ?? []).length;
+  const closers =
+    (source.match(/\n\$\$;\n/g) ?? []).length;
+  const brokenClosers =
+    (source.match(/\n\$;\n/g) ?? []).length;
+
+  assert.equal(openers, 6);
+  assert.equal(closers, openers);
+  assert.equal(brokenClosers, 0);
+});
