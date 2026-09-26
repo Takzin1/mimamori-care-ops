@@ -199,9 +199,9 @@ These may remain BLOCKED during early synthetic staging.
 
 ### Blockers
 
-- 
-- 
-- 
+-
+-
+-
 
 ### Reviewer conclusion
 
