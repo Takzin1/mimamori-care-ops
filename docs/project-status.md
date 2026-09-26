@@ -68,7 +68,7 @@ Repository-side implementation and Security Audit Round 1 are substantially comp
 Remaining work is primarily environment / organizational provisioning:
 
 1. complete one-time repository / reviewer settings (#10, #22)
-2. execute staging/production provisioning and operational drills tracked in #64
+2. execute staging/production provisioning and operational drills tracked in #64 using the staging evidence template / production evidence index
 3. configure real shared/edge admission, exact production origin(s), secrets, observability, backup/restore, and outbox provider credentials
 4. validate the live workflow with target operators using synthetic/scenario data
 5. complete privacy/legal/real-world PoC governance before any production PII or care data
