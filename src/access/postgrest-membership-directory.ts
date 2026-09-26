@@ -1,4 +1,7 @@
 import {
+  isCareOpsIdentifier,
+} from "../identifiers.ts";
+import {
   STAFF_ROLES,
   type StaffRole,
   type TenantMembership,
@@ -65,6 +68,7 @@ function parseRow(row: MembershipRow): TenantMembership {
     typeof row.tenant_id !== "string" ||
     typeof row.principal_id !== "string" ||
     typeof row.actor_id !== "string" ||
+    !isCareOpsIdentifier(row.actor_id) ||
     typeof row.active !== "boolean"
   ) {
     throw new CaseStoreCorruptionError(
