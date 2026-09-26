@@ -39,6 +39,7 @@ What is already implemented and tested:
 - production-facing Supabase/PostgREST CaseRepository adapter
 - transactional outbox with worker lease/retry/dead-letter semantics
 - payload-free outbox health monitoring for operations
+- safe synthetic staging preflight for liveness/readiness, exact Origin/CORS, and unauthenticated fail-closed checks
 - real PostgreSQL 17 integration CI
 - Postgres/Supabase Case Store contract with RLS and fail-closed RPC access
 - bounded Supabase/PostgREST outbound request deadlines
@@ -51,7 +52,7 @@ Not yet production-ready:
 - intentionally provisioned production Auth environment and login/session UX
 - production admin credential provisioning / execution path for the membership control plane
 - production Auth-provider/login UX and live Console deployment
-- deployment / observability / incident runbook
+- intentionally provisioned staging/production observability providers, alert ownership, and completed operational drills
 - production shared/edge request-admission provider and thresholds
 - final repository branch-protection / reviewer deployment settings
 
@@ -239,13 +240,13 @@ Start here:
 22. [Console Capabilities](docs/console-capabilities.md)
 23. [ADR 0015 — Dependency-free Console renderer](docs/adr/0015-dependency-free-console-renderer.md)
 24. [Live Console Web Renderer](docs/live-console-web-renderer.md)
-15. `tests/application-case-service.test.ts`
-16. `tests/identity.test.ts`
-17. `tests/http-api.test.ts`
-18. `tests/sla.test.ts`
-19. [Responder Console contract](docs/responder-console.md)
-20. `demo/responder-console/index.html`
-21. `db/case_store.sql`
+25. `tests/application-case-service.test.ts`
+26. `tests/identity.test.ts`
+27. `tests/http-api.test.ts`
+28. `tests/sla.test.ts`
+29. [Responder Console contract](docs/responder-console.md)
+30. `demo/responder-console/index.html`
+31. `db/case_store.sql`
 
 ## Development
 
@@ -260,6 +261,16 @@ npm run typecheck
 npm test
 npm run test:coverage
 ```
+
+After a synthetic staging API and exact Console origin are provisioned, run the credential-free boundary preflight:
+
+```bash
+npm run preflight:staging -- \
+  --base-url https://api.example.test \
+  --console-origin https://console.example.test
+```
+
+The preflight sends no access token, resident data, Case payload, or completion evidence. It verifies liveness/readiness, unexpected-Origin rejection, the narrow CORS contract, and fail-closed unauthenticated browser behavior.
 
 The repository keeps runtime dependencies at zero. TypeScript 5.9.2 is an exact devDependency installed from the committed integrity lockfile with frozen `npm ci` in CI.
 
