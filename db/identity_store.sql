@@ -55,7 +55,7 @@ create index if not exists care_memberships_tenant_active_idx
     actor_id
   );
 
-do $
+do $$
 begin
   if not exists (
     select 1
@@ -69,7 +69,12 @@ begin
       add constraint
         care_tenant_memberships_actor_id_format_check
       check (
-        actor_id ~ '^[A-Za-z0-9._:-]{1,128}
+        actor_id ~ '^[A-Za-z0-9._:-]{1,128}$'
+      );
+  end if;
+end;
+$$;
+
 create table if not exists public.care_membership_admin_events (
   tenant_id text not null,
   principal_id text not null,
