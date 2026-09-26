@@ -1,4 +1,8 @@
 import {
+  normalizeOutboundRequestTimeoutMs,
+  outboundRequestSignal,
+} from "../transport/outbound-timeout.ts";
+import {
   CaseStoreCorruptionError,
   CaseStoreTransportError,
 } from "../persistence/errors.ts";
@@ -24,6 +28,7 @@ export interface PostgrestOutboxStoreOptions {
   baseUrl: string;
   serviceRoleKey: string;
   fetchImpl?: FetchLike;
+  requestTimeoutMs?: number;
 }
 
 const OUTBOX_STATUSES = new Set<OutboxStatus>([
@@ -134,6 +139,7 @@ export class PostgrestOutboxStore implements OutboxStore {
   private readonly baseUrl: string;
   private readonly serviceRoleKey: string;
   private readonly fetchImpl: FetchLike;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: PostgrestOutboxStoreOptions) {
     const baseUrl = requireText(
@@ -148,6 +154,10 @@ export class PostgrestOutboxStore implements OutboxStore {
       "service role key",
     );
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.requestTimeoutMs =
+      normalizeOutboundRequestTimeoutMs(
+        options.requestTimeoutMs,
+      );
   }
 
   private rpcUrl(name: string): URL {
@@ -177,11 +187,14 @@ export class PostgrestOutboxStore implements OutboxStore {
           method: "POST",
           headers,
           body: JSON.stringify(body),
+          signal: outboundRequestSignal(
+            this.requestTimeoutMs,
+          ),
         },
       );
-    } catch (error) {
+    } catch {
       throw new CaseStoreTransportError(
-        `Outbox request failed: ${error instanceof Error ? error.message : "network error"}`,
+        "Outbox request failed",
       );
     }
 
