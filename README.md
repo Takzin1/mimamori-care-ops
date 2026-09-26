@@ -208,6 +208,8 @@ Operational references:
 - [Backup, Restore, and Rollback](docs/backup-restore-rollback.md)
 - [Outbox and Dead-Letter Operations](docs/outbox-operations.md)
 - [Deployment Environment Contract](docs/deployment-environment.md)
+- [Staging Evidence Template](docs/staging-evidence-template.md)
+- [Production Evidence Index](docs/production-evidence-index.md)
 
 ## Review this repository in 10 minutes
 
