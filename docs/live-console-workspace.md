@@ -116,3 +116,14 @@ A future framework shell should primarily:
 - call workspace methods from explicit operator actions
 - render login/reauth states from session snapshot
 - avoid implementing Case transition/SLA/authorization logic itself
+
+
+## Operator and capabilities
+
+Workspace initialization loads safe operator context alongside the Queue.
+
+Selecting a Case loads capabilities alongside detail and metrics.
+
+Capabilities are refreshed after accepted commands and stale-conflict refetches.
+
+The renderer should use these server projections to decide which controls and input forms to show instead of reimplementing RBAC or lifecycle availability.

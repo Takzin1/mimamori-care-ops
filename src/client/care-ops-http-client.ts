@@ -1,4 +1,8 @@
 import type {
+  CaseCapabilitiesProjection,
+  OperatorContextProjection,
+} from "../application/capabilities.ts";
+import type {
   CaseCommandIntent,
 } from "../application/types.ts";
 import type {
@@ -330,6 +334,39 @@ implements CareOpsClient {
     }
 
     return value;
+  }
+
+  async operatorContext(
+    tenantId: string,
+  ): Promise<OperatorContextProjection> {
+    const tenant = identifier(
+      tenantId,
+      "tenantId",
+    );
+
+    return await this.request(
+      `/api/care-ops/tenants/${encodeURIComponent(tenant)}/operator`,
+      { method: "GET" },
+    ) as unknown as OperatorContextProjection;
+  }
+
+  async caseCapabilities(
+    tenantId: string,
+    caseId: string,
+  ): Promise<CaseCapabilitiesProjection> {
+    const tenant = identifier(
+      tenantId,
+      "tenantId",
+    );
+    const caseIdentity = identifier(
+      caseId,
+      "caseId",
+    );
+
+    return await this.request(
+      `/api/care-ops/tenants/${encodeURIComponent(tenant)}/cases/${encodeURIComponent(caseIdentity)}/capabilities`,
+      { method: "GET" },
+    ) as unknown as CaseCapabilitiesProjection;
   }
 
   async queue(

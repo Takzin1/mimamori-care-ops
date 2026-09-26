@@ -39,6 +39,10 @@ export interface CareOpsHttpApiOptions {
 
 type Route =
   | {
+      kind: "operator";
+      tenantId: string;
+    }
+  | {
       kind: "queue";
       tenantId: string;
     }
@@ -49,6 +53,11 @@ type Route =
     }
   | {
       kind: "metrics";
+      tenantId: string;
+      caseId: string;
+    }
+  | {
+      kind: "capabilities";
       tenantId: string;
       caseId: string;
     }
@@ -95,6 +104,23 @@ function safeIdentifier(
 function routeFor(request: Request): Route {
   const url = new URL(request.url);
   const parts = url.pathname.split("/");
+
+  if (
+    parts.length === 6 &&
+    parts[0] === "" &&
+    parts[1] === "api" &&
+    parts[2] === "care-ops" &&
+    parts[3] === "tenants" &&
+    parts[5] === "operator"
+  ) {
+    return {
+      kind: "operator",
+      tenantId: safeIdentifier(
+        parts[4]!,
+        "tenantId",
+      ),
+    };
+  }
 
   if (
     parts.length === 6 &&
@@ -163,6 +189,28 @@ function routeFor(request: Request): Route {
     parts[2] === "care-ops" &&
     parts[3] === "tenants" &&
     parts[5] === "cases" &&
+    parts[7] === "capabilities"
+  ) {
+    return {
+      kind: "capabilities",
+      tenantId: safeIdentifier(
+        parts[4]!,
+        "tenantId",
+      ),
+      caseId: safeIdentifier(
+        parts[6]!,
+        "caseId",
+      ),
+    };
+  }
+
+  if (
+    parts.length === 8 &&
+    parts[0] === "" &&
+    parts[1] === "api" &&
+    parts[2] === "care-ops" &&
+    parts[3] === "tenants" &&
+    parts[5] === "cases" &&
     parts[7] === "commands"
   ) {
     return {
@@ -189,9 +237,11 @@ function allowedMethods(
   route: Route,
 ): readonly string[] {
   switch (route.kind) {
+    case "operator":
     case "queue":
     case "case":
     case "metrics":
+    case "capabilities":
       return ["GET"];
     case "commands":
       return ["POST"];
@@ -472,6 +522,20 @@ export class CareOpsHttpApi {
       const token = accessToken(request);
 
       switch (route.kind) {
+        case "operator": {
+          const projection =
+            await this.gateway.operatorContext({
+              accessToken: token,
+              tenantId: route.tenantId,
+            });
+
+          return json(
+            projection,
+            200,
+            requestId,
+          );
+        }
+
         case "queue": {
           const projection = await this.gateway.queue({
             accessToken: token,
@@ -519,6 +583,21 @@ export class CareOpsHttpApi {
 
           return json(
             metrics,
+            200,
+            requestId,
+          );
+        }
+
+        case "capabilities": {
+          const projection =
+            await this.gateway.capabilities({
+              accessToken: token,
+              tenantId: route.tenantId,
+              caseId: route.caseId,
+            });
+
+          return json(
+            projection,
             200,
             requestId,
           );

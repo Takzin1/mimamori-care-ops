@@ -1,4 +1,8 @@
 import type {
+  CaseCapabilitiesProjection,
+  OperatorContextProjection,
+} from "../application/capabilities.ts";
+import type {
   CaseCommandIntent,
   CaseOperationResult,
 } from "../application/types.ts";
@@ -248,6 +252,30 @@ implements CareOpsSessionClient {
     this.#disposed = true;
     this.#unsubscribeProvider();
     this.#listeners.clear();
+  }
+
+  operatorContext(
+    tenantId: string,
+  ): Promise<OperatorContextProjection> {
+    return this.#run(
+      () =>
+        this.#client.operatorContext(
+          tenantId,
+        ),
+    );
+  }
+
+  caseCapabilities(
+    tenantId: string,
+    caseId: string,
+  ): Promise<CaseCapabilitiesProjection> {
+    return this.#run(
+      () =>
+        this.#client.caseCapabilities(
+          tenantId,
+          caseId,
+        ),
+    );
   }
 
   queue(

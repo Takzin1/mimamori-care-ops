@@ -196,3 +196,17 @@ A deployment may wrap it with:
 - Node HTTP adapter
 
 The browser must never instantiate a database repository or receive a service-role key.
+
+
+## Operator and Case capability reads
+
+The authenticated API also exposes safe UI projections:
+
+```
+GET /api/care-ops/tenants/:tenantId/operator
+GET /api/care-ops/tenants/:tenantId/cases/:caseId/capabilities
+```
+
+The operator route returns Care Ops actor ID, roles, and Queue visibility, but never the verified Auth principal ID.
+
+The capability route combines the current Case structural preconditions with the same RBAC role map used by command execution. It is advisory/read-only; actual commands remain subject to current identity, membership, target validation, expected version, and Case transition validation.

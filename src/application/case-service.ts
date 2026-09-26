@@ -9,6 +9,7 @@ import type {
   CaseMetrics,
 } from "../core/index.ts";
 import {
+  assertActiveMembership,
   assertAssignableTarget,
   assertCanExecuteCommand,
   assertCanReadCase,
@@ -24,6 +25,12 @@ import type {
   CaseRepository,
   StoredCase,
 } from "../persistence/types.ts";
+import {
+  projectCaseCapabilities,
+  projectOperatorContext,
+  type CaseCapabilitiesProjection,
+  type OperatorContextProjection,
+} from "./capabilities.ts";
 import type {
   AttentionSignal,
   CaseCommandIntent,
@@ -190,6 +197,48 @@ export class CaseService {
       aggregate,
       event: transition.event,
     };
+  }
+
+  async operatorContext(input: {
+    tenantId: string;
+    principalId: string;
+  }): Promise<OperatorContextProjection> {
+    const membership = await this.membershipFor(
+      input.tenantId,
+      input.principalId,
+    );
+    assertActiveMembership(membership);
+
+    return projectOperatorContext(
+      membership,
+    );
+  }
+
+  async capabilities(
+    input: CaseQueryInput,
+  ): Promise<CaseCapabilitiesProjection> {
+    const membership = await this.membershipFor(
+      input.tenantId,
+      input.principalId,
+    );
+    assertCanReadCase(membership);
+
+    const stored = await this.repository.load(
+      input.tenantId,
+      input.caseId,
+    );
+
+    if (!stored) {
+      throw new CaseNotFoundError(
+        input.tenantId,
+        input.caseId,
+      );
+    }
+
+    return projectCaseCapabilities(
+      stored.aggregate,
+      membership,
+    );
   }
 
   async get(input: CaseQueryInput): Promise<StoredCase | null> {

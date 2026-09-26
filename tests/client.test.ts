@@ -422,3 +422,89 @@ test("browser client rejects unsafe identifiers, malformed tokens and unsafe bas
     CareOpsClientConfigurationError,
   );
 });
+
+
+test("browser client fetches operator and Case capability projections with fresh tokens", async () => {
+  const paths: string[] = [];
+  const auth: string[] = [];
+  let token = 0;
+
+  const client = new CareOpsHttpClient({
+    baseUrl: "https://care.example.test",
+    accessTokenProvider: () =>
+      "cap-token-" + String(++token),
+    fetchImpl: async (
+      input,
+      init = {},
+    ) => {
+      const url = new URL(
+        input.toString(),
+      );
+      paths.push(url.pathname);
+      auth.push(
+        new Headers(init.headers)
+          .get("authorization") ?? "",
+      );
+
+      if (
+        url.pathname.endsWith(
+          "/operator",
+        )
+      ) {
+        return jsonResponse({
+          tenantId: "provider-a",
+          actorId: "dispatcher-a",
+          roles: ["dispatcher"],
+          queueVisibility: "tenant",
+        });
+      }
+
+      return jsonResponse({
+        tenantId: "provider-a",
+        caseId: "case-a",
+        version: 1,
+        status: "NEW",
+        operator: {
+          tenantId: "provider-a",
+          actorId: "dispatcher-a",
+          roles: ["dispatcher"],
+          queueVisibility: "tenant",
+        },
+        commands: [
+          {
+            type: "acknowledge",
+            requires: [],
+          },
+        ],
+      });
+    },
+  });
+
+  const operator =
+    await client.operatorContext(
+      "provider-a",
+    );
+  const capabilities =
+    await client.caseCapabilities(
+      "provider-a",
+      "case-a",
+    );
+
+  assert.equal(
+    operator.actorId,
+    "dispatcher-a",
+  );
+  assert.equal(
+    capabilities.commands[0]?.type,
+    "acknowledge",
+  );
+
+  assert.deepEqual(paths, [
+    "/api/care-ops/tenants/provider-a/operator",
+    "/api/care-ops/tenants/provider-a/cases/case-a/capabilities",
+  ]);
+  assert.deepEqual(auth, [
+    "Bearer cap-token-1",
+    "Bearer cap-token-2",
+  ]);
+});

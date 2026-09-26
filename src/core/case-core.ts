@@ -1,6 +1,7 @@
 import {
   type CaseAggregate,
   type CaseCommand,
+  type CaseCommandType,
   type CaseCreatedEvent,
   type CaseEvent,
   type NewCaseInput,
@@ -37,6 +38,99 @@ function requireCurrentAssignee(
     throw new InvalidTransitionError(
       "Only the current assignee may perform this transition",
     );
+  }
+}
+
+export function assertCaseCommandAvailable(
+  aggregate: CaseAggregate,
+  actorId: string,
+  type: CaseCommandType,
+): void {
+  const actor = requireText(actorId, "actor id");
+
+  switch (type) {
+    case "set_priority":
+      requireStatus(
+        aggregate,
+        "NEW",
+        "ACKNOWLEDGED",
+        "ASSIGNED",
+        "IN_PROGRESS",
+        "HANDOFF_PENDING",
+      );
+      return;
+
+    case "acknowledge":
+      requireStatus(aggregate, "NEW");
+      return;
+
+    case "assign":
+      requireStatus(aggregate, "ACKNOWLEDGED");
+      return;
+
+    case "start_action":
+      requireStatus(aggregate, "ASSIGNED");
+      requireCurrentAssignee(aggregate, actor);
+      return;
+
+    case "request_handoff":
+      requireStatus(aggregate, "IN_PROGRESS");
+      requireCurrentAssignee(aggregate, actor);
+      return;
+
+    case "accept_handoff":
+      requireStatus(aggregate, "HANDOFF_PENDING");
+      if (
+        !aggregate.handoffTargetId ||
+        aggregate.handoffTargetId !== actor
+      ) {
+        throw new InvalidTransitionError(
+          "Only the requested handoff target may accept",
+        );
+      }
+      if (!aggregate.assigneeId) {
+        throw new InvalidTransitionError(
+          "Handoff cannot proceed without an outgoing assignee",
+        );
+      }
+      return;
+
+    case "complete":
+      requireStatus(aggregate, "IN_PROGRESS");
+      requireCurrentAssignee(aggregate, actor);
+      return;
+
+    case "close":
+      requireStatus(aggregate, "COMPLETED");
+      return;
+
+    case "reopen":
+      requireStatus(
+        aggregate,
+        "COMPLETED",
+        "CLOSED",
+      );
+      return;
+  }
+}
+
+export function canCaseCommand(
+  aggregate: CaseAggregate,
+  actorId: string,
+  type: CaseCommandType,
+): boolean {
+  try {
+    assertCaseCommandAvailable(
+      aggregate,
+      actorId,
+      type,
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof InvalidTransitionError) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -80,19 +174,16 @@ export function executeCommand(
   }
 
   const actorId = requireText(command.actorId, "actor id");
+  assertCaseCommandAvailable(
+    aggregate,
+    actorId,
+    command.type,
+  );
   const sequence = aggregate.version + 1;
   let event: CaseEvent;
 
   switch (command.type) {
     case "set_priority":
-      requireStatus(
-        aggregate,
-        "NEW",
-        "ACKNOWLEDGED",
-        "ASSIGNED",
-        "IN_PROGRESS",
-        "HANDOFF_PENDING",
-      );
       if (command.priority === aggregate.priority) {
         throw new InvalidTransitionError(
           "Priority change must select a different priority",
@@ -111,7 +202,6 @@ export function executeCommand(
       break;
 
     case "acknowledge":
-      requireStatus(aggregate, "NEW");
       event = {
         type: "acknowledged",
         sequence,
@@ -122,7 +212,6 @@ export function executeCommand(
       break;
 
     case "assign":
-      requireStatus(aggregate, "ACKNOWLEDGED");
       event = {
         type: "assigned",
         sequence,
@@ -133,8 +222,6 @@ export function executeCommand(
       break;
 
     case "start_action":
-      requireStatus(aggregate, "ASSIGNED");
-      requireCurrentAssignee(aggregate, actorId);
       event = {
         type: "action_started",
         sequence,
@@ -145,8 +232,6 @@ export function executeCommand(
       break;
 
     case "request_handoff":
-      requireStatus(aggregate, "IN_PROGRESS");
-      requireCurrentAssignee(aggregate, actorId);
       if (requireText(command.targetAssigneeId, "handoff target") === actorId) {
         throw new InvalidTransitionError(
           "Handoff target must differ from current assignee",
@@ -162,29 +247,19 @@ export function executeCommand(
       break;
 
     case "accept_handoff":
-      requireStatus(aggregate, "HANDOFF_PENDING");
-      if (!aggregate.handoffTargetId || aggregate.handoffTargetId !== actorId) {
-        throw new InvalidTransitionError(
-          "Only the requested handoff target may accept",
-        );
-      }
-      if (!aggregate.assigneeId) {
-        throw new InvalidTransitionError(
-          "Handoff cannot proceed without an outgoing assignee",
-        );
-      }
       event = {
         type: "handoff_accepted",
         sequence,
         at,
         actorId,
-        data: { previousAssigneeId: aggregate.assigneeId },
+        data: {
+          previousAssigneeId:
+            aggregate.assigneeId!,
+        },
       };
       break;
 
     case "complete":
-      requireStatus(aggregate, "IN_PROGRESS");
-      requireCurrentAssignee(aggregate, actorId);
       if (command.evidence.length === 0) {
         throw new InvalidTransitionError(
           "Completion requires at least one evidence item",
@@ -207,7 +282,6 @@ export function executeCommand(
       break;
 
     case "close":
-      requireStatus(aggregate, "COMPLETED");
       event = {
         type: "closed",
         sequence,
@@ -218,7 +292,6 @@ export function executeCommand(
       break;
 
     case "reopen":
-      requireStatus(aggregate, "COMPLETED", "CLOSED");
       event = {
         type: "reopened",
         sequence,

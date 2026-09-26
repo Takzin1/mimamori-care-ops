@@ -1,4 +1,8 @@
 import type {
+  CaseCapabilitiesProjection,
+  OperatorContextProjection,
+} from "../application/capabilities.ts";
+import type {
   CaseCommandIntent,
 } from "../application/types.ts";
 import type {
@@ -47,11 +51,13 @@ export interface WorkspaceMutationState {
 export interface LiveConsoleWorkspaceSnapshot {
   tenantId: string;
   session: CareOpsSessionSnapshot;
+  operator: WorkspaceResource<OperatorContextProjection>;
   queue: WorkspaceResource<CaseQueueProjection>;
   selectedCaseId: string | null;
   selectedCaseActive: boolean | null;
   detail: WorkspaceResource<StoredCase>;
   metrics: WorkspaceResource<CaseMetrics>;
+  capabilities: WorkspaceResource<CaseCapabilitiesProjection>;
   mutation: WorkspaceMutationState;
   lastSuccessfulRefreshAt: string | null;
   generation: number;
@@ -75,6 +81,8 @@ export interface LiveConsoleWorkspaceClient {
   subscribe(
     listener: LiveConsoleWorkspaceListener,
   ): () => void;
+
+  refreshOperator(): Promise<void>;
 
   refreshQueue(): Promise<void>;
 

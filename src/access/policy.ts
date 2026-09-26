@@ -1,9 +1,20 @@
 import type { CaseCommandIntent } from "../application/types.ts";
+import type { CaseCommandType } from "../core/types.ts";
 import { CaseAccessDeniedError } from "./errors.ts";
 import type {
   StaffRole,
   TenantMembership,
 } from "./types.ts";
+
+const TENANT_WIDE_QUEUE_ROLES: readonly StaffRole[] = [
+  "dispatcher",
+  "supervisor",
+  "auditor",
+];
+
+export type CareOpsQueueVisibility =
+  | "tenant"
+  | "responder";
 
 const COMMAND_ROLES: Record<CaseCommandIntent["type"], readonly StaffRole[]> = {
   set_priority: ["dispatcher", "supervisor"],
@@ -45,14 +56,32 @@ export function assertCanReadCase(
   }
 }
 
+export function canExecuteCommandType(
+  membership: TenantMembership | null,
+  type: CaseCommandType,
+): membership is TenantMembership {
+  return Boolean(
+    membership &&
+    membership.active &&
+    hasAnyRole(
+      membership,
+      COMMAND_ROLES[type],
+    ),
+  );
+}
+
 export function assertCanExecuteCommand(
   membership: TenantMembership | null,
   command: CaseCommandIntent,
 ): asserts membership is TenantMembership {
   assertActiveMembership(membership);
 
-  const allowed = COMMAND_ROLES[command.type];
-  if (!hasAnyRole(membership, allowed)) {
+  if (
+    !canExecuteCommandType(
+      membership,
+      command.type,
+    )
+  ) {
     throw new CaseAccessDeniedError("command_forbidden");
   }
 }
@@ -67,4 +96,16 @@ export function assertAssignableTarget(
   ) {
     throw new CaseAccessDeniedError("target_not_assignable");
   }
+}
+
+
+export function queueVisibilityForMembership(
+  membership: TenantMembership,
+): CareOpsQueueVisibility {
+  return membership.roles.some(
+    (role) =>
+      TENANT_WIDE_QUEUE_ROLES.includes(role),
+  )
+    ? "tenant"
+    : "responder";
 }
