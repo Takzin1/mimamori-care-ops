@@ -1,19 +1,25 @@
 import type {
+  CareOpsAdmissionDecision,
   CareOpsMetricLabels,
   CareOpsOperationalLogRecord,
   CareOpsRouteClass,
   OperationalCareOpsRuntimeOptions,
 } from "./types.ts";
 
+const MAX_RETRY_AFTER_SECONDS = 3600;
+
 function json(
   body: unknown,
   status: number,
   requestId?: string,
+  extraHeaders?: HeadersInit,
 ): Response {
   const headers = new Headers({
     "content-type":
       "application/json; charset=utf-8",
     "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
   });
 
   if (requestId) {
@@ -23,12 +29,54 @@ function json(
     );
   }
 
+  if (extraHeaders) {
+    const extra =
+      new Headers(extraHeaders);
+    extra.forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
+
   return new Response(
     JSON.stringify(body),
     {
       status,
       headers,
     },
+  );
+}
+
+function careOpsError(
+  code: string,
+  message: string,
+  status: number,
+  requestId: string,
+  retryAfterSeconds?: number,
+): Response {
+  const headers = new Headers({
+    vary: "Authorization",
+  });
+
+  if (
+    retryAfterSeconds !== undefined
+  ) {
+    headers.set(
+      "retry-after",
+      String(retryAfterSeconds),
+    );
+  }
+
+  return json(
+    {
+      error: {
+        code,
+        message,
+        requestId,
+      },
+    },
+    status,
+    requestId,
+    headers,
   );
 }
 
@@ -81,6 +129,57 @@ function bodyless(
   });
 }
 
+function admissionDecision(
+  value: unknown,
+): CareOpsAdmissionDecision {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    throw new Error(
+      "invalid admission decision",
+    );
+  }
+
+  const decision =
+    value as Record<string, unknown>;
+
+  if (decision.allowed === true) {
+    return { allowed: true };
+  }
+
+  if (decision.allowed !== false) {
+    throw new Error(
+      "invalid admission decision",
+    );
+  }
+
+  const retryAfter =
+    decision.retryAfterSeconds;
+
+  if (retryAfter === undefined) {
+    return { allowed: false };
+  }
+
+  if (
+    !Number.isSafeInteger(retryAfter) ||
+    (retryAfter as number) < 1 ||
+    (retryAfter as number) >
+      MAX_RETRY_AFTER_SECONDS
+  ) {
+    throw new Error(
+      "invalid retry-after value",
+    );
+  }
+
+  return {
+    allowed: false,
+    retryAfterSeconds:
+      retryAfter as number,
+  };
+}
+
 export class OperationalCareOpsRuntime {
   readonly #handler:
     OperationalCareOpsRuntimeOptions["handler"];
@@ -94,6 +193,8 @@ export class OperationalCareOpsRuntime {
         "readinessChecks"
       ]
     >[number][];
+  readonly #admission:
+    OperationalCareOpsRuntimeOptions["admission"];
   readonly #now: () => string;
   readonly #nowMs: () => number;
   readonly #requestIdFactory: () => string;
@@ -106,6 +207,8 @@ export class OperationalCareOpsRuntime {
     this.#metrics = options.metrics;
     this.#readinessChecks =
       options.readinessChecks ?? [];
+    this.#admission =
+      options.admission;
     this.#now =
       options.now ??
       (() => new Date().toISOString());
@@ -279,6 +382,63 @@ export class OperationalCareOpsRuntime {
     );
   }
 
+  async #admit(
+    request: Request,
+    requestMethod: string,
+    startedAt: number,
+  ): Promise<Response | null> {
+    if (!this.#admission) {
+      return null;
+    }
+
+    let decision: CareOpsAdmissionDecision;
+
+    try {
+      decision = admissionDecision(
+        await this.#admission.admit({
+          request,
+          method: requestMethod,
+          routeClass: "care_ops",
+        }),
+      );
+    } catch {
+      const requestId =
+        this.#requestIdFactory();
+
+      return await this.#finish(
+        "care_ops",
+        requestMethod,
+        careOpsError(
+          "ADMISSION_UNAVAILABLE",
+          "Service temporarily unavailable",
+          503,
+          requestId,
+        ),
+        startedAt,
+      );
+    }
+
+    if (decision.allowed) {
+      return null;
+    }
+
+    const requestId =
+      this.#requestIdFactory();
+
+    return await this.#finish(
+      "care_ops",
+      requestMethod,
+      careOpsError(
+        "RATE_LIMITED",
+        "Too many requests",
+        429,
+        requestId,
+        decision.retryAfterSeconds,
+      ),
+      startedAt,
+    );
+  }
+
   async handle(
     request: Request,
   ): Promise<Response> {
@@ -315,6 +475,17 @@ export class OperationalCareOpsRuntime {
       );
     }
 
+    const admissionResponse =
+      await this.#admit(
+        request,
+        requestMethod,
+        startedAt,
+      );
+
+    if (admissionResponse) {
+      return admissionResponse;
+    }
+
     try {
       const response =
         await this.#handler.handle(request);
@@ -329,15 +500,9 @@ export class OperationalCareOpsRuntime {
       const requestId =
         this.#requestIdFactory();
 
-      const response = json(
-        {
-          error: {
-            code: "INTERNAL_ERROR",
-            message:
-              "Internal server error",
-            requestId,
-          },
-        },
+      const response = careOpsError(
+        "INTERNAL_ERROR",
+        "Internal server error",
         500,
         requestId,
       );

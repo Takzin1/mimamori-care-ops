@@ -8,6 +8,12 @@ import {
 
 const minute = 60_000;
 
+const allowAdmission = {
+  admit: () => ({
+    allowed: true as const,
+  }),
+};
+
 const policy: CaseSlaPolicy = {
   critical: {
     acknowledgeWithinMs: 2 * minute,
@@ -44,6 +50,7 @@ test("operational Supabase runtime serves health/readiness without touching Supa
 
   const app =
     createOperationalSupabaseCareOpsRuntime({
+      admission: allowAdmission,
       runtime: {
         supabaseUrl:
           "https://project.supabase.test",
@@ -98,6 +105,7 @@ test("operational Supabase runtime serves health/readiness without touching Supa
 test("operational Supabase runtime public object does not expose runtime credentials", () => {
   const app =
     createOperationalSupabaseCareOpsRuntime({
+      admission: allowAdmission,
       runtime: {
         supabaseUrl:
           "https://project.supabase.test",

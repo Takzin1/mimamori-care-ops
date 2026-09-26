@@ -86,12 +86,13 @@ The reference Supabase/Postgres contract:
 | audit history mutation | append-only event contract + runtime direct-DML revoke |
 | snapshot drift | replay-equivalence tests |
 | hanging trusted dependency call | bounded outbound requests / AbortSignal |
+| unbounded inbound Care Ops work | pre-handler request admission + production composition requirement |
 | Signal replay / duplicate ingestion | tenant + adapter + source signal uniqueness |
 
 ## Threats not yet fully covered
 
 - production identity provider compromise
-- rate limiting / abuse prevention
+- production admission provider / threshold / trusted source-key configuration
 - production key rotation
 - infrastructure compromise
 - retention/deletion policy

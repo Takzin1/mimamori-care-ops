@@ -2,6 +2,7 @@ import {
   OperationalCareOpsRuntime,
 } from "../ops/operational-http-runtime.ts";
 import type {
+  CareOpsRequestAdmission,
   OperationalCareOpsRuntimeOptions,
 } from "../ops/types.ts";
 import {
@@ -11,10 +12,26 @@ import {
 
 export interface OperationalSupabaseCareOpsRuntimeOptions {
   runtime: SupabaseCareOpsRuntimeOptions;
+  admission: CareOpsRequestAdmission;
   operations?: Omit<
     OperationalCareOpsRuntimeOptions,
-    "handler"
+    "handler" | "admission"
   >;
+}
+
+function requireAdmission(
+  value: CareOpsRequestAdmission,
+): CareOpsRequestAdmission {
+  if (
+    !value ||
+    typeof value.admit !== "function"
+  ) {
+    throw new Error(
+      "request admission controller is required",
+    );
+  }
+
+  return value;
 }
 
 export class OperationalSupabaseCareOpsRuntime {
@@ -25,6 +42,11 @@ export class OperationalSupabaseCareOpsRuntime {
     options:
       OperationalSupabaseCareOpsRuntimeOptions,
   ) {
+    const admission =
+      requireAdmission(
+        options.admission,
+      );
+
     const careOps =
       new SupabaseCareOpsRuntime(
         options.runtime,
@@ -33,6 +55,7 @@ export class OperationalSupabaseCareOpsRuntime {
     this.#runtime =
       new OperationalCareOpsRuntime({
         ...options.operations,
+        admission,
         handler: careOps,
       });
   }

@@ -139,7 +139,7 @@ Cross-tenant access is denied by membership before Case existence is disclosed.
 
 ## Server runtime composition
 
-Production server wiring should use `createSupabaseCareOpsRuntime` rather than assembling trusted components inside browser/framework code.
+The lower-level trusted server runtime is `createSupabaseCareOpsRuntime`. Production-facing operational wiring should use `createOperationalSupabaseCareOpsRuntime`, which adds health/readiness/observability and requires an explicit request-admission controller.
 
 The runtime intentionally exposes only `handle(request)`.
 
@@ -239,3 +239,24 @@ Covered adapters:
 - Outbox Store
 
 Timeout or abort is treated as an authentication/transport failure. There is no fail-open fallback.
+
+
+## Inbound request admission boundary
+
+Production-facing Care Ops traffic must pass a request-admission control before Auth or PostgREST work.
+
+`OperationalSupabaseCareOpsRuntime` requires an injected admission controller and fails construction if it is missing.
+
+Admission semantics:
+
+- allowed -> continue to the authenticated handler
+- denied -> stable HTTP 429 `RATE_LIMITED`
+- admission backend error / invalid decision -> stable HTTP 503 `ADMISSION_UNAVAILABLE`
+- optional `Retry-After` is bounded to 1..3600 seconds
+- GET/HEAD health and readiness probes bypass admission
+
+The Core does not trust `X-Forwarded-For` or any other source header by default. Source/key derivation belongs to the deployment adapter, which must use ingress metadata that the platform actually authenticates.
+
+The admission provider must not consume the request body or log bearer tokens/resident/Case payloads.
+
+This boundary does not itself choose a distributed limiter. Production still requires a shared/edge provider, thresholds, monitoring, and abuse-response ownership.
