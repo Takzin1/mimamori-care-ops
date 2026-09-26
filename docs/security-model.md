@@ -68,8 +68,9 @@ The reference Supabase/Postgres contract:
 
 - enables RLS
 - revokes table access from PUBLIC / anon / authenticated
-- restricts persistence RPC execution to service role
-- keeps RPCs security-invoker
+- keeps runtime service-role table access read-only
+- restricts persistence mutation RPC execution to service role
+- uses narrowly scoped SECURITY DEFINER mutation RPCs with a locked `pg_catalog` search path
 
 ## Threats currently covered by design/tests
 
@@ -82,7 +83,7 @@ The reference Supabase/Postgres contract:
 | stale overwrite | expectedVersion / CAS |
 | double ownership during handoff | outgoing assignee retained until acceptance |
 | fake completion | evidence + current-assignee requirement |
-| audit history mutation | append-only event contract |
+| audit history mutation | append-only event contract + runtime direct-DML revoke |
 | snapshot drift | replay-equivalence tests |
 | Signal replay / duplicate ingestion | tenant + adapter + source signal uniqueness |
 
