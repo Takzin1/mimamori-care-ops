@@ -85,6 +85,7 @@ The reference Supabase/Postgres contract:
 | fake completion | evidence + current-assignee requirement |
 | audit history mutation | append-only event contract + runtime direct-DML revoke |
 | snapshot drift | replay-equivalence tests |
+| hanging trusted dependency call | bounded outbound requests / AbortSignal |
 | Signal replay / duplicate ingestion | tenant + adapter + source signal uniqueness |
 
 ## Threats not yet fully covered

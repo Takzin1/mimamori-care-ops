@@ -43,6 +43,7 @@ export interface SupabaseCareOpsRuntimeOptions {
   slaPolicies: Readonly<Record<string, CaseSlaPolicy>>;
   fetchImpl?: FetchLike;
   casePageSize?: number;
+  outboundTimeoutMs?: number;
   maxCommandBodyBytes?: number;
   requestIdFactory?: RequestIdFactory;
   clock?: RuntimeClock;
@@ -111,6 +112,8 @@ export class SupabaseCareOpsRuntime {
         publishableKey:
           options.publishableKey,
         fetchImpl: options.fetchImpl,
+        requestTimeoutMs:
+          options.outboundTimeoutMs,
       });
 
     const memberships =
@@ -119,6 +122,8 @@ export class SupabaseCareOpsRuntime {
         serviceRoleKey:
           options.serviceRoleKey,
         fetchImpl: options.fetchImpl,
+        requestTimeoutMs:
+          options.outboundTimeoutMs,
       });
 
     const repository =
@@ -128,6 +133,8 @@ export class SupabaseCareOpsRuntime {
           options.serviceRoleKey,
         fetchImpl: options.fetchImpl,
         pageSize: options.casePageSize,
+        requestTimeoutMs:
+          options.outboundTimeoutMs,
       });
 
     const policies =
