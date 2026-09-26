@@ -18,8 +18,10 @@ Console UI
 
 The client supports:
 
+- operator context
 - Queue
 - Case detail
+- Case capabilities
 - Case metrics
 - Case commands
 
