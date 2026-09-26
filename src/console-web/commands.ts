@@ -18,6 +18,7 @@ import type {
 function required(
   value: string | undefined,
   label: string,
+  maxLength?: number,
 ): string {
   const normalized =
     value?.trim() ?? "";
@@ -25,6 +26,15 @@ function required(
   if (!normalized) {
     throw new ConsoleWebInputError(
       `${label} is required`,
+    );
+  }
+
+  if (
+    maxLength !== undefined &&
+    normalized.length > maxLength
+  ) {
+    throw new ConsoleWebInputError(
+      `${label} is too long`,
     );
   }
 
@@ -76,6 +86,7 @@ export function buildConsoleCommandIntent(
         assigneeId: required(
           values.assigneeId,
           "assigneeId",
+          128,
         ),
       };
 
@@ -88,6 +99,7 @@ export function buildConsoleCommandIntent(
         targetAssigneeId: required(
           values.targetAssigneeId,
           "targetAssigneeId",
+          128,
         ),
       };
 
@@ -105,6 +117,7 @@ export function buildConsoleCommandIntent(
         summary: required(
           values.summary,
           "summary",
+          4000,
         ),
         evidence: [
           {
@@ -116,6 +129,7 @@ export function buildConsoleCommandIntent(
             ref: required(
               values.evidenceRef,
               "evidenceRef",
+              1000,
             ),
           },
         ],
@@ -130,6 +144,7 @@ export function buildConsoleCommandIntent(
         reason: required(
           values.reason,
           "reason",
+          1000,
         ),
       };
   }
