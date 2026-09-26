@@ -38,3 +38,4 @@ Add an ADR when changing:
 
 | [0016](0016-rpc-only-runtime-database-mutation.md) | RPC-only runtime database mutation | Accepted |
 | [0017](0017-production-request-admission.md) | Production request admission boundary | Accepted |
+| [0018](0018-strict-browser-origin-boundary.md) | Strict browser origin boundary | Accepted |
