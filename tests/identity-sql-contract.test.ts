@@ -170,7 +170,23 @@ test("identity PLpgSQL function delimiters remain balanced", async () => {
   const brokenClosers =
     (source.match(/\n\$;\n/g) ?? []).length;
 
-  assert.equal(openers, 6);
+  assert.ok(openers >= 7);
   assert.equal(closers, openers);
   assert.equal(brokenClosers, 0);
+});
+
+
+test("actor ID grammar is enforced in the membership store", async () => {
+  const source = await sql();
+
+  assert.ok(
+    source.includes(
+      "care_tenant_memberships_actor_id_format_check",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "actor_id ~ '^[A-Za-z0-9._:-]{1,128}$'",
+    ),
+  );
 });

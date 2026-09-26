@@ -1,3 +1,6 @@
+import {
+  isOperationalActorId,
+} from "../access/actor-id.ts";
 import type {
   CaseCommandIntent,
 } from "../application/types.ts";
@@ -35,6 +38,25 @@ function required(
   ) {
     throw new ConsoleWebInputError(
       `${label} is too long`,
+    );
+  }
+
+  return normalized;
+}
+
+function actorId(
+  value: string | undefined,
+  label: string,
+): string {
+  const normalized = required(
+    value,
+    label,
+    128,
+  );
+
+  if (!isOperationalActorId(normalized)) {
+    throw new ConsoleWebInputError(
+      `${label} has invalid format`,
     );
   }
 
@@ -83,10 +105,9 @@ export function buildConsoleCommandIntent(
     case "assign":
       return {
         type,
-        assigneeId: required(
+        assigneeId: actorId(
           values.assigneeId,
           "assigneeId",
-          128,
         ),
       };
 
@@ -96,10 +117,9 @@ export function buildConsoleCommandIntent(
     case "request_handoff":
       return {
         type,
-        targetAssigneeId: required(
+        targetAssigneeId: actorId(
           values.targetAssigneeId,
           "targetAssigneeId",
-          128,
         ),
       };
 

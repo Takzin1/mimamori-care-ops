@@ -1,4 +1,5 @@
 import type { CaseCommandIntent } from "../application/types.ts";
+import { isOperationalActorId } from "../access/actor-id.ts";
 import {
   CASE_PRIORITIES,
   COMPLETION_OUTCOMES,
@@ -74,6 +75,23 @@ function requiredText(
 
   if (normalized.length > maxLength) {
     invalid(`${label} is too long`);
+  }
+
+  return normalized;
+}
+
+function actorId(
+  value: unknown,
+  label: string,
+): string {
+  const normalized = requiredText(
+    value,
+    label,
+    128,
+  );
+
+  if (!isOperationalActorId(normalized)) {
+    invalid(`${label} has invalid format`);
   }
 
   return normalized;
@@ -222,10 +240,9 @@ function parseCommand(
       );
       return {
         type,
-        assigneeId: requiredText(
+        assigneeId: actorId(
           value.assigneeId,
           "assigneeId",
-          128,
         ),
       };
 
@@ -237,10 +254,9 @@ function parseCommand(
       );
       return {
         type,
-        targetAssigneeId: requiredText(
+        targetAssigneeId: actorId(
           value.targetAssigneeId,
           "targetAssigneeId",
-          128,
         ),
       };
 

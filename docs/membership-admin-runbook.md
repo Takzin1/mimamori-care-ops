@@ -132,6 +132,14 @@ Procedure:
 
 ## Actor ID migration
 
+Actor IDs are operational machine identifiers and must match:
+
+```
+^[A-Za-z0-9._:-]{1,128}$
+```
+
+Do not use display names, spaces, emails with `@`, or free-form labels as actor IDs.
+
 Changing actor ID is exceptional.
 
 Use it only when the operational identifier itself must change.

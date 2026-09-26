@@ -353,3 +353,31 @@ test("authentication failure stops before Case or Queue service lookup", async (
 
   assert.equal(serviceCalls, 0);
 });
+
+
+test("membership actor lookup rejects unsafe filter syntax before fetch", async () => {
+  let fetchCalls = 0;
+
+  const directory =
+    new PostgrestTenantMembershipDirectory({
+      baseUrl:
+        "https://example.supabase.co",
+      serviceRoleKey:
+        "service-secret",
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return jsonResponse([]);
+      },
+    });
+
+  assert.throws(
+    () =>
+      directory.findByActorId(
+        "provider-a",
+        "responder-a,or(actor_id.eq.attacker)",
+      ),
+    /actor id has invalid format/,
+  );
+
+  assert.equal(fetchCalls, 0);
+});

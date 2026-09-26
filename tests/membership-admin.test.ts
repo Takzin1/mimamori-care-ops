@@ -249,3 +249,51 @@ test("in-memory admin repository allows one winner for the same expected version
     ["membership_created", "roles_replaced"],
   );
 });
+
+
+test("membership admin rejects unsafe actor identifiers", () => {
+  assert.throws(
+    () =>
+      createManagedMembership(
+        {
+          tenantId: "provider-a",
+          principalId: "principal-unsafe",
+          actorId:
+            "responder-a,or(actor_id.eq.attacker)",
+          roles: ["responder"],
+          adminActorId: "admin-root",
+          reason: "unsafe actor test",
+        },
+        "2026-09-26T01:00:00.000Z",
+      ),
+    InvalidMembershipAdminCommandError,
+  );
+
+  const created = createManagedMembership(
+    {
+      tenantId: "provider-a",
+      principalId: "principal-safe",
+      actorId: "responder-safe",
+      roles: ["responder"],
+      adminActorId: "admin-root",
+      reason: "safe actor",
+    },
+    "2026-09-26T01:00:00.000Z",
+  );
+
+  assert.throws(
+    () =>
+      executeMembershipCommand(
+        created.membership,
+        1,
+        {
+          type: "change_actor_id",
+          actorId: "responder unsafe",
+          adminActorId: "admin-root",
+          reason: "unsafe actor change",
+        },
+        "2026-09-26T01:05:00.000Z",
+      ),
+    InvalidMembershipAdminCommandError,
+  );
+});

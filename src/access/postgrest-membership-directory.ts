@@ -1,4 +1,7 @@
 import {
+  isOperationalActorId,
+} from "./actor-id.ts";
+import {
   STAFF_ROLES,
   type StaffRole,
   type TenantMembership,
@@ -65,6 +68,7 @@ function parseRow(row: MembershipRow): TenantMembership {
     typeof row.tenant_id !== "string" ||
     typeof row.principal_id !== "string" ||
     typeof row.actor_id !== "string" ||
+    !isOperationalActorId(row.actor_id) ||
     typeof row.active !== "boolean"
   ) {
     throw new CaseStoreCorruptionError(
@@ -199,10 +203,23 @@ implements TenantMembershipDirectory {
     tenantId: string,
     actorId: string,
   ): Promise<TenantMembership | null> {
+    const normalizedActorId =
+      requireText(actorId, "actor id");
+
+    if (
+      !isOperationalActorId(
+        normalizedActorId,
+      )
+    ) {
+      throw new Error(
+        "actor id has invalid format",
+      );
+    }
+
     return this.find(
       requireText(tenantId, "tenant id"),
       "actor_id",
-      requireText(actorId, "actor id"),
+      normalizedActorId,
     );
   }
 }
