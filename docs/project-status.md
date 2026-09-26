@@ -29,13 +29,16 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Server-only Supabase runtime composition | Implemented + tested | `src/runtime/` + `tests/runtime.test.ts` |
 | Browser-safe Care Ops API client | Implemented + tested | `src/client/` + `tests/client.test.ts` |
 | Ephemeral browser session coordinator | Implemented + tested | `src/session/` + `tests/session-controller.test.ts` |
+| Supabase browser Auth reference bridge | Implemented + tested | `src/session/supabase-browser-auth-provider.ts` + adapter tests |
 | Live Console workspace state model | Implemented + tested | `src/console/` + `tests/live-console-workspace.test.ts` |
 | Server-projected operator / Case capabilities | Implemented + tested | shared Core/RBAC predicates + HTTP/client/workspace tests |
 | Dependency-free live Console DOM renderer | Implemented + tested | `src/console-web/` + `tests/console-web.test.ts` |
 | Provisioned production Auth/login flow | Not implemented | deployment roadmap |
 | Responder Console presenter + synthetic reviewer demo | Implemented + tested | `src/presentation/` + `demo/responder-console/` |
 | Reviewer demo deployment config | Implemented + tested | `demo/responder-console/vercel.json`; project import tracked in #22 |
-| Live authenticated Responder Console deployment | Not implemented | renderer exists; production Auth/provider + deployment remain |
+| Operational health/readiness + structured observability boundary | Implemented + tested | `src/ops/` + operational runtime tests |
+| Operational Supabase runtime composition | Implemented + tested | `src/runtime/operational-supabase-care-ops-runtime.ts` |
+| Live authenticated Responder Console deployment | Not implemented | renderer/Auth bridge exist; production environment + deployment remain |
 | Production deployment | Not implemented | release checklist |
 | Production PII / care data | **Not allowed** | security policy |
 
@@ -54,6 +57,6 @@ It does **not** yet demonstrate a production-grade healthcare/care-service syste
 
 ## Next sequence
 
-1. admin identity / operational runbook for membership control plane
-2. production Auth-provider/login integration for live Console
-3. deployment / observability / privacy hardening
+1. dedicated security audit / adversarial review
+2. one-time repository + reviewer deployment settings (#10, #22)
+3. production environment provisioning / deployment / privacy governance

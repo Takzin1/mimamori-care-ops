@@ -28,6 +28,7 @@ Do not treat completion of the Core as production approval.
 - [ ] authenticated HTTP boundary regression tests passing
 - [ ] browser/client cannot submit trusted principalId or actorId
 - [ ] browser client token-persistence review completed
+- [ ] reference Auth/session bridge regression tests passing
 - [ ] session shell refresh/sign-out behavior tested
 - [ ] 401 -> reauthentication-required behavior tested
 - [ ] failed mutation is not auto-replayed after reauthentication
@@ -64,13 +65,14 @@ Do not treat completion of the Core as production approval.
 ## Operations
 
 - [ ] structured logs
+- [ ] default observability schema reviewed for PII leakage
 - [ ] metrics / alerting
 - [ ] outbox worker identity / credentials separated
 - [ ] dead-letter queue monitoring and response owner
 - [ ] delivery-key idempotency strategy validated per provider
 - [ ] incident response runbook
 - [ ] on-call / escalation ownership
-- [ ] health checks
+- [ ] health/readiness endpoints deployed and monitored
 - [ ] recovery objectives defined
 - [ ] rollback plan tested
 - [ ] deployment environment documented

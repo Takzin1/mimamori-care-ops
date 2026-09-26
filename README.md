@@ -27,9 +27,11 @@ What is already implemented and tested:
 - server-only Supabase runtime composition with explicit credential routing
 - browser-safe Care Ops API client with per-request token provider
 - ephemeral browser session coordinator with explicit 401/reauth handling
+- Supabase browser Auth reference bridge with no Care Ops token persistence
 - renderer-neutral live Console workspace with race/conflict handling
 - server-projected operator / Case capabilities from shared Core + RBAC rules
 - dependency-free live Console DOM renderer driven by server capabilities
+- operational health/readiness + non-PII structured log/metrics boundary
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
@@ -191,6 +193,11 @@ Deployment guide: [Reviewer Demo Deployment](docs/reviewer-demo-deployment.md). 
 Start with the [External Review Package](docs/external-review.md) for the current capability/evidence boundary, known gaps, CI evidence, and security review path.
 
 Repository workflow and branch-protection recommendations are documented in [Repository Governance](docs/repository-governance.md). Release semantics are documented in [Release Policy](docs/release-policy.md).
+
+Operational references:
+- [Membership Administration Runbook](docs/membership-admin-runbook.md)
+- [Production Auth Provider Wiring](docs/production-auth-provider.md)
+- [Operations and Observability Baseline](docs/operations-observability.md)
 
 ## Review this repository in 10 minutes
 
