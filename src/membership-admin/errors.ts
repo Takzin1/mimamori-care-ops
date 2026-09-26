@@ -1,14 +1,18 @@
 export class MembershipAdminConflictError extends Error {
   readonly code = "MEMBERSHIP_ADMIN_CONFLICT";
+  readonly expectedVersion: number;
+  readonly actualVersion: number;
 
   constructor(
-    readonly expectedVersion: number,
-    readonly actualVersion: number,
+    expectedVersion: number,
+    actualVersion: number,
   ) {
     super(
       `Membership version conflict: expected ${expectedVersion}, actual ${actualVersion}`,
     );
     this.name = "MembershipAdminConflictError";
+    this.expectedVersion = expectedVersion;
+    this.actualVersion = actualVersion;
   }
 }
 
