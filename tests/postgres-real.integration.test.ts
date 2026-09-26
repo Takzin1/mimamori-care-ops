@@ -371,10 +371,70 @@ test(
     assert.equal(deadLetterResult.ok, true);
     assert.equal(deadLetterResult.status, "dead_letter");
 
-    const eventUpdatePrivilege = sql(
-      "select has_table_privilege(" +
-      "'service_role','public.care_case_events','UPDATE');",
+    const privileges = JSON.parse(
+      sql(
+        "select json_build_object(" +
+        "'case_select',has_table_privilege(" +
+        "'service_role','public.care_cases','SELECT')," +
+        "'case_insert',has_table_privilege(" +
+        "'service_role','public.care_cases','INSERT')," +
+        "'case_update',has_table_privilege(" +
+        "'service_role','public.care_cases','UPDATE')," +
+        "'event_select',has_table_privilege(" +
+        "'service_role','public.care_case_events','SELECT')," +
+        "'event_insert',has_table_privilege(" +
+        "'service_role','public.care_case_events','INSERT')," +
+        "'event_update',has_table_privilege(" +
+        "'service_role','public.care_case_events','UPDATE')," +
+        "'outbox_select',has_table_privilege(" +
+        "'service_role','public.care_outbox','SELECT')," +
+        "'outbox_insert',has_table_privilege(" +
+        "'service_role','public.care_outbox','INSERT')," +
+        "'outbox_update',has_table_privilege(" +
+        "'service_role','public.care_outbox','UPDATE')," +
+        "'sequence_usage',has_sequence_privilege(" +
+        "'service_role','public.care_outbox_id_seq','USAGE')" +
+        ")::text;",
+      ),
     );
-    assert.equal(eventUpdatePrivilege, "f");
+
+    assert.deepEqual(privileges, {
+      case_select: true,
+      case_insert: false,
+      case_update: false,
+      event_select: true,
+      event_insert: false,
+      event_update: false,
+      outbox_select: true,
+      outbox_insert: false,
+      outbox_update: false,
+      sequence_usage: false,
+    });
+
+    assert.throws(() =>
+      sql(
+        "set role service_role; " +
+        "update public.care_cases set status='CLOSED' " +
+        "where tenant_id='provider-db' and case_id='case-db-001';",
+      ),
+    );
+
+    assert.throws(() =>
+      sql(
+        "set role service_role; " +
+        "insert into public.care_case_events " +
+        "(tenant_id,case_id,sequence,event_type,actor_id,occurred_at,data,event) " +
+        "values ('provider-db','case-db-001',999,'closed','forged',now()," +
+        "'{}'::jsonb,'{}'::jsonb);",
+      ),
+    );
+
+    assert.throws(() =>
+      sql(
+        "set role service_role; " +
+        "update public.care_outbox set status='delivered' " +
+        "where tenant_id='provider-db';",
+      ),
+    );
   },
 );
