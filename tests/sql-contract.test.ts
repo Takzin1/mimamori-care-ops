@@ -84,7 +84,6 @@ test("Data API access is fail-closed to server-side service role", async () => {
     "claim_care_outbox",
     "complete_care_outbox",
     "fail_care_outbox",
-    "get_care_outbox_health",
   ]) {
     const start = source.indexOf(
       "create or replace function public." + name,
@@ -355,7 +354,8 @@ test("outbox health projection is payload-free and server-only", async () => {
   );
 
   assert.ok(
-    body.includes("security definer"),
+    body.includes("security invoker"),
+    "read-only health RPC must use caller privileges",
   );
   assert.ok(
     body.includes("set search_path = pg_catalog"),
