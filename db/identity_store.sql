@@ -432,6 +432,7 @@ set search_path = pg_catalog
 as $$
 declare
   v_row public.care_tenant_memberships;
+  v_constraint_name text;
 begin
   perform set_config(
     'care.admin_actor_id',
@@ -477,12 +478,22 @@ begin
   );
 exception
   when unique_violation then
-    return jsonb_build_object(
-      'ok', false,
-      'alreadyExists', true
-    );
+    get stacked diagnostics
+      v_constraint_name = constraint_name;
+
+    if v_constraint_name in (
+      'care_tenant_memberships_pkey',
+      'care_tenant_memberships_tenant_id_actor_id_key'
+    ) then
+      return jsonb_build_object(
+        'ok', false,
+        'alreadyExists', true
+      );
+    end if;
+
+    raise;
 end;
-$$;
+$;
 
 create or replace function care_admin.transition_membership(
   p_tenant_id text,
@@ -503,6 +514,7 @@ as $$
 declare
   v_row public.care_tenant_memberships;
   v_current_version bigint;
+  v_constraint_name text;
 begin
   if p_expected_version < 1 then
     raise exception
@@ -614,12 +626,21 @@ begin
   );
 exception
   when unique_violation then
-    return jsonb_build_object(
-      'ok', false,
-      'alreadyExists', true
-    );
+    get stacked diagnostics
+      v_constraint_name = constraint_name;
+
+    if v_constraint_name =
+      'care_tenant_memberships_tenant_id_actor_id_key'
+    then
+      return jsonb_build_object(
+        'ok', false,
+        'alreadyExists', true
+      );
+    end if;
+
+    raise;
 end;
-$$;
+$;
 
 revoke all on function care_admin.create_membership(
   text,
