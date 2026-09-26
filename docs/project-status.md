@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-25
+Last updated: 2026-09-26
 
 Mimamori Care Ops is an **architecture/core prototype**, not a production deployment.
 
@@ -25,10 +25,11 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Production identity boundary / Supabase Auth reference verifier | Implemented + tested | `src/identity/` + identity tests |
 | Persistent tenant membership store | Implemented + tested | `db/identity_store.sql` + real Postgres CI |
 | Audited membership provisioning / revocation | Implemented + tested | `src/membership-admin/` + Postgres audit contract |
+| Authenticated Care Ops HTTP boundary | Implemented + tested | `src/http/` + `tests/http-api.test.ts` |
 | Provisioned production Auth/login flow | Not implemented | deployment roadmap |
 | Responder Console presenter + synthetic reviewer demo | Implemented + tested | `src/presentation/` + `demo/responder-console/` |
 | Reviewer demo deployment config | Implemented + tested | `demo/responder-console/vercel.json`; project import tracked in #22 |
-| Live authenticated Responder Console | Not implemented | identity integration required |
+| Live authenticated Responder Console UI/session shell | Not implemented | HTTP boundary ready; framework/session wiring remains |
 | Production deployment | Not implemented | release checklist |
 | Production PII / care data | **Not allowed** | security policy |
 
@@ -47,6 +48,6 @@ It does **not** yet demonstrate a production-grade healthcare/care-service syste
 
 ## Next sequence
 
-1. live authenticated Console server route
+1. live Console framework/session shell over the authenticated HTTP boundary
 2. admin identity / operational runbook for membership control plane
 3. deployment / observability / privacy hardening
