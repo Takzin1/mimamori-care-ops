@@ -22,6 +22,7 @@ The repository currently demonstrates, with automated tests:
 - deterministic SLA / aging evaluation
 - authorized, explainable Case Queue projection
 - transactional outbox
+- payload-free outbox health projection
 - Supabase/PostgREST server adapters
 - verified-token identity boundary
 - persistent tenant membership
@@ -141,3 +142,15 @@ The codebase uses PRs and CI by convention, but repository settings still need a
 Recommended settings are documented in [Repository Governance](repository-governance.md).
 
 Until that setting is enabled, passing CI is a project convention rather than a GitHub-enforced merge gate.
+
+
+## Operations review
+
+Before production review, also read:
+
+- [Incident Response](incident-response.md)
+- [Backup, Restore, and Rollback](backup-restore-rollback.md)
+- [Outbox and Dead-Letter Operations](outbox-operations.md)
+- [Deployment Environment Contract](deployment-environment.md)
+
+These are repository-level runbooks. Their production owners, thresholds, credentials, and drill evidence are intentionally not claimed as complete.
