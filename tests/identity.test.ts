@@ -370,11 +370,12 @@ test("membership actor lookup rejects unsafe filter syntax before fetch", async 
       },
     });
 
-  await assert.rejects(
-    directory.findByActorId(
-      "provider-a",
-      "responder-a,or(actor_id.eq.attacker)",
-    ),
+  assert.throws(
+    () =>
+      directory.findByActorId(
+        "provider-a",
+        "responder-a,or(actor_id.eq.attacker)",
+      ),
     /actor id has invalid format/,
   );
 
