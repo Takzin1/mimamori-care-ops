@@ -6,6 +6,16 @@ import type {
   TenantMembership,
 } from "./types.ts";
 
+const TENANT_WIDE_QUEUE_ROLES: readonly StaffRole[] = [
+  "dispatcher",
+  "supervisor",
+  "auditor",
+];
+
+export type CareOpsQueueVisibility =
+  | "tenant"
+  | "responder";
+
 const COMMAND_ROLES: Record<CaseCommandIntent["type"], readonly StaffRole[]> = {
   set_priority: ["dispatcher", "supervisor"],
   acknowledge: ["dispatcher", "responder", "supervisor"],
@@ -86,4 +96,16 @@ export function assertAssignableTarget(
   ) {
     throw new CaseAccessDeniedError("target_not_assignable");
   }
+}
+
+
+export function queueVisibilityForMembership(
+  membership: TenantMembership,
+): CareOpsQueueVisibility {
+  return membership.roles.some(
+    (role) =>
+      TENANT_WIDE_QUEUE_ROLES.includes(role),
+  )
+    ? "tenant"
+    : "responder";
 }
