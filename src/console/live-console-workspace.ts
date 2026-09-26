@@ -82,12 +82,18 @@ function cloneSnapshot(
       expiresAt: value.session.expiresAt,
       generation: value.session.generation,
     },
+    operator: cloneResource(
+      value.operator,
+    ),
     queue: cloneResource(value.queue),
     selectedCaseId: value.selectedCaseId,
     selectedCaseActive:
       value.selectedCaseActive,
     detail: cloneResource(value.detail),
     metrics: cloneResource(value.metrics),
+    capabilities: cloneResource(
+      value.capabilities,
+    ),
     mutation: {
       pending: value.mutation.pending,
       error: cloneError(
@@ -201,6 +207,7 @@ implements LiveConsoleWorkspaceClient {
 
   #snapshot: LiveConsoleWorkspaceSnapshot;
   #disposed = false;
+  #operatorRequest = 0;
   #queueRequest = 0;
   #selectionRequest = 0;
   #mutationRequest = 0;
@@ -220,11 +227,13 @@ implements LiveConsoleWorkspaceClient {
     this.#snapshot = {
       tenantId: this.#tenantId,
       session,
+      operator: emptyResource(),
       queue: emptyResource(),
       selectedCaseId: null,
       selectedCaseActive: null,
       detail: emptyResource(),
       metrics: emptyResource(),
+      capabilities: emptyResource(),
       mutation: {
         pending: false,
         error: null,
@@ -280,6 +289,7 @@ implements LiveConsoleWorkspaceClient {
     session: CareOpsSessionSnapshot,
   ): void {
     if (session.state !== "ready") {
+      this.#operatorRequest += 1;
       this.#queueRequest += 1;
       this.#selectionRequest += 1;
       this.#mutationRequest += 1;
@@ -289,11 +299,13 @@ implements LiveConsoleWorkspaceClient {
         session: {
           ...session,
         },
+        operator: emptyResource(),
         queue: emptyResource(),
         selectedCaseId: null,
         selectedCaseActive: null,
         detail: emptyResource(),
         metrics: emptyResource(),
+        capabilities: emptyResource(),
         mutation: {
           pending: false,
           error: null,
@@ -336,17 +348,24 @@ implements LiveConsoleWorkspaceClient {
     caseId: string,
     request: number,
   ): Promise<void> {
-    const [detail, metrics] =
-      await Promise.allSettled([
-        this.#session.getCase(
-          this.#tenantId,
-          caseId,
-        ),
-        this.#session.metrics(
-          this.#tenantId,
-          caseId,
-        ),
-      ]);
+    const [
+      detail,
+      metrics,
+      capabilities,
+    ] = await Promise.allSettled([
+      this.#session.getCase(
+        this.#tenantId,
+        caseId,
+      ),
+      this.#session.metrics(
+        this.#tenantId,
+        caseId,
+      ),
+      this.#session.caseCapabilities(
+        this.#tenantId,
+        caseId,
+      ),
+    ]);
 
     if (!this.#selected(caseId, request)) {
       return;
@@ -359,6 +378,12 @@ implements LiveConsoleWorkspaceClient {
     const metricsError =
       metrics.status === "rejected"
         ? workspaceError(metrics.reason)
+        : null;
+    const capabilityError =
+      capabilities.status === "rejected"
+        ? workspaceError(
+            capabilities.reason,
+          )
         : null;
 
     this.#emit((current) => ({
@@ -387,9 +412,23 @@ implements LiveConsoleWorkspaceClient {
               data: current.metrics.data,
               error: metricsError,
             },
+      capabilities:
+        capabilities.status === "fulfilled"
+          ? {
+              state: "ready",
+              data: capabilities.value,
+              error: null,
+            }
+          : {
+              state: "error",
+              data:
+                current.capabilities.data,
+              error: capabilityError,
+            },
       lastSuccessfulRefreshAt:
         detail.status === "fulfilled" ||
-        metrics.status === "fulfilled"
+        metrics.status === "fulfilled" ||
+        capabilities.status === "fulfilled"
           ? this.#now()
           : current.lastSuccessfulRefreshAt,
     }));
@@ -413,7 +452,10 @@ implements LiveConsoleWorkspaceClient {
     }
 
     if (session.state === "ready") {
-      await this.refreshQueue();
+      await Promise.all([
+        this.refreshOperator(),
+        this.refreshQueue(),
+      ]);
     }
   }
 
@@ -432,6 +474,66 @@ implements LiveConsoleWorkspaceClient {
     return () => {
       this.#listeners.delete(listener);
     };
+  }
+
+  async refreshOperator(): Promise<void> {
+    this.#assertActive();
+    if (!this.#ready()) return;
+
+    const request =
+      ++this.#operatorRequest;
+
+    this.#emit((current) => ({
+      ...current,
+      operator: {
+        state: "loading",
+        data: current.operator.data,
+        error: null,
+      },
+    }));
+
+    try {
+      const operator =
+        await this.#session.operatorContext(
+          this.#tenantId,
+        );
+
+      if (
+        this.#disposed ||
+        !this.#ready() ||
+        request !== this.#operatorRequest
+      ) {
+        return;
+      }
+
+      this.#emit((current) => ({
+        ...current,
+        operator: {
+          state: "ready",
+          data: operator,
+          error: null,
+        },
+        lastSuccessfulRefreshAt:
+          this.#now(),
+      }));
+    } catch (error) {
+      if (
+        this.#disposed ||
+        !this.#ready() ||
+        request !== this.#operatorRequest
+      ) {
+        return;
+      }
+
+      this.#emit((current) => ({
+        ...current,
+        operator: {
+          state: "error",
+          data: current.operator.data,
+          error: workspaceError(error),
+        },
+      }));
+    }
   }
 
   async refreshQueue(): Promise<void> {
@@ -525,6 +627,11 @@ implements LiveConsoleWorkspaceClient {
         data: null,
         error: null,
       },
+      capabilities: {
+        state: "loading",
+        data: null,
+        error: null,
+      },
       mutation: {
         pending: false,
         error: null,
@@ -564,6 +671,12 @@ implements LiveConsoleWorkspaceClient {
       metrics: {
         state: "loading",
         data: current.metrics.data,
+        error: null,
+      },
+      capabilities: {
+        state: "loading",
+        data:
+          current.capabilities.data,
         error: null,
       },
     }));
@@ -752,6 +865,7 @@ implements LiveConsoleWorkspaceClient {
       selectedCaseActive: null,
       detail: emptyResource(),
       metrics: emptyResource(),
+      capabilities: emptyResource(),
       mutation: {
         pending: false,
         error: null,
@@ -764,6 +878,7 @@ implements LiveConsoleWorkspaceClient {
     if (this.#disposed) return;
 
     this.#disposed = true;
+    this.#operatorRequest += 1;
     this.#queueRequest += 1;
     this.#selectionRequest += 1;
     this.#mutationRequest += 1;
