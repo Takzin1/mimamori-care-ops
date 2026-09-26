@@ -172,3 +172,16 @@ It does not access localStorage, sessionStorage, IndexedDB, or cookies.
 A 401 transitions the Console to reauthentication-required state. Failed Case mutations are never automatically replayed after reauthentication.
 
 Provider-specific Auth SDK/session persistence remains deployment code and requires separate review.
+
+
+## Responder lateral access
+
+Responder visibility is Case-scoped.
+
+An active responder may read Case detail, metrics, and capabilities only when their trusted actor ID matches the current `assigneeId` or `handoffTargetId`.
+
+Dispatcher, supervisor, and auditor read roles remain tenant-wide.
+
+The application performs tenant membership authorization before Case lookup, then applies Case-level responder visibility after loading the tenant-scoped Case. This preserves cross-tenant existence protection while preventing same-tenant lateral reads.
+
+Responders do not acknowledge unassigned NEW Cases in the current lifecycle.
