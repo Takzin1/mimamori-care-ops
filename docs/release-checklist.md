@@ -44,7 +44,8 @@ Do not treat completion of the Core as production approval.
 - [ ] secret manager configured
 - [ ] key rotation process tested
 - [ ] retention / deletion policy implemented
-- [ ] backup and restore tested
+- [ ] backup provider / RPO / RTO assigned
+- [ ] synthetic restore drill completed using backup/restore runbook
 - [ ] synthetic/demo environments separated from production
 
 ## Application security
@@ -74,15 +75,16 @@ Do not treat completion of the Core as production approval.
 - [ ] structured logs
 - [ ] default observability schema reviewed for PII leakage
 - [ ] metrics / alerting
-- [ ] outbox worker identity / credentials separated
-- [ ] dead-letter queue monitoring and response owner
+- [ ] payload-free outbox health monitor regression tests passing
+- [ ] outbox worker identity / credentials separated in deployment
+- [ ] dead-letter alert thresholds and response owner assigned
 - [ ] delivery-key idempotency strategy validated per provider
-- [ ] incident response runbook
-- [ ] on-call / escalation ownership
+- [ ] incident response runbook reviewed and incident owner assigned
+- [ ] on-call / escalation ownership assigned
 - [ ] health/readiness endpoints deployed and monitored
-- [ ] recovery objectives defined
-- [ ] rollback plan tested
-- [ ] deployment environment documented
+- [ ] recovery objectives approved
+- [ ] rollback drill completed
+- [ ] deployment environment inventory completed
 
 ## Product / human operations
 

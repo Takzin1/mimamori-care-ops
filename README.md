@@ -38,6 +38,7 @@ What is already implemented and tested:
 - authorized, explainable Case Queue projection
 - production-facing Supabase/PostgREST CaseRepository adapter
 - transactional outbox with worker lease/retry/dead-letter semantics
+- payload-free outbox health monitoring for operations
 - real PostgreSQL 17 integration CI
 - Postgres/Supabase Case Store contract with RLS and fail-closed RPC access
 - bounded Supabase/PostgREST outbound request deadlines
@@ -203,6 +204,10 @@ Operational references:
 - [Membership Administration Runbook](docs/membership-admin-runbook.md)
 - [Production Auth Provider Wiring](docs/production-auth-provider.md)
 - [Operations and Observability Baseline](docs/operations-observability.md)
+- [Incident Response](docs/incident-response.md)
+- [Backup, Restore, and Rollback](docs/backup-restore-rollback.md)
+- [Outbox and Dead-Letter Operations](docs/outbox-operations.md)
+- [Deployment Environment Contract](docs/deployment-environment.md)
 
 ## Review this repository in 10 minutes
 
