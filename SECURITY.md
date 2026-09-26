@@ -219,3 +219,28 @@ The grammar is enforced at HTTP command parsing, membership actor lookup, member
 This prevents assignment/handoff identifiers from introducing PostgREST filter metacharacters or ambiguous whitespace into trusted lookup paths.
 
 Human-readable staff names belong in a separate presentation/profile field and must not be encoded into `actorId`.
+
+
+## Outbound dependency timeout boundary
+
+Trusted server calls to Supabase Auth and PostgREST are time-bounded.
+
+The reference server adapters use one shared outbound timeout contract:
+
+- default: 10 seconds
+- configurable: 1..60000 ms
+- every trusted outbound fetch receives an AbortSignal
+- timeout/abort fails closed through existing safe authentication/transport errors
+- tokens and service-role keys are not copied into timeout errors
+
+The runtime propagates one configured timeout to Auth, membership lookup, and Case persistence. The outbox adapter exposes the same bounded constructor option.
+
+This is availability hardening, not rate limiting. Production still requires a separate request-admission / abuse-prevention control.
+
+## CI supply-chain boundary
+
+GitHub Actions used by the CI workflow are pinned to immutable commit SHAs, and the PostgreSQL 17 service image is pinned to a digest.
+
+Regression tests reject returning to floating `actions/*@vN` or an unpinned `postgres:17` service image.
+
+The TypeScript CLI is still obtained through an exact npm package version rather than an integrity-pinned lockfile; this remains a lower-severity supply-chain review item.
