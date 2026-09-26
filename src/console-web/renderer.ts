@@ -90,11 +90,15 @@ function actionInput(
   doc: Document,
   name: string,
   label: string,
+  maxLength?: number,
 ): HTMLInputElement {
   const input = node(doc, "input");
   input.name = name;
   input.autocomplete = "off";
   input.required = true;
+  if (maxLength !== undefined) {
+    input.maxLength = maxLength;
+  }
 
   const wrap = node(doc, "label", "mco-field");
   wrap.append(
@@ -121,11 +125,13 @@ function textArea(
   doc: Document,
   name: string,
   label: string,
+  maxLength: number,
 ): HTMLElement {
   const wrap = node(doc, "label", "mco-field");
   const area = node(doc, "textarea");
   area.name = name;
   area.required = true;
+  area.maxLength = maxLength;
   wrap.append(
     node(doc, "span", "mco-label", label),
     area,
@@ -207,6 +213,7 @@ function actionFields(
           doc,
           "assigneeId",
           "Assignee actor ID",
+          128,
         );
         fields.push(fieldWrapper(input));
         break;
@@ -217,6 +224,7 @@ function actionFields(
           doc,
           "targetAssigneeId",
           "Handoff target actor ID",
+          128,
         );
         fields.push(fieldWrapper(input));
         break;
@@ -239,6 +247,7 @@ function actionFields(
             doc,
             "summary",
             "Completion summary",
+            4000,
           ),
         );
         break;
@@ -248,6 +257,7 @@ function actionFields(
           doc,
           "evidenceRef",
           "Evidence reference",
+          1000,
         );
         fields.push(
           selectField(
@@ -267,6 +277,7 @@ function actionFields(
             doc,
             "reason",
             "Reopen reason",
+            1000,
           ),
         );
         break;
