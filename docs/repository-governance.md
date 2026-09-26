@@ -41,7 +41,9 @@ Require these checks before merge:
 - `verify`
 - `postgres-integration`
 
-The workflow names/jobs must be confirmed in the GitHub UI when creating the rule because GitHub displays exact check-context names.
+The current CI check contexts are `verify` and `postgres-integration`.
+
+After enabling protection, run **Actions -> Repository Governance Audit -> Run workflow**. The read-only audit verifies that `main` is protected and that both required CI contexts are enforced.
 
 ### History / merge policy
 
@@ -64,7 +66,7 @@ Recommended:
 
 The repository already contains strong automated checks, including real PostgreSQL integration coverage.
 
-Without branch protection, those checks are advisory: an administrator can still push or merge without them.
+As of 2026-09-26, GitHub reports `main` as unprotected, required status checks as off, and no repository rulesets. Until the setting is changed, those checks are advisory: an administrator can still push or merge without them.
 
 Branch protection converts the existing CI investment into an enforced repository invariant.
 
