@@ -79,6 +79,8 @@ The reference Supabase/Postgres contract:
 | cross-tenant Case lookup | tenant membership + composite persistence key |
 | actor spoofing | principal-to-actor binding |
 | privilege escalation | command role policy |
+| identifier/filter ambiguity | shared bounded identifier alphabet + DB constraint |
+| hanging trusted dependency call | bounded outbound requests / AbortSignal |
 | arbitrary assignment | active responder target validation |
 | stale overwrite | expectedVersion / CAS |
 | double ownership during handoff | outgoing assignee retained until acceptance |
