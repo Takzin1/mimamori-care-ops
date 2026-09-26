@@ -64,6 +64,20 @@ The Core deliberately does not decide whether forwarded-IP headers are trustwort
 
 A real deployment still needs a shared/edge limiter, explicit thresholds, monitoring, and an abuse-response owner.
 
+## Browser origin policy
+
+Production-facing `OperationalSupabaseCareOpsRuntime` requires an explicit browser origin policy in addition to request admission.
+
+The reference `ExactBrowserOriginPolicy` allows only canonical exact HTTP(S) origins.
+
+Allowed browser responses echo only the exact origin and `Vary: Origin`. Wildcard origins and credentialed CORS are not emitted.
+
+Preflight is limited to GET/POST and Authorization/Content-Type.
+
+Health/readiness probes bypass the browser-origin policy. Requests without Origin proceed as non-browser requests and still require normal admission/authentication.
+
+The deployment must supply the reviewed live Console origin(s).
+
 ## Structured logging
 
 The default log schema contains only:
