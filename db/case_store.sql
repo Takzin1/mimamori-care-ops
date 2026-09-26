@@ -735,7 +735,7 @@ returns jsonb
 language plpgsql
 security invoker
 set search_path = pg_catalog
-as $
+as $$
 declare
   v_result jsonb;
 begin
@@ -783,7 +783,7 @@ begin
 
   return v_result;
 end;
-$;
+$$;
 
 revoke execute on function public.create_care_case(jsonb, jsonb)
   from public, anon, authenticated;
