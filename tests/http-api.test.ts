@@ -768,16 +768,13 @@ test("HTTP Case capabilities combine verified RBAC and lifecycle state", async (
     ),
   );
 
-  assert.equal(responder.status, 200);
+  assert.equal(responder.status, 403);
   const responderPayload =
     await body(responder);
 
-  assert.deepEqual(
-    responderPayload.commands.map(
-      (item: { type: string }) =>
-        item.type,
-    ),
-    ["acknowledge"],
+  assert.equal(
+    responderPayload.error.code,
+    "FORBIDDEN",
   );
 });
 
