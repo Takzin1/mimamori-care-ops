@@ -28,3 +28,4 @@ Add an ADR when changing:
 - AI responsibility boundary
 
 | [0008](0008-audited-membership-control-plane.md) | Audited membership control plane | Accepted |
+| [0009](0009-authenticated-http-boundary.md) | Authenticated Care Ops HTTP boundary | Accepted |
