@@ -26,6 +26,7 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Persistent tenant membership store | Implemented + tested | `db/identity_store.sql` + real Postgres CI |
 | Audited membership provisioning / revocation | Implemented + tested | `src/membership-admin/` + Postgres audit contract |
 | Authenticated Care Ops HTTP boundary | Implemented + tested | `src/http/` + `tests/http-api.test.ts` |
+| Server-only Supabase runtime composition | Implemented + tested | `src/runtime/` + `tests/runtime.test.ts` |
 | Provisioned production Auth/login flow | Not implemented | deployment roadmap |
 | Responder Console presenter + synthetic reviewer demo | Implemented + tested | `src/presentation/` + `demo/responder-console/` |
 | Reviewer demo deployment config | Implemented + tested | `demo/responder-console/vercel.json`; project import tracked in #22 |
@@ -48,6 +49,6 @@ It does **not** yet demonstrate a production-grade healthcare/care-service syste
 
 ## Next sequence
 
-1. live Console framework/session shell over the authenticated HTTP boundary
+1. live Console framework/session shell over the server runtime
 2. admin identity / operational runbook for membership control plane
 3. deployment / observability / privacy hardening

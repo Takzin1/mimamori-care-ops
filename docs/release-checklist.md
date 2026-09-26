@@ -45,6 +45,8 @@ Do not treat completion of the Core as production approval.
 - [ ] RLS verified in deployed database
 - [ ] PUBLIC / anon / authenticated grants reviewed
 - [ ] service-role usage confined to trusted server environment
+- [ ] runtime composition credential-routing test passing
+- [ ] deployment adapter uses server runtime instead of direct repository access
 - [ ] rate limiting / abuse prevention implemented
 - [ ] CORS/origin policy reviewed for live Console host
 - [ ] command body/request-size limits reviewed
