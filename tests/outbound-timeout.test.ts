@@ -188,8 +188,16 @@ test("Case Store requests abort on deadline and sanitize transport errors", asyn
   assert.ok(signals.length >= 1);
   assert.ok(
     signals.every(
+      (signal) =>
+        signal instanceof AbortSignal,
+    ),
+    "every parallel Case Store fetch must receive an AbortSignal",
+  );
+  assert.ok(
+    signals.some(
       (signal) => signal.aborted,
     ),
+    "at least one deadline must fire before the request fails closed",
   );
 });
 
