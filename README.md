@@ -27,6 +27,7 @@ What is already implemented and tested:
 - server-only Supabase runtime composition with explicit credential routing
 - browser-safe Care Ops API client with per-request token provider
 - ephemeral browser session coordinator with explicit 401/reauth handling
+- renderer-neutral live Console workspace with race/conflict handling
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
@@ -144,6 +145,7 @@ src/
   runtime/        server-only deployment composition
   client/         browser-safe HTTP API client
   session/        ephemeral browser session coordination
+  console/        live Console workspace state
   persistence/   repository contracts and in-memory reference adapter
 
 db/
@@ -203,6 +205,8 @@ Start here:
 16. [Browser Client](docs/browser-client.md)
 17. [ADR 0012 — Ephemeral session coordinator](docs/adr/0012-ephemeral-session-coordinator.md)
 18. [Browser Session](docs/browser-session.md)
+19. [ADR 0013 — Live Console workspace](docs/adr/0013-live-console-workspace.md)
+20. [Live Console Workspace](docs/live-console-workspace.md)
 15. `tests/application-case-service.test.ts`
 16. `tests/identity.test.ts`
 17. `tests/http-api.test.ts`
