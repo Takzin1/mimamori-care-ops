@@ -12,6 +12,10 @@ import type {
   StoredCase,
 } from "../persistence/index.ts";
 import type {
+  CaseCapabilitiesProjection,
+  OperatorContextProjection,
+} from "./capabilities.ts";
+import type {
   CaseCommandIntent,
   CaseOperationResult,
 } from "./types.ts";
@@ -55,6 +59,33 @@ export class AuthenticatedCareOpsGateway {
     accessToken: string,
   ): Promise<AuthenticatedPrincipal> {
     return this.authenticator.authenticate(accessToken);
+  }
+
+  async operatorContext(
+    input: AuthenticatedRequest,
+  ): Promise<OperatorContextProjection> {
+    const principal = await this.authenticate(
+      input.accessToken,
+    );
+
+    return this.caseService.operatorContext({
+      tenantId: input.tenantId,
+      principalId: principal.principalId,
+    });
+  }
+
+  async capabilities(
+    input: AuthenticatedCaseRequest,
+  ): Promise<CaseCapabilitiesProjection> {
+    const principal = await this.authenticate(
+      input.accessToken,
+    );
+
+    return this.caseService.capabilities({
+      tenantId: input.tenantId,
+      caseId: input.caseId,
+      principalId: principal.principalId,
+    });
   }
 
   async execute(
