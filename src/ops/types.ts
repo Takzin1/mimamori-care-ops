@@ -86,12 +86,19 @@ export interface CareOpsRequestAdmission {
     | Promise<CareOpsAdmissionDecision>;
 }
 
+export interface CareOpsBrowserOriginPolicy {
+  allows(
+    origin: string,
+  ): boolean | Promise<boolean>;
+}
+
 export interface OperationalCareOpsRuntimeOptions {
   handler: CareOpsHttpHandler;
   logger?: CareOpsStructuredLogger;
   metrics?: CareOpsMetricsSink;
   readinessChecks?: readonly CareOpsReadinessCheck[];
   admission?: CareOpsRequestAdmission;
+  originPolicy?: CareOpsBrowserOriginPolicy;
   now?: () => string;
   nowMs?: () => number;
   requestIdFactory?: () => string;
