@@ -135,3 +135,16 @@ The HTTP transport:
 - maps internal failures to safe response bodies without database details
 
 Cross-tenant access is denied by membership before Case existence is disclosed.
+
+
+## Server runtime composition
+
+Production server wiring should use `createSupabaseCareOpsRuntime` rather than assembling trusted components inside browser/framework code.
+
+The runtime intentionally exposes only `handle(request)`.
+
+It does not expose the service-role-bearing Case repository, membership directory, or authenticated gateway.
+
+The incoming user bearer token is routed only to Auth verification. The service-role credential is routed only to server-side PostgREST adapters.
+
+Secret loading remains a deployment responsibility; the Core package does not read generic environment variables.
