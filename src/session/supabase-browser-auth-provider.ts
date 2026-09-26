@@ -95,15 +95,19 @@ function statusFromSession(
 
 export class SupabaseBrowserAuthSessionProvider
 implements BrowserAuthSessionProvider {
+  readonly #auth:
+    SupabaseBrowserAuthClientLike;
+
   constructor(
-    private readonly auth:
-      SupabaseBrowserAuthClientLike,
-  ) {}
+    auth: SupabaseBrowserAuthClientLike,
+  ) {
+    this.#auth = auth;
+  }
 
   async currentStatus():
   Promise<BrowserAuthSessionStatus> {
     const result =
-      await this.auth.getSession();
+      await this.#auth.getSession();
 
     if (result.error) {
       throw new SupabaseBrowserAuthProviderError(
@@ -119,7 +123,7 @@ implements BrowserAuthSessionProvider {
   async accessToken():
   Promise<string | null> {
     const result =
-      await this.auth.getSession();
+      await this.#auth.getSession();
 
     if (result.error) {
       return null;
@@ -142,7 +146,7 @@ implements BrowserAuthSessionProvider {
 
   async signOut(): Promise<void> {
     const result =
-      await this.auth.signOut();
+      await this.#auth.signOut();
 
     if (result.error) {
       throw new SupabaseBrowserAuthProviderError(
@@ -155,7 +159,7 @@ implements BrowserAuthSessionProvider {
     listener: BrowserAuthSessionListener,
   ): () => void {
     const result =
-      this.auth.onAuthStateChange(
+      this.#auth.onAuthStateChange(
         (_event, session) => {
           listener(
             statusFromSession(session),
