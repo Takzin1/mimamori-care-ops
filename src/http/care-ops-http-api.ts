@@ -2,6 +2,9 @@ import type {
   AuthenticatedCareOpsGateway,
 } from "../application/authenticated-gateway.ts";
 import {
+  isCareOpsIdentifier,
+} from "../identifiers.ts";
+import {
   CaseAccessDeniedError,
 } from "../access/errors.ts";
 import {
@@ -67,7 +70,6 @@ type Route =
       caseId: string;
     };
 
-const SAFE_IDENTIFIER = /^[A-Za-z0-9._:-]{1,128}$/;
 const MAX_ACCESS_TOKEN_LENGTH = 8 * 1024;
 
 function defaultRequestIdFactory(): string {
@@ -90,7 +92,7 @@ function safeIdentifier(
     );
   }
 
-  if (!SAFE_IDENTIFIER.test(decoded)) {
+  if (!isCareOpsIdentifier(decoded)) {
     throw new HttpRequestError(
       400,
       "INVALID_PATH",
