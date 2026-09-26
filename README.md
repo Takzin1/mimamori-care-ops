@@ -40,14 +40,19 @@ What is already implemented and tested:
 - transactional outbox with worker lease/retry/dead-letter semantics
 - real PostgreSQL 17 integration CI
 - Postgres/Supabase Case Store contract with RLS and fail-closed RPC access
+- bounded Supabase/PostgREST outbound request deadlines
+- fail-closed pre-handler request-admission boundary
+- immutable CI action/image refs and integrity-pinned TypeScript toolchain
 - Time to Completion and supporting operational metrics
 
 Not yet production-ready:
 
 - intentionally provisioned production Auth environment and login/session UX
-- production admin identity / membership control-plane runbook
+- production admin credential provisioning / execution path for the membership control plane
 - production Auth-provider/login UX and live Console deployment
 - deployment / observability / incident runbook
+- production shared/edge request-admission provider and thresholds
+- final repository branch-protection / reviewer deployment settings
 
 See [Project Status](docs/project-status.md) and the open GitHub Issues for the active roadmap.
 
@@ -249,7 +254,7 @@ npm test
 npm run test:coverage
 ```
 
-The repository currently keeps runtime dependencies at zero. TypeScript is pinned in the typecheck command until dependency installation is formalized.
+The repository keeps runtime dependencies at zero. TypeScript 5.9.2 is an exact devDependency installed from the committed integrity lockfile with frozen `npm ci` in CI.
 
 ## Security and data policy
 
