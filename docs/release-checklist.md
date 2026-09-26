@@ -55,12 +55,14 @@ Do not treat completion of the Core as production approval.
 - [ ] runtime composition credential-routing test passing
 - [ ] deployment adapter uses server runtime instead of direct repository access
 - [ ] rate limiting / abuse prevention implemented
+- [ ] trusted Supabase/PostgREST outbound timeout reviewed
 - [ ] CORS/origin policy reviewed for live Console host
 - [ ] command body/request-size limits reviewed
 - [ ] audit actor spoofing regression tests passing
 - [ ] cross-tenant access tests passing
 - [ ] stale-write / concurrency tests passing
 - [ ] dependency / supply-chain review completed
+- [ ] CI action/image refs pinned to immutable identifiers
 
 ## Operations
 
