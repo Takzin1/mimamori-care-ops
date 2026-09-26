@@ -185,80 +185,95 @@ function formValues(
 
 function actionFields(
   doc: Document,
-  type: CaseCommandType,
+  action: ConsoleWebAction,
 ): HTMLElement[] {
-  switch (type) {
-    case "set_priority":
-      return [
-        selectField(
-          doc,
-          "priority",
-          "Priority",
-          CASE_PRIORITIES,
-        ),
-      ];
+  const fields: HTMLElement[] = [];
 
-    case "assign": {
-      const input = actionInput(
-        doc,
-        "assigneeId",
-        "Assignee actor ID",
-      );
-      return [fieldWrapper(input)];
+  for (const requirement of action.requires) {
+    switch (requirement) {
+      case "priority":
+        fields.push(
+          selectField(
+            doc,
+            "priority",
+            "Priority",
+            CASE_PRIORITIES,
+          ),
+        );
+        break;
+
+      case "assigneeId": {
+        const input = actionInput(
+          doc,
+          "assigneeId",
+          "Assignee actor ID",
+        );
+        fields.push(fieldWrapper(input));
+        break;
+      }
+
+      case "targetAssigneeId": {
+        const input = actionInput(
+          doc,
+          "targetAssigneeId",
+          "Handoff target actor ID",
+        );
+        fields.push(fieldWrapper(input));
+        break;
+      }
+
+      case "outcome":
+        fields.push(
+          selectField(
+            doc,
+            "outcome",
+            "Outcome",
+            COMPLETION_OUTCOMES,
+          ),
+        );
+        break;
+
+      case "summary":
+        fields.push(
+          textArea(
+            doc,
+            "summary",
+            "Completion summary",
+          ),
+        );
+        break;
+
+      case "evidence": {
+        const ref = actionInput(
+          doc,
+          "evidenceRef",
+          "Evidence reference",
+        );
+        fields.push(
+          selectField(
+            doc,
+            "evidenceKind",
+            "Evidence kind",
+            EVIDENCE_KINDS,
+          ),
+          fieldWrapper(ref),
+        );
+        break;
+      }
+
+      case "reason":
+        fields.push(
+          textArea(
+            doc,
+            "reason",
+            "Reopen reason",
+          ),
+        );
+        break;
     }
-
-    case "request_handoff": {
-      const input = actionInput(
-        doc,
-        "targetAssigneeId",
-        "Handoff target actor ID",
-      );
-      return [fieldWrapper(input)];
-    }
-
-    case "complete": {
-      const ref = actionInput(
-        doc,
-        "evidenceRef",
-        "Evidence reference",
-      );
-      return [
-        selectField(
-          doc,
-          "outcome",
-          "Outcome",
-          COMPLETION_OUTCOMES,
-        ),
-        textArea(
-          doc,
-          "summary",
-          "Completion summary",
-        ),
-        selectField(
-          doc,
-          "evidenceKind",
-          "Evidence kind",
-          EVIDENCE_KINDS,
-        ),
-        fieldWrapper(ref),
-      ];
-    }
-
-    case "reopen":
-      return [
-        textArea(
-          doc,
-          "reason",
-          "Reopen reason",
-        ),
-      ];
-
-    case "acknowledge":
-    case "start_action":
-    case "accept_handoff":
-    case "close":
-      return [];
   }
+
+  return fields;
 }
 
 export class LiveConsoleWebRenderer
@@ -935,7 +950,7 @@ implements LiveConsoleWebRendererHandle {
     for (
       const field of actionFields(
         doc,
-        action.type,
+        action,
       )
     ) {
       form.append(field);
