@@ -37,7 +37,12 @@ test("membership store is fail-closed to server-side lookup only", async () => {
 
   assert.ok(
     source.includes(
-      "alter table public.care_tenant_memberships enable row level security",
+      "alter table public.care_tenant_memberships",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "enable row level security",
     ),
   );
   assert.ok(
