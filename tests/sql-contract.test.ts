@@ -299,7 +299,12 @@ test("outbox RPC access is server-only", async () => {
   );
   assert.ok(
     source.includes(
-      "revoke delete on table public.care_outbox from service_role",
+      "revoke insert, update, delete on table public.care_outbox",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant select on table public.care_outbox to service_role",
     ),
   );
 });
