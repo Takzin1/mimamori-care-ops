@@ -1,4 +1,8 @@
 import {
+  outboundAbortSignal,
+  outboundTimeoutMs,
+} from "../outbound.ts";
+import {
   CaseConflictError,
 } from "../core/errors.ts";
 import {
@@ -34,6 +38,7 @@ export interface PostgrestCaseRepositoryOptions {
   serviceRoleKey: string;
   fetchImpl?: FetchLike;
   pageSize?: number;
+  requestTimeoutMs?: number;
 }
 
 interface CaseRow {
@@ -177,6 +182,7 @@ export class PostgrestCaseRepository implements CaseRepository {
   private readonly serviceRoleKey: string;
   private readonly fetchImpl: FetchLike;
   private readonly pageSize: number;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: PostgrestCaseRepositoryOptions) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl);
@@ -186,6 +192,9 @@ export class PostgrestCaseRepository implements CaseRepository {
     );
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.pageSize = options.pageSize ?? 500;
+    this.requestTimeoutMs = outboundTimeoutMs(
+      options.requestTimeoutMs,
+    );
 
     if (
       !Number.isInteger(this.pageSize) ||
@@ -225,6 +234,11 @@ export class PostgrestCaseRepository implements CaseRepository {
       response = await this.fetchImpl(url, {
         ...init,
         headers,
+        signal:
+          init.signal ??
+          outboundAbortSignal(
+            this.requestTimeoutMs,
+          ),
       });
     } catch (error) {
       throw new CaseStoreTransportError(
