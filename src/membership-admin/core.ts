@@ -1,4 +1,7 @@
 import {
+  isCareOpsIdentifier,
+} from "../identifiers.ts";
+import {
   STAFF_ROLES,
   type StaffRole,
 } from "../access/types.ts";
@@ -20,6 +23,20 @@ function text(value: string, label: string): string {
       `${label} is required`,
     );
   }
+  return normalized;
+}
+
+function actorId(
+  value: string,
+): string {
+  const normalized = value.trim();
+
+  if (!isCareOpsIdentifier(normalized)) {
+    throw new InvalidMembershipAdminCommandError(
+      "actor id is not a valid Care Ops identifier",
+    );
+  }
+
   return normalized;
 }
 
@@ -108,7 +125,7 @@ export function createManagedMembership(
     ),
     reason: text(input.reason, "change reason"),
     data: {
-      actorId: text(input.actorId, "actor id"),
+      actorId: actorId(input.actorId),
       roles: roles(input.roles),
       active: input.active ?? true,
     },
@@ -180,11 +197,10 @@ export function executeMembershipCommand(
       break;
 
     case "change_actor_id": {
-      const actorId = text(
+      const nextActorId = actorId(
         command.actorId,
-        "actor id",
       );
-      if (actorId === membership.actorId) {
+      if (nextActorId === membership.actorId) {
         throw new InvalidMembershipAdminCommandError(
           "Actor ID change must select a different actor",
         );
@@ -195,7 +211,7 @@ export function executeMembershipCommand(
         type: "actor_id_changed",
         data: {
           previousActorId: membership.actorId,
-          actorId,
+          actorId: nextActorId,
         },
       };
       break;
@@ -230,7 +246,7 @@ export function applyMembershipEvent(
     return {
       tenantId: event.tenantId,
       principalId: event.principalId,
-      actorId: text(event.data.actorId, "actor id"),
+      actorId: actorId(event.data.actorId),
       roles: roles(event.data.roles),
       active: event.data.active,
       version: 1,
@@ -330,9 +346,8 @@ export function applyMembershipEvent(
       }
       return {
         ...next,
-        actorId: text(
+        actorId: actorId(
           event.data.actorId,
-          "actor id",
         ),
       };
   }
