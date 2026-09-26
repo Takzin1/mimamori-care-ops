@@ -62,3 +62,89 @@ test("membership store is fail-closed to server-side lookup only", async () => {
   );
   assert.ok(source.includes("to service_role"));
 });
+
+
+test("membership administration remains separate from runtime credentials", async () => {
+  const source = await sql();
+
+  assert.ok(
+    source.includes(
+      "create role care_membership_admin",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "revoke insert, update, delete\n  on table public.care_tenant_memberships\n  from service_role",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant select, insert, update\n  on table public.care_tenant_memberships\n  to care_membership_admin",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "revoke all on table public.care_membership_admin_events\n  from care_membership_admin",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant select\n  on table public.care_membership_admin_events\n  to care_membership_admin",
+    ),
+  );
+});
+
+test("membership mutation contract is versioned and append-only audited", async () => {
+  const source = await sql();
+
+  assert.ok(
+    source.includes(
+      "version bigint not null default 1",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "create table if not exists public.care_membership_admin_events",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "primary key (\n    tenant_id,\n    principal_id,\n    version\n  )",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "membership deletion is forbidden; deactivate instead",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "membership version must increment by exactly one",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "exactly one membership field may change per version",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "care_membership_audit_mutation",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "care_admin.create_membership",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "care_admin.transition_membership",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "security invoker",
+    ),
+  );
+});
