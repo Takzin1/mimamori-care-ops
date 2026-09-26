@@ -63,7 +63,14 @@ It does **not** yet demonstrate a production-grade healthcare/care-service syste
 
 ## Next sequence
 
-1. complete one-time repository / reviewer deployment settings (#10, #22)
-2. provision production Auth/environment and a real shared/edge request-admission provider
-3. finish production secrets, observability, incident response, backup/restore, and deployment controls
-4. complete privacy/legal/real-world PoC governance before any production PII or care data
+Repository-side implementation and Security Audit Round 1 are substantially complete.
+
+Remaining work is primarily environment / organizational provisioning:
+
+1. complete one-time repository / reviewer settings (#10, #22)
+2. execute staging/production provisioning and operational drills tracked in #64
+3. configure real shared/edge admission, exact production origin(s), secrets, observability, backup/restore, and outbox provider credentials
+4. validate the live workflow with target operators using synthetic/scenario data
+5. complete privacy/legal/real-world PoC governance before any production PII or care data
+
+The existence of code/runbooks is not production approval. Issue #64 closes only with environment/drill evidence.
