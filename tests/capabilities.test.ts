@@ -103,7 +103,7 @@ test("NEW Case capabilities combine lifecycle and RBAC", () => {
         ["responder"],
       ),
     ),
-    ["acknowledge"],
+    [],
   );
 
   assert.deepEqual(

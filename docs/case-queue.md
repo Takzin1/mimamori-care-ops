@@ -71,6 +71,8 @@ Only Cases where the responder is:
 
 Unassigned Cases are not shown in responder-only scope because the current authorization model assigns Cases through dispatcher/supervisor roles.
 
+The same responder scope applies to direct Case detail, metrics, and capability reads. Knowing a Case ID does not widen responder visibility.
+
 ## Exclusions
 
 `COMPLETED` and `CLOSED` Cases are excluded from the active worklist.

@@ -1,5 +1,8 @@
 import type { CaseCommandIntent } from "../application/types.ts";
-import type { CaseCommandType } from "../core/types.ts";
+import type {
+  CaseAggregate,
+  CaseCommandType,
+} from "../core/types.ts";
 import { CaseAccessDeniedError } from "./errors.ts";
 import type {
   StaffRole,
@@ -18,7 +21,7 @@ export type CareOpsQueueVisibility =
 
 const COMMAND_ROLES: Record<CaseCommandIntent["type"], readonly StaffRole[]> = {
   set_priority: ["dispatcher", "supervisor"],
-  acknowledge: ["dispatcher", "responder", "supervisor"],
+  acknowledge: ["dispatcher", "supervisor"],
   assign: ["dispatcher", "supervisor"],
   start_action: ["responder", "supervisor"],
   request_handoff: ["responder", "supervisor"],
@@ -53,6 +56,29 @@ export function assertCanReadCase(
 
   if (membership.roles.length === 0) {
     throw new CaseAccessDeniedError("command_forbidden");
+  }
+}
+
+export function assertCanReadCaseAggregate(
+  membership: TenantMembership | null,
+  aggregate: CaseAggregate,
+): asserts membership is TenantMembership {
+  assertCanReadCase(membership);
+
+  if (
+    queueVisibilityForMembership(membership) ===
+    "tenant"
+  ) {
+    return;
+  }
+
+  if (
+    aggregate.assigneeId !== membership.actorId &&
+    aggregate.handoffTargetId !== membership.actorId
+  ) {
+    throw new CaseAccessDeniedError(
+      "case_not_visible",
+    );
   }
 }
 

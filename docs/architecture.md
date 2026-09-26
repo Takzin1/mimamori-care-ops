@@ -197,6 +197,8 @@ The operational worklist is a derived read model, not another Case state machine
 
 Responder-only scopes expose current ownership and incoming handoffs. Dispatcher, supervisor, and auditor read scopes may see the tenant-wide queue.
 
+Case detail visibility follows the same responder ownership scope: responders may read only Cases where they are the current assignee or handoff target. Direct Case/metrics/capability routes must not widen visibility beyond the Queue model.
+
 UI clients must not reproduce queue ranking or SLA logic independently.
 
 

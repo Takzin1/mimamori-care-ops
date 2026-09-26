@@ -13,6 +13,7 @@ import {
   assertAssignableTarget,
   assertCanExecuteCommand,
   assertCanReadCase,
+  assertCanReadCaseAggregate,
 } from "../access/policy.ts";
 import type {
   TenantMembership,
@@ -179,6 +180,11 @@ export class CaseService {
       throw new CaseNotFoundError(input.tenantId, input.caseId);
     }
 
+    assertCanReadCaseAggregate(
+      membership,
+      stored.aggregate,
+    );
+
     const transition = executeCommand(
       stored.aggregate,
       input.expectedVersion,
@@ -235,6 +241,11 @@ export class CaseService {
       );
     }
 
+    assertCanReadCaseAggregate(
+      membership,
+      stored.aggregate,
+    );
+
     return projectCaseCapabilities(
       stored.aggregate,
       membership,
@@ -248,7 +259,21 @@ export class CaseService {
     );
     assertCanReadCase(membership);
 
-    return this.repository.load(input.tenantId, input.caseId);
+    const stored = await this.repository.load(
+      input.tenantId,
+      input.caseId,
+    );
+
+    if (!stored) {
+      return null;
+    }
+
+    assertCanReadCaseAggregate(
+      membership,
+      stored.aggregate,
+    );
+
+    return stored;
   }
 
   async metrics(input: CaseQueryInput): Promise<CaseMetrics> {
@@ -266,6 +291,11 @@ export class CaseService {
     if (!stored) {
       throw new CaseNotFoundError(input.tenantId, input.caseId);
     }
+
+    assertCanReadCaseAggregate(
+      membership,
+      stored.aggregate,
+    );
 
     return calculateCaseMetrics(stored.events);
   }
@@ -285,6 +315,11 @@ export class CaseService {
     if (!stored) {
       throw new CaseNotFoundError(input.tenantId, input.caseId);
     }
+
+    assertCanReadCaseAggregate(
+      membership,
+      stored.aggregate,
+    );
 
     return stored.aggregate;
   }
