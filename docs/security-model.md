@@ -86,6 +86,8 @@ The reference Supabase/Postgres contract:
 | audit history mutation | append-only event contract + runtime direct-DML revoke |
 | snapshot drift | replay-equivalence tests |
 | Signal replay / duplicate ingestion | tenant + adapter + source signal uniqueness |
+| unbounded trusted dependency wait | bounded outbound dependency requests with AbortSignal |
+| floating CI action/image refs | immutable action SHAs + PostgreSQL digest |
 
 ## Threats not yet fully covered
 
