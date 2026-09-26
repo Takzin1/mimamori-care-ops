@@ -42,3 +42,21 @@ export class InvalidMembershipAdminCommandError extends Error {
     this.name = "InvalidMembershipAdminCommandError";
   }
 }
+
+export class MembershipAdminStoreError extends Error {
+  readonly code = "MEMBERSHIP_ADMIN_STORE_ERROR";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "MembershipAdminStoreError";
+  }
+}
+
+export class MembershipAdminStoreCorruptionError extends Error {
+  readonly code = "MEMBERSHIP_ADMIN_STORE_CORRUPTION";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "MembershipAdminStoreCorruptionError";
+  }
+}
