@@ -37,7 +37,7 @@ Application commands never accept `actorId` from the caller. `CaseService` binds
 | Command | dispatcher | responder | supervisor | auditor |
 |---|---:|---:|---:|---:|
 | set_priority | yes | no | yes | no |
-| acknowledge | yes | yes | yes | no |
+| acknowledge | yes | no | yes | no |
 | assign | yes | no | yes | no |
 | start_action | no | yes | yes | no |
 | request_handoff | no | yes | yes | no |
@@ -45,9 +45,13 @@ Application commands never accept `actorId` from the caller. `CaseService` binds
 | complete | no | yes | yes | no |
 | close | yes | no | yes | no |
 | reopen | no | no | yes | no |
-| read / metrics | yes | yes | yes | yes |
+| read / metrics | yes | assigned / handoff target only | yes | yes |
 
 Assignment and handoff targets must be active staff with `responder` or `supervisor` role.
+
+Responder visibility is Case-scoped. A responder may read a Case only while they are the current `assigneeId` or current `handoffTargetId`. Dispatcher, supervisor, and auditor roles retain tenant-wide read visibility.
+
+Because the current lifecycle acknowledges a Case before assignment, responders do not acknowledge unassigned NEW Cases.
 
 ## Security ordering
 
