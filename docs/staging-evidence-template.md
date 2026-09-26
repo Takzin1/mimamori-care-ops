@@ -53,6 +53,8 @@ The preflight does **not** prove rate-limit thresholds, authenticated RBAC, data
 | Production secrets are not present in CI/reviewer demo |  |  |  |
 | Browser receives only public/publishable configuration |  |  |  |
 | Runtime/admin/worker credentials are distinct |  |  |  |
+| API runtime environment passes deployment parser |  |  | `parseCareOpsDeploymentEnvironment` |
+| Membership-admin/provider-delivery/backup-operator secrets are absent from API runtime |  |  |  |
 
 ## 2. Identity and membership
 
