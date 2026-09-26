@@ -44,6 +44,25 @@ function required(
   return normalized;
 }
 
+function actorId(
+  value: string | undefined,
+  label: string,
+): string {
+  const normalized = required(
+    value,
+    label,
+    128,
+  );
+
+  if (!isOperationalActorId(normalized)) {
+    throw new ConsoleWebInputError(
+      `${label} has invalid format`,
+    );
+  }
+
+  return normalized;
+}
+
 function oneOf<T extends string>(
   value: string | undefined,
   allowed: readonly T[],
