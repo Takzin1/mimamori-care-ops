@@ -800,3 +800,74 @@ test("HTTP capabilities deny cross-tenant access before Case disclosure", async 
     "FORBIDDEN",
   );
 });
+
+
+test("responder cannot directly read, inspect capabilities, or acknowledge an unowned Case", async () => {
+  const { api } = await fixture();
+
+  const routes = [
+    "/api/care-ops/tenants/provider-a/cases/case-a",
+    "/api/care-ops/tenants/provider-a/cases/case-a/metrics",
+    "/api/care-ops/tenants/provider-a/cases/case-a/capabilities",
+  ];
+
+  for (const path of routes) {
+    const response = await api.handle(
+      request(path, {
+        headers:
+          authHeaders("token-responder"),
+      }),
+    );
+
+    assert.equal(response.status, 403);
+    const payload = await body(response);
+    assert.equal(
+      payload.error.code,
+      "FORBIDDEN",
+    );
+  }
+
+  const command = await api.handle(
+    request(
+      "/api/care-ops/tenants/provider-a/cases/case-a/commands",
+      {
+        method: "POST",
+        headers: {
+          ...authHeaders(
+            "token-responder",
+          ),
+          "content-type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          command: {
+            type: "acknowledge",
+          },
+        }),
+      },
+    ),
+  );
+
+  assert.equal(command.status, 403);
+
+  const dispatcher = await api.handle(
+    request(
+      "/api/care-ops/tenants/provider-a/cases/case-a",
+      {
+        headers: authHeaders(),
+      },
+    ),
+  );
+
+  assert.equal(dispatcher.status, 200);
+  const stored = await body(dispatcher);
+  assert.equal(
+    stored.aggregate.status,
+    "NEW",
+  );
+  assert.equal(
+    stored.aggregate.version,
+    1,
+  );
+});
