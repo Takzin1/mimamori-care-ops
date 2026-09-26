@@ -2,7 +2,7 @@ import type {
   CareOpsBrowserOriginPolicy,
 } from "./types.ts";
 
-function canonicalOrigin(
+export function canonicalBrowserOrigin(
   value: string,
 ): string {
   if (
@@ -78,7 +78,7 @@ implements CareOpsBrowserOriginPolicy {
 
     try {
       canonical =
-        canonicalOrigin(origin);
+        canonicalBrowserOrigin(origin);
     } catch {
       return false;
     }
