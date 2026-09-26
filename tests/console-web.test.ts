@@ -437,3 +437,30 @@ test("command builder mirrors server input length limits", () => {
     ConsoleWebInputError,
   );
 });
+
+
+test("command builder rejects unsafe actor identifier syntax", () => {
+  assert.throws(
+    () =>
+      buildConsoleCommandIntent(
+        "assign",
+        {
+          assigneeId:
+            "responder-a,or(actor_id.eq.attacker)",
+        },
+      ),
+    ConsoleWebInputError,
+  );
+
+  assert.throws(
+    () =>
+      buildConsoleCommandIntent(
+        "request_handoff",
+        {
+          targetAssigneeId:
+            "responder unsafe",
+        },
+      ),
+    ConsoleWebInputError,
+  );
+});
