@@ -16,11 +16,17 @@ import type {
 export type MembershipAdminClock = () => string;
 
 export class MembershipAdminService {
+  private readonly repository: MembershipAdminRepository;
+  private readonly now: MembershipAdminClock;
+
   constructor(
-    private readonly repository: MembershipAdminRepository,
-    private readonly now: MembershipAdminClock =
+    repository: MembershipAdminRepository,
+    now: MembershipAdminClock =
       () => new Date().toISOString(),
-  ) {}
+  ) {
+    this.repository = repository;
+    this.now = now;
+  }
 
   async create(
     input: CreateMembershipInput,
