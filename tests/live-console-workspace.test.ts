@@ -316,12 +316,30 @@ test("workspace initializes authorized Queue without owning auth state", async (
   const serialized =
     JSON.stringify(snapshot);
 
+  for (const secretMarker of [
+    "access-token",
+    "refresh-token",
+    "service_role",
+    "service-role",
+  ]) {
+    assert.equal(
+      serialized.includes(secretMarker),
+      false,
+    );
+  }
+
   assert.equal(
-    serialized.includes("token"),
+    Object.hasOwn(
+      snapshot.session,
+      "accessToken",
+    ),
     false,
   );
   assert.equal(
-    serialized.includes("provider"),
+    Object.hasOwn(
+      snapshot.session,
+      "provider",
+    ),
     false,
   );
 });
