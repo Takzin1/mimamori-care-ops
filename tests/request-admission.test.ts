@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ExactBrowserOriginPolicy,
   OperationalCareOpsRuntime,
   createOperationalSupabaseCareOpsRuntime,
   type CareOpsOperationalLogRecord,
@@ -382,6 +383,11 @@ test("GET and HEAD health/readiness probes bypass admission", async () => {
   assert.equal(admissionCalls, 0);
 });
 
+const productionOriginPolicy =
+  new ExactBrowserOriginPolicy([
+    "https://console.example.test",
+  ]);
+
 const minute = 60_000;
 const policy: CaseSlaPolicy = {
   critical: {
@@ -416,6 +422,8 @@ const policy: CaseSlaPolicy = {
 
 test("operational Supabase composition rejects missing admission controller", () => {
   const withoutAdmission = {
+    originPolicy:
+      productionOriginPolicy,
     runtime: {
       supabaseUrl:
         "https://project.supabase.test",
@@ -445,6 +453,8 @@ test("operational Supabase admission denial prevents Auth/PostgREST fetch", asyn
 
   const app =
     createOperationalSupabaseCareOpsRuntime({
+      originPolicy:
+        productionOriginPolicy,
       admission: {
         admit() {
           admissionCalls += 1;

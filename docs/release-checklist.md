@@ -59,7 +59,8 @@ Do not treat completion of the Core as production approval.
 - [ ] trusted admission key/source derivation reviewed
 - [ ] rate-limit thresholds and abuse-response owner defined
 - [ ] outbound dependency timeout configured and reviewed
-- [ ] CORS/origin policy reviewed for live Console host
+- [ ] strict browser-origin boundary regression tests passing
+- [ ] exact production Console origin(s) configured and reviewed
 - [ ] command body/request-size limits reviewed
 - [ ] audit actor spoofing regression tests passing
 - [ ] cross-tenant access tests passing

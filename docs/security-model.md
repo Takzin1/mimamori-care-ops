@@ -88,6 +88,7 @@ The reference Supabase/Postgres contract:
 | hanging trusted dependency call | bounded outbound requests / AbortSignal |
 | unbounded inbound Care Ops work | pre-handler request admission + production composition requirement |
 | mutable CI compiler resolution | exact TypeScript devDependency + committed integrity lockfile + npm ci |
+| browser cross-origin abuse | canonical Origin validation + exact production origin policy + narrow preflight |
 | Signal replay / duplicate ingestion | tenant + adapter + source signal uniqueness |
 
 ## Threats not yet fully covered

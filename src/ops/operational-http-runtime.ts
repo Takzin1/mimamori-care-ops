@@ -1,3 +1,6 @@
+import {
+  canonicalBrowserOrigin,
+} from "./exact-browser-origin-policy.ts";
 import type {
   CareOpsAdmissionDecision,
   CareOpsMetricLabels,
@@ -7,6 +10,11 @@ import type {
 } from "./types.ts";
 
 const MAX_RETRY_AFTER_SECONDS = 3600;
+const CORS_MAX_AGE_SECONDS = 600;
+const CORS_ALLOWED_METHODS =
+  new Set(["GET", "POST"]);
+const CORS_ALLOWED_HEADERS =
+  new Set(["authorization", "content-type"]);
 
 function json(
   body: unknown,
@@ -78,6 +86,168 @@ function careOpsError(
     requestId,
     headers,
   );
+}
+
+function appendVary(
+  headers: Headers,
+  value: string,
+): void {
+  const current =
+    headers.get("vary")
+      ?.split(",")
+      .map((item) => item.trim())
+      .filter(Boolean) ?? [];
+
+  if (
+    !current.some(
+      (item) =>
+        item.toLowerCase() ===
+        value.toLowerCase(),
+    )
+  ) {
+    current.push(value);
+  }
+
+  headers.set(
+    "vary",
+    current.join(", "),
+  );
+}
+
+function withAllowedOrigin(
+  response: Response,
+  origin: string,
+): Response {
+  const headers =
+    new Headers(response.headers);
+
+  headers.set(
+    "access-control-allow-origin",
+    origin,
+  );
+  headers.delete(
+    "access-control-allow-credentials",
+  );
+  appendVary(headers, "Origin");
+
+  return new Response(
+    response.body,
+    {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    },
+  );
+}
+
+function requestedHeaders(
+  request: Request,
+): readonly string[] {
+  const raw =
+    request.headers.get(
+      "access-control-request-headers",
+    );
+
+  if (!raw?.trim()) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((value) =>
+      value.trim().toLowerCase(),
+    )
+    .filter(Boolean);
+}
+
+function isCareOpsApiPath(
+  request: Request,
+): boolean {
+  return new URL(
+    request.url,
+  ).pathname.startsWith(
+    "/api/care-ops/",
+  );
+}
+
+function preflightResponse(
+  request: Request,
+  origin: string,
+): Response {
+  const requestedMethod =
+    request.headers
+      .get(
+        "access-control-request-method",
+      )
+      ?.trim()
+      .toUpperCase();
+
+  if (
+    !requestedMethod ||
+    !CORS_ALLOWED_METHODS.has(
+      requestedMethod,
+    )
+  ) {
+    throw new Error(
+      "CORS method is not allowed",
+    );
+  }
+
+  const headers =
+    requestedHeaders(request);
+
+  if (
+    headers.some(
+      (header) =>
+        !CORS_ALLOWED_HEADERS.has(header),
+    )
+  ) {
+    throw new Error(
+      "CORS header is not allowed",
+    );
+  }
+
+  const responseHeaders =
+    new Headers({
+      "cache-control": "no-store",
+      "x-content-type-options":
+        "nosniff",
+      "referrer-policy":
+        "no-referrer",
+      "access-control-allow-origin":
+        origin,
+      "access-control-allow-methods":
+        requestedMethod,
+      "access-control-max-age":
+        String(
+          CORS_MAX_AGE_SECONDS,
+        ),
+    });
+
+  if (headers.length > 0) {
+    responseHeaders.set(
+      "access-control-allow-headers",
+      "Authorization, Content-Type",
+    );
+  }
+
+  appendVary(
+    responseHeaders,
+    "Origin",
+  );
+  appendVary(
+    responseHeaders,
+    "Access-Control-Request-Method",
+  );
+  appendVary(
+    responseHeaders,
+    "Access-Control-Request-Headers",
+  );
+
+  return new Response(null, {
+    status: 204,
+    headers: responseHeaders,
+  });
 }
 
 function statusClass(
@@ -195,6 +365,8 @@ export class OperationalCareOpsRuntime {
     >[number][];
   readonly #admission:
     OperationalCareOpsRuntimeOptions["admission"];
+  readonly #originPolicy:
+    OperationalCareOpsRuntimeOptions["originPolicy"];
   readonly #now: () => string;
   readonly #nowMs: () => number;
   readonly #requestIdFactory: () => string;
@@ -209,6 +381,8 @@ export class OperationalCareOpsRuntime {
       options.readinessChecks ?? [];
     this.#admission =
       options.admission;
+    this.#originPolicy =
+      options.originPolicy;
     this.#now =
       options.now ??
       (() => new Date().toISOString());
@@ -382,6 +556,163 @@ export class OperationalCareOpsRuntime {
     );
   }
 
+  async #checkOrigin(
+    request: Request,
+    requestMethod: string,
+    startedAt: number,
+  ): Promise<
+    | {
+        origin: string | null;
+        response: Response | null;
+      }
+  > {
+    const origin =
+      request.headers.get("origin");
+
+    if (!origin) {
+      return {
+        origin: null,
+        response: null,
+      };
+    }
+
+    if (!this.#originPolicy) {
+      return {
+        origin: null,
+        response: null,
+      };
+    }
+
+    let canonical: string;
+
+    try {
+      canonical =
+        canonicalBrowserOrigin(
+          origin,
+        );
+    } catch {
+      const requestId =
+        this.#requestIdFactory();
+
+      return {
+        origin: null,
+        response:
+          await this.#finish(
+            "care_ops",
+            requestMethod,
+            careOpsError(
+              "ORIGIN_NOT_ALLOWED",
+              "Browser origin is not allowed",
+              403,
+              requestId,
+            ),
+            startedAt,
+          ),
+      };
+    }
+
+    let allowed = false;
+
+    try {
+      allowed =
+        await this.#originPolicy.allows(
+          canonical,
+        );
+    } catch {
+      const requestId =
+        this.#requestIdFactory();
+
+      return {
+        origin: null,
+        response:
+          await this.#finish(
+            "care_ops",
+            requestMethod,
+            careOpsError(
+              "ORIGIN_POLICY_UNAVAILABLE",
+              "Service temporarily unavailable",
+              503,
+              requestId,
+            ),
+            startedAt,
+          ),
+      };
+    }
+
+    if (!allowed) {
+      const requestId =
+        this.#requestIdFactory();
+
+      return {
+        origin: null,
+        response:
+          await this.#finish(
+            "care_ops",
+            requestMethod,
+            careOpsError(
+              "ORIGIN_NOT_ALLOWED",
+              "Browser origin is not allowed",
+              403,
+              requestId,
+            ),
+            startedAt,
+          ),
+      };
+    }
+
+    return {
+      origin: canonical,
+      response: null,
+    };
+  }
+
+  async #preflight(
+    request: Request,
+    origin: string,
+    requestMethod: string,
+    startedAt: number,
+  ): Promise<Response> {
+    let response: Response;
+
+    try {
+      if (
+        requestMethod !== "OPTIONS" ||
+        !isCareOpsApiPath(request)
+      ) {
+        throw new Error(
+          "not a Care Ops preflight",
+        );
+      }
+
+      response =
+        preflightResponse(
+          request,
+          origin,
+        );
+    } catch {
+      const requestId =
+        this.#requestIdFactory();
+
+      response =
+        withAllowedOrigin(
+          careOpsError(
+            "CORS_PREFLIGHT_REJECTED",
+            "CORS preflight is not allowed",
+            403,
+            requestId,
+          ),
+          origin,
+        );
+    }
+
+    return await this.#finish(
+      "care_ops",
+      requestMethod,
+      response,
+      startedAt,
+    );
+  }
+
   async #admit(
     request: Request,
     requestMethod: string,
@@ -475,6 +806,32 @@ export class OperationalCareOpsRuntime {
       );
     }
 
+    const originCheck =
+      await this.#checkOrigin(
+        request,
+        requestMethod,
+        startedAt,
+      );
+
+    if (originCheck.response) {
+      return originCheck.response;
+    }
+
+    const allowedOrigin =
+      originCheck.origin;
+
+    if (
+      requestMethod === "OPTIONS" &&
+      allowedOrigin
+    ) {
+      return await this.#preflight(
+        request,
+        allowedOrigin,
+        requestMethod,
+        startedAt,
+      );
+    }
+
     const admissionResponse =
       await this.#admit(
         request,
@@ -483,12 +840,25 @@ export class OperationalCareOpsRuntime {
       );
 
     if (admissionResponse) {
-      return admissionResponse;
+      return allowedOrigin
+        ? withAllowedOrigin(
+            admissionResponse,
+            allowedOrigin,
+          )
+        : admissionResponse;
     }
 
     try {
-      const response =
+      let response =
         await this.#handler.handle(request);
+
+      if (allowedOrigin) {
+        response =
+          withAllowedOrigin(
+            response,
+            allowedOrigin,
+          );
+      }
 
       return await this.#finish(
         "care_ops",
@@ -500,12 +870,20 @@ export class OperationalCareOpsRuntime {
       const requestId =
         this.#requestIdFactory();
 
-      const response = careOpsError(
+      let response = careOpsError(
         "INTERNAL_ERROR",
         "Internal server error",
         500,
         requestId,
       );
+
+      if (allowedOrigin) {
+        response =
+          withAllowedOrigin(
+            response,
+            allowedOrigin,
+          );
+      }
 
       return await this.#finish(
         "care_ops",

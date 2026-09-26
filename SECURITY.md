@@ -277,3 +277,18 @@ sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrS
 CI also runs an explicit dependency audit at high severity.
 
 This complements the existing immutable GitHub Actions commit pins and PostgreSQL image digest.
+
+
+## Browser origin / CORS boundary
+
+Production-facing Care Ops browser traffic must pass an explicit origin policy before request admission, authentication, or PostgREST work.
+
+The reference production composition requires a browser origin policy and rejects missing configuration.
+
+The provided exact policy accepts only canonical HTTP(S) origins and rejects `null`, wildcard, malformed, path-bearing, credential-bearing, and non-canonical values.
+
+For allowed browser traffic the runtime emits only the exact allowed origin and `Vary: Origin`; it never emits wildcard CORS or `Access-Control-Allow-Credentials`.
+
+Care Ops preflight is limited to GET/POST with Authorization and Content-Type.
+
+Requests without Origin may continue as non-browser/service requests and still require admission/authentication.
