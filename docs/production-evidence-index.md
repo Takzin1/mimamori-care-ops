@@ -33,7 +33,7 @@ Use restricted evidence systems where required and record only safe references h
 | responder Case-scoped visibility | authorization regression tests | staging record |
 | runtime DB least privilege | SQL + real Postgres tests | staging DB privilege check |
 | membership control plane | `src/membership-admin/` | staging provision/revoke drill |
-| strict browser origin | origin/CORS tests + credential-free staging preflight | staging live-origin/preflight check |
+| strict browser origin | origin/CORS tests + credential-free staging preflight | staging live-origin / manual `Staging Preflight` workflow run |
 | request admission | admission tests | staging shared/edge provider |
 | outbound timeouts | transport tests | staging config review |
 | browser token boundary | session/client tests | staging browser review |
@@ -42,7 +42,7 @@ Use restricted evidence systems where required and record only safe references h
 
 | Control | Repository evidence | Environment/drill evidence |
 |---|---|---|
-| health/readiness | ops runtime tests + credential-free staging preflight | staging monitor/preflight result |
+| health/readiness | ops runtime tests + credential-free staging preflight | staging monitor / manual `Staging Preflight` workflow run |
 | structured logs | non-PII schema tests | staging log sink |
 | metrics | ops contract | staging metrics backend |
 | outbox health | read-only health projection | staging monitor |

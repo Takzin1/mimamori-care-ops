@@ -43,7 +43,7 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Fail-closed deployment environment + composition root | Implemented + tested | `src/deployment/` + deployment composition tests; provider environment not yet provisioned |
 | Provider-neutral request admission boundary | Implemented + tested | `src/ops/` + `tests/request-admission.test.ts`; production provider not provisioned |
 | Strict browser origin / CORS boundary | Implemented + tested | exact-origin policy + narrow preflight; production hostname not provisioned |
-| Synthetic staging boundary preflight | Implemented + tested | `src/ops/staging-preflight.ts` + `scripts/staging-preflight.ts` + regression tests; requires provisioned staging endpoint/origin |
+| Synthetic staging boundary preflight | Implemented + tested | `src/ops/staging-preflight.ts` + CLI + manual GitHub Actions workflow + regression tests; requires provisioned staging endpoint/origin |
 | Integrity-pinned TypeScript CI toolchain | Implemented + tested | `package-lock.json` + frozen CI install + supply-chain regression test |
 | Security Audit Round 1 | Complete | Issue #45; remediation PRs #46, #49, #50, #54, #56, #58 |
 | Live authenticated Responder Console deployment | Not implemented | renderer/Auth bridge exist; production environment + deployment remain |

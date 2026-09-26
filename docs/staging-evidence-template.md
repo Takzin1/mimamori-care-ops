@@ -42,6 +42,8 @@ This credential-free check sends no access token, resident data, Case payload, o
 
 Record only the command result and a safe execution reference. Do not paste secrets or sensitive runtime logs into GitHub.
 
+For repeatable GitHub-hosted evidence, use **Actions -> Staging Preflight -> Run workflow** and provide only the synthetic staging API base URL and exact Console origin. The workflow is manual, read-only, uses no repository secrets, and runs the same credential-free preflight command. The workflow run URL can be recorded as the safe evidence reference.
+
 The preflight does **not** prove rate-limit thresholds, authenticated RBAC, database grants/RLS, provider delivery, backup/restore, incident handling, or human workflow validation. Those still require the checks below.
 
 ## 1. Environment separation
