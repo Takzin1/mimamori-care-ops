@@ -25,6 +25,7 @@ What is already implemented and tested:
 - audited membership provisioning / revocation control plane
 - authenticated Care Ops HTTP boundary for Queue / Case / metrics / commands
 - server-only Supabase runtime composition with explicit credential routing
+- browser-safe Care Ops API client with per-request token provider
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
@@ -140,6 +141,7 @@ src/
   application/   operational orchestration
   http/          authenticated Web Request/Response transport
   runtime/        server-only deployment composition
+  client/         browser-safe HTTP API client
   persistence/   repository contracts and in-memory reference adapter
 
 db/
@@ -195,6 +197,8 @@ Start here:
 12. [HTTP API](docs/http-api.md)
 13. [ADR 0010 — Server runtime composition](docs/adr/0010-server-runtime-composition.md)
 14. [Server Runtime](docs/server-runtime.md)
+15. [ADR 0011 — Browser client/session boundary](docs/adr/0011-browser-client-session-boundary.md)
+16. [Browser Client](docs/browser-client.md)
 15. `tests/application-case-service.test.ts`
 16. `tests/identity.test.ts`
 17. `tests/http-api.test.ts`

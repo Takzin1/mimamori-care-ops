@@ -12,6 +12,7 @@ ADRs document decisions that change the meaning or safety boundary of the Care O
 | [0006](0006-transactional-outbox.md) | Transactional outbox for external side effects | Accepted |
 | [0007](0007-production-identity-boundary.md) | Production identity boundary and tenant membership | Accepted |
 | [0010](0010-server-runtime-composition.md) | Server-only runtime composition root | Accepted |
+| [0011](0011-browser-client-session-boundary.md) | Browser client and session boundary | Accepted |
 
 ## When to add an ADR
 

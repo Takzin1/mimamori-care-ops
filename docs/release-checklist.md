@@ -27,6 +27,8 @@ Do not treat completion of the Core as production approval.
 - [ ] service accounts separated from human principals
 - [ ] authenticated HTTP boundary regression tests passing
 - [ ] browser/client cannot submit trusted principalId or actorId
+- [ ] browser client token-persistence review completed
+- [ ] session shell refresh/sign-out behavior tested
 - [ ] least-privilege database/service credentials reviewed
 
 ## Data protection

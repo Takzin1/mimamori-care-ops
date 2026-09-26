@@ -148,3 +148,16 @@ It does not expose the service-role-bearing Case repository, membership director
 The incoming user bearer token is routed only to Auth verification. The service-role credential is routed only to server-side PostgREST adapters.
 
 Secret loading remains a deployment responsibility; the Core package does not read generic environment variables.
+
+
+## Browser client boundary
+
+Browser code may use `CareOpsHttpClient` to call the authenticated Care Ops API.
+
+The client has no service-role configuration and does not access PostgREST directly.
+
+It obtains a bearer token from an injected provider for each request and does not persist or refresh that token.
+
+Requests omit ambient credential cookies, disable caching, reject redirects, and use no-referrer behavior.
+
+Command objects are rebuilt from allowed business fields before serialization so caller-supplied `principalId` or `actorId` cannot become trusted API input.
