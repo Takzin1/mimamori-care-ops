@@ -84,6 +84,7 @@ test("Data API access is fail-closed to server-side service role", async () => {
     "claim_care_outbox",
     "complete_care_outbox",
     "fail_care_outbox",
+    "get_care_outbox_health",
   ]) {
     const start = source.indexOf(
       "create or replace function public." + name,
@@ -320,8 +321,8 @@ test("PLpgSQL function delimiters remain balanced", async () => {
   );
   assert.equal(
     source.match(/\nas \$\$\n/g)?.length ?? 0,
-    6,
-    "all six persistence RPCs must open with double-dollar delimiters",
+    7,
+    "all seven persistence RPCs must open with double-dollar delimiters",
   );
   assert.equal(
     source.match(/\n\$;\n/g)?.length ?? 0,
@@ -330,7 +331,67 @@ test("PLpgSQL function delimiters remain balanced", async () => {
   );
   assert.equal(
     source.match(/\n\$\$;\n/g)?.length ?? 0,
-    6,
-    "all six persistence RPCs must close with double-dollar delimiters",
+    7,
+    "all seven persistence RPCs must close with double-dollar delimiters",
+  );
+});
+
+
+test("outbox health projection is payload-free and server-only", async () => {
+  const source = await sql();
+
+  const start = source.indexOf(
+    "create or replace function public.get_care_outbox_health",
+  );
+  assert.ok(start >= 0);
+
+  const next = source.indexOf(
+    "create or replace function public.",
+    start + 1,
+  );
+  const body = source.slice(
+    start,
+    next >= 0 ? next : source.length,
+  );
+
+  assert.ok(
+    body.includes("security definer"),
+  );
+  assert.ok(
+    body.includes("set search_path = pg_catalog"),
+  );
+  assert.ok(
+    body.includes("'deadLetter'"),
+  );
+  assert.ok(
+    body.includes("'oldestActionableAt'"),
+  );
+  assert.ok(
+    body.includes("'maxAttemptCount'"),
+  );
+
+  for (const forbidden of [
+    "payload",
+    "delivery_key",
+    "last_error",
+    "case_id",
+    "subject_id",
+  ]) {
+    assert.equal(
+      body.includes(forbidden),
+      false,
+      `${forbidden} must not be returned by the health projection`,
+    );
+  }
+
+  assert.ok(
+    source.includes(
+      "revoke execute on function public.get_care_outbox_health(text, boolean)",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "grant execute on function public.get_care_outbox_health(text, boolean)",
+    ),
   );
 });
