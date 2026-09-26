@@ -42,6 +42,28 @@ The response deliberately does not disclose:
 
 HEAD is supported for both endpoints without a response body.
 
+## Request admission
+
+For non-probe Care Ops traffic, `OperationalCareOpsRuntime` can call an injected `CareOpsRequestAdmission` before the application handler.
+
+`OperationalSupabaseCareOpsRuntime` requires this admission controller.
+
+Outcomes:
+
+- allowed -> existing Care Ops handler runs
+- denied -> 429 `RATE_LIMITED`
+- admission backend error -> 503 `ADMISSION_UNAVAILABLE`
+- malformed admission decision -> 503 fail-closed
+- optional `Retry-After` -> integer 1..3600 seconds only
+
+`GET|HEAD /healthz` and `GET|HEAD /readyz` bypass admission.
+
+The provider receives the incoming Request only so deployment code can derive a key from platform-trusted ingress context. It must not consume the body and must not log Authorization, resident, Case, or care payloads.
+
+The Core deliberately does not decide whether forwarded-IP headers are trustworthy and does not ship an in-memory limiter as production infrastructure.
+
+A real deployment still needs a shared/edge limiter, explicit thresholds, monitoring, and an abuse-response owner.
+
 ## Structured logging
 
 The default log schema contains only:
@@ -139,6 +161,7 @@ to combine:
 - health/readiness
 - structured logs
 - metrics
+- required request admission
 
 ## Still required in production
 
