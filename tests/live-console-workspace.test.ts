@@ -8,6 +8,8 @@ import {
   executeCommand,
   type BrowserAuthSessionStatus,
   type CareOpsSessionClient,
+  type CaseCapabilitiesProjection,
+  type OperatorContextProjection,
   type CareOpsSessionListener,
   type CareOpsSessionSnapshot,
   type CaseCommandIntent,
@@ -137,6 +139,39 @@ implements CareOpsSessionClient {
   readonly listeners =
     new Set<CareOpsSessionListener>();
 
+  operatorContextImpl:
+    (
+      tenantId: string,
+    ) => Promise<OperatorContextProjection> =
+    async (tenantId) => ({
+      tenantId,
+      actorId: "operator-a",
+      roles: ["supervisor"],
+      queueVisibility: "tenant",
+    });
+
+  caseCapabilitiesImpl:
+    (
+      tenantId: string,
+      caseId: string,
+    ) => Promise<CaseCapabilitiesProjection> =
+    async (tenantId, caseId) => {
+      const stored = storedCase(caseId);
+      return {
+        tenantId,
+        caseId,
+        version: stored.aggregate.version,
+        status: stored.aggregate.status,
+        operator: {
+          tenantId,
+          actorId: "operator-a",
+          roles: ["supervisor"],
+          queueVisibility: "tenant",
+        },
+        commands: [],
+      };
+    };
+
   queueImpl:
     (tenantId: string) =>
       Promise<CaseQueueProjection> =
@@ -202,6 +237,24 @@ implements CareOpsSessionClient {
   }
 
   dispose(): void {}
+
+  operatorContext(
+    tenantId: string,
+  ): Promise<OperatorContextProjection> {
+    return this.operatorContextImpl(
+      tenantId,
+    );
+  }
+
+  caseCapabilities(
+    tenantId: string,
+    caseId: string,
+  ): Promise<CaseCapabilitiesProjection> {
+    return this.caseCapabilitiesImpl(
+      tenantId,
+      caseId,
+    );
+  }
 
   queue(
     tenantId: string,
@@ -308,9 +361,16 @@ test("workspace initializes authorized Queue without owning auth state", async (
     ),
     ["case-a", "case-b"],
   );
-  assert.equal(
+  assert.ok(
     snapshot.lastSuccessfulRefreshAt,
-    "2026-09-26T02:00:00.000Z",
+  );
+  assert.equal(
+    snapshot.operator.state,
+    "ready",
+  );
+  assert.equal(
+    snapshot.operator.data?.actorId,
+    "operator-a",
   );
 
   const serialized =
@@ -400,6 +460,10 @@ test("older Case selection response cannot overwrite a newer selection", async (
   assert.equal(
     snapshot.metrics.data?.handoffCount,
     2,
+  );
+  assert.equal(
+    snapshot.capabilities.data?.caseId,
+    "case-b",
   );
 });
 
@@ -663,6 +727,14 @@ test("session loss invalidates in-flight responses and clears operational worksp
   );
   assert.equal(
     snapshot.metrics.data,
+    null,
+  );
+  assert.equal(
+    snapshot.capabilities.data,
+    null,
+  );
+  assert.equal(
+    snapshot.operator.data,
     null,
   );
   assert.equal(
