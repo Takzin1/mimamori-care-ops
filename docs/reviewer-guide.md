@@ -102,11 +102,15 @@ Use it to verify that the visible UI reflects:
 - completion evidence
 - TTC-oriented metrics
 
-## 7. Know what is not implemented yet
+## 7. Know what remains before production
 
-See `docs/project-status.md`.
+See `docs/project-status.md`, `docs/release-checklist.md`, and Issue #64.
 
-Do not infer production readiness from the strength of the Core invariants. Production auth integration, runtime Postgres adapter, Signal idempotency, SLA engine, responder UI, deployment hardening and privacy operations are still roadmap items.
+Do not infer production readiness from the strength of the Core invariants. The repository already contains the production identity reference boundary, runtime Postgres adapter, Signal idempotency, SLA engine, live Console renderer, request-admission/origin boundaries, observability hooks, outbox monitoring, and resilience runbooks.
+
+The remaining gates are primarily environment and organizational evidence: provisioned staging/production infrastructure, real provider/secret separation, live Console/Auth deployment, shared/edge admission, observability/alert owners, backup/restore and incident drills, target-operator validation, accessibility review, and privacy/legal/PoC governance.
+
+After staging API + exact Console origin exist, use `npm run preflight:staging` for the credential-free boundary checks.
 
 ## 8. Suggested reviewer questions
 
