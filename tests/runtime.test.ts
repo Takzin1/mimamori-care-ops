@@ -339,3 +339,121 @@ test("runtime rejects ambiguous or incomplete deployment config", () => {
     }),
   );
 });
+
+
+test("runtime propagates outbound dependency deadline and fails closed on stalled Auth", async () => {
+  const signals: AbortSignal[] = [];
+
+  const app = createSupabaseCareOpsRuntime({
+    supabaseUrl:
+      "https://project.supabase.test",
+    publishableKey: "publishable-key",
+    serviceRoleKey: "service-secret",
+    slaPolicies: {
+      "provider-a": policy,
+    },
+    outboundRequestTimeoutMs: 5,
+    fetchImpl: async (
+      _input,
+      init = {},
+    ) =>
+      await new Promise<Response>(
+        (_resolve, reject) => {
+          const signal = init.signal;
+
+          if (!signal) {
+            reject(
+              new Error(
+                "missing runtime AbortSignal",
+              ),
+            );
+            return;
+          }
+
+          signals.push(signal);
+
+          const fail = () =>
+            reject(
+              new Error(
+                "sensitive-user-token",
+              ),
+            );
+
+          if (signal.aborted) {
+            fail();
+            return;
+          }
+
+          signal.addEventListener(
+            "abort",
+            fail,
+            { once: true },
+          );
+        },
+      ),
+    requestIdFactory: () =>
+      "runtime-timeout-request",
+  });
+
+  const response = await app.handle(
+    new Request(
+      "https://care.example.test/api/care-ops/tenants/provider-a/queue",
+      {
+        headers: {
+          authorization:
+            "Bearer user-token",
+        },
+      },
+    ),
+  );
+
+  assert.equal(response.status, 401);
+  assert.equal(signals.length, 1);
+  assert.equal(
+    signals[0]?.aborted,
+    true,
+  );
+
+  const payload =
+    await response.text();
+
+  assert.equal(
+    payload.includes(
+      "sensitive-user-token",
+    ),
+    false,
+  );
+  assert.equal(
+    payload.includes("user-token"),
+    false,
+  );
+});
+
+test("runtime rejects invalid outbound timeout configuration", () => {
+  const boundary =
+    new FakeSupabaseBoundary();
+
+  for (const timeout of [
+    0,
+    -1,
+    60_001,
+    1.5,
+  ]) {
+    assert.throws(() =>
+      createSupabaseCareOpsRuntime({
+        supabaseUrl:
+          "https://project.supabase.test",
+        publishableKey:
+          "publishable-key",
+        serviceRoleKey:
+          "service-secret",
+        slaPolicies: {
+          "provider-a": policy,
+        },
+        outboundRequestTimeoutMs:
+          timeout,
+        fetchImpl: boundary.fetch,
+      }),
+    );
+  }
+});
