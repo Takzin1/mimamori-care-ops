@@ -29,9 +29,11 @@ The repository currently demonstrates, with automated tests:
 - authenticated HTTP API
 - browser-safe API client
 - ephemeral browser session coordination
+- Supabase browser Auth reference bridge
 - live Console workspace race/conflict handling
 - server-projected operator/Case capabilities
 - dependency-free safe DOM renderer
+- provider-neutral health/readiness + non-PII observability wrapper
 - real PostgreSQL integration CI
 
 ## What this repository does not demonstrate
