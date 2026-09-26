@@ -185,3 +185,20 @@ Dispatcher, supervisor, and auditor read roles remain tenant-wide.
 The application performs tenant membership authorization before Case lookup, then applies Case-level responder visibility after loading the tenant-scoped Case. This preserves cross-tenant existence protection while preventing same-tenant lateral reads.
 
 Responders do not acknowledge unassigned NEW Cases in the current lifecycle.
+
+
+## Operational actor identifiers
+
+Care Ops actor IDs are machine identifiers, not display names.
+
+They use the canonical grammar:
+
+```
+^[A-Za-z0-9._:-]{1,128}$
+```
+
+The grammar is enforced at HTTP command parsing, membership actor lookup, membership administration, and the persistent membership table.
+
+This prevents assignment/handoff identifiers from introducing PostgREST filter metacharacters or ambiguous whitespace into trusted lookup paths.
+
+Human-readable staff names belong in a separate presentation/profile field and must not be encoded into `actorId`.
