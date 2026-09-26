@@ -35,24 +35,38 @@ The repository currently demonstrates, with automated tests:
 - server-projected operator/Case capabilities
 - dependency-free safe DOM renderer
 - provider-neutral health/readiness + non-PII observability wrapper
+- fail-closed request-admission boundary
+- strict exact-origin / narrow-CORS browser boundary
+- fail-closed staging/production deployment environment parser
+- operational Supabase deployment composition root
+- secret-safe network-free deployment config doctor
+- credential-free synthetic staging boundary preflight
+- manual read-only staging evidence workflow
+- incident / backup-restore-rollback / outbox operations runbooks
+- repository-governance audit for main protection + required CI
 - real PostgreSQL integration CI
 
 ## What this repository does not demonstrate
 
 It does **not** currently demonstrate a production healthcare/care deployment.
 
-Not yet provisioned or approved:
+Not yet provisioned, deployed, exercised, or approved:
 
-- production Auth environment
-- production login/session UX
-- production membership-admin credential/runbook
-- production deployment
-- production rate limiting / edge policy
-- production observability / on-call
+- production-equivalent Auth environment and live login deployment
+- live authenticated Responder Console deployment
+- production membership-admin credential/identity
+- staging/production infrastructure
+- shared/edge request-admission provider and approved thresholds
+- production observability providers, alerts, and on-call ownership
+- outbox provider credential/delivery validation
 - retention / deletion implementation
-- backup/restore drill
-- privacy/legal approval
+- backup provider, approved RPO/RTO, and restore/rollback drill evidence
+- incident/secret-rotation drill evidence
+- target-operator and accessibility validation
+- privacy/legal/real-world PoC governance
 - real resident/care/medical data
+
+Repository code, validators, evidence templates, and runbooks for several of these gates already exist. Their existence is intentionally **not** treated as proof that a live environment or operational drill has passed.
 
 Real personal or care data is not allowed in this repository or demo environment.
 
@@ -91,6 +105,13 @@ High-signal tests include:
 - `tests/live-console-workspace.test.ts`
 - `tests/console-capabilities.test.ts`
 - `tests/console-web.test.ts`
+- `tests/deployment-composition.test.ts`
+- `tests/deployment-config-doctor.test.ts`
+- `tests/deployment-config-cli.test.ts`
+- `tests/staging-preflight.test.ts`
+- `tests/staging-preflight-workflow.test.ts`
+- `tests/repository-governance.test.ts`
+- `tests/repository-governance-workflow.test.ts`
 - `tests/postgres-real.integration.test.ts`
 
 ## CI
@@ -137,9 +158,14 @@ See [SECURITY.md](../SECURITY.md).
 
 ## Current repository-governance gap
 
-The codebase uses PRs and CI by convention, but repository settings still need a protected `main` rule/ruleset.
+The codebase uses PRs and CI by convention. GitHub was checked on 2026-09-26 and currently reports:
 
-Recommended settings are documented in [Repository Governance](repository-governance.md).
+- `main protected: false`
+- branch protection disabled
+- required status checks off
+- no repository rulesets
+
+Recommended settings are documented in [Repository Governance](repository-governance.md). After configuration, the manual **Repository Governance Audit** workflow verifies that `verify` and `postgres-integration` are enforced.
 
 Until that setting is enabled, passing CI is a project convention rather than a GitHub-enforced merge gate.
 
@@ -153,4 +179,12 @@ Before production review, also read:
 - [Outbox and Dead-Letter Operations](outbox-operations.md)
 - [Deployment Environment Contract](deployment-environment.md)
 
-These are repository-level runbooks. Their production owners, thresholds, credentials, and drill evidence are intentionally not claimed as complete.
+These are repository-level runbooks. Their production owners, thresholds, credentials, provider configuration, and drill evidence are intentionally not claimed as complete.
+
+Before provisioning a synthetic staging runtime, the repository also provides:
+
+```bash
+npm run config:validate
+```
+
+to validate the deployment configuration without network access or credential echoing. After the staging API and exact Console origin exist, use the credential-free **Staging Preflight** workflow/CLI to capture the first live boundary evidence.
