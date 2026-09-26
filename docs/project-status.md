@@ -30,6 +30,7 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Browser-safe Care Ops API client | Implemented + tested | `src/client/` + `tests/client.test.ts` |
 | Ephemeral browser session coordinator | Implemented + tested | `src/session/` + `tests/session-controller.test.ts` |
 | Live Console workspace state model | Implemented + tested | `src/console/` + `tests/live-console-workspace.test.ts` |
+| Server-projected operator / Case capabilities | Implemented + tested | shared Core/RBAC predicates + HTTP/client/workspace tests |
 | Provisioned production Auth/login flow | Not implemented | deployment roadmap |
 | Responder Console presenter + synthetic reviewer demo | Implemented + tested | `src/presentation/` + `demo/responder-console/` |
 | Reviewer demo deployment config | Implemented + tested | `demo/responder-console/vercel.json`; project import tracked in #22 |
