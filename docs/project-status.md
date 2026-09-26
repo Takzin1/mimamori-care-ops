@@ -39,6 +39,7 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Operational health/readiness + structured observability boundary | Implemented + tested | `src/ops/` + operational runtime tests |
 | Operational Supabase runtime composition | Implemented + tested | `src/runtime/operational-supabase-care-ops-runtime.ts` |
 | Provider-neutral request admission boundary | Implemented + tested | `src/ops/` + `tests/request-admission.test.ts`; production provider not provisioned |
+| Integrity-pinned TypeScript CI toolchain | Implemented + tested | `package-lock.json` + frozen CI install + supply-chain regression test |
 | Live authenticated Responder Console deployment | Not implemented | renderer/Auth bridge exist; production environment + deployment remain |
 | Production deployment | Not implemented | release checklist |
 | Production PII / care data | **Not allowed** | security policy |

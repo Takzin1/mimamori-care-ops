@@ -29,6 +29,12 @@ jobs:
       - name: Reject whitespace errors
         run: git diff --check HEAD^
 
+      - name: Install locked toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
       - name: Typecheck
         run: npm run typecheck
 

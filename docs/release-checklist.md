@@ -65,6 +65,7 @@ Do not treat completion of the Core as production approval.
 - [ ] cross-tenant access tests passing
 - [ ] stale-write / concurrency tests passing
 - [ ] dependency / supply-chain review completed
+- [ ] package lockfile integrity / frozen install verified
 - [ ] CI actions/images pinned to reviewed immutable revisions
 
 ## Operations

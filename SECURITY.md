@@ -260,3 +260,20 @@ The Core does not trust `X-Forwarded-For` or any other source header by default.
 The admission provider must not consume the request body or log bearer tokens/resident/Case payloads.
 
 This boundary does not itself choose a distributed limiter. Production still requires a shared/edge provider, thresholds, monitoring, and abuse-response ownership.
+
+
+## CI toolchain supply-chain boundary
+
+The repository-managed TypeScript compiler is pinned as an exact devDependency and installed from the committed npm lockfile.
+
+CI uses `npm ci --ignore-scripts` before typecheck, so package.json / lockfile drift fails the build rather than silently resolving a different compiler.
+
+The TypeScript 5.9.2 tarball is protected by the lockfile integrity value:
+
+```
+sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrSJu3+t/xlw3R9A==
+```
+
+CI also runs an explicit dependency audit at high severity.
+
+This complements the existing immutable GitHub Actions commit pins and PostgreSQL image digest.
