@@ -4,6 +4,14 @@ This checklist is intentionally stricter than the current prototype state.
 
 Do not treat completion of the Core as production approval.
 
+## Evidence discipline
+
+Use [Staging Evidence Template](staging-evidence-template.md) for the first synthetic staging pass and [Production Evidence Index](production-evidence-index.md) to track environment/drill evidence.
+
+Do not mark an environment/operations checkbox complete solely because repository code or a runbook exists.
+
+Do not place secret values, resident/care payloads, access tokens, or raw sensitive evidence in GitHub.
+
 ## Architecture
 
 - [ ] Case lifecycle invariants reviewed
