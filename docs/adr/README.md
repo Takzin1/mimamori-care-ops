@@ -14,6 +14,7 @@ ADRs document decisions that change the meaning or safety boundary of the Care O
 | [0010](0010-server-runtime-composition.md) | Server-only runtime composition root | Accepted |
 | [0011](0011-browser-client-session-boundary.md) | Browser client and session boundary | Accepted |
 | [0012](0012-ephemeral-session-coordinator.md) | Ephemeral browser session coordinator | Accepted |
+| [0013](0013-live-console-workspace.md) | Live Console workspace state model | Accepted |
 
 ## When to add an ADR
 

@@ -31,6 +31,8 @@ Do not treat completion of the Core as production approval.
 - [ ] session shell refresh/sign-out behavior tested
 - [ ] 401 -> reauthentication-required behavior tested
 - [ ] failed mutation is not auto-replayed after reauthentication
+- [ ] stale Console command refetch/no-replay behavior tested
+- [ ] selection race / late-response protection tested
 - [ ] least-privilege database/service credentials reviewed
 
 ## Data protection
