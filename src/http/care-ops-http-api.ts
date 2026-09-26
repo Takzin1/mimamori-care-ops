@@ -525,7 +525,7 @@ export class CareOpsHttpApi {
         }
 
         case "commands":
-          return this.command(
+          return await this.command(
             request,
             route,
             token,
