@@ -87,6 +87,7 @@ The reference Supabase/Postgres contract:
 | snapshot drift | replay-equivalence tests |
 | hanging trusted dependency call | bounded outbound requests / AbortSignal |
 | unbounded inbound Care Ops work | pre-handler request admission + production composition requirement |
+| mutable CI compiler resolution | exact TypeScript devDependency + committed integrity lockfile + npm ci |
 | Signal replay / duplicate ingestion | tenant + adapter + source signal uniqueness |
 
 ## Threats not yet fully covered
