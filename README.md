@@ -29,6 +29,7 @@ What is already implemented and tested:
 - ephemeral browser session coordinator with explicit 401/reauth handling
 - renderer-neutral live Console workspace with race/conflict handling
 - server-projected operator / Case capabilities from shared Core + RBAC rules
+- dependency-free live Console DOM renderer driven by server capabilities
 - tenant staff membership + role-based command authorization
 - retry-safe Signal idempotency + immutable Case lineage
 - explicit Case priority + deterministic SLA/aging evaluation
@@ -43,7 +44,7 @@ Not yet production-ready:
 
 - intentionally provisioned production Auth environment and login/session UX
 - production admin identity / membership control-plane runbook
-- live Console UI shell/auth-provider UX and deployment
+- production Auth-provider/login UX and live Console deployment
 - deployment / observability / incident runbook
 
 See [Project Status](docs/project-status.md) and the open GitHub Issues for the active roadmap.
@@ -147,6 +148,7 @@ src/
   client/         browser-safe HTTP API client
   session/        ephemeral browser session coordination
   console/        live Console workspace state
+  console-web/    dependency-free live Console DOM renderer
   persistence/   repository contracts and in-memory reference adapter
 
 db/
@@ -184,6 +186,12 @@ The demo is intentionally disconnected from production data until production ide
 
 Deployment guide: [Reviewer Demo Deployment](docs/reviewer-demo-deployment.md). A dedicated Vercel project is required; do not reuse legacy Mimamori projects.
 
+## External review
+
+Start with the [External Review Package](docs/external-review.md) for the current capability/evidence boundary, known gaps, CI evidence, and security review path.
+
+Repository workflow and branch-protection recommendations are documented in [Repository Governance](docs/repository-governance.md). Release semantics are documented in [Release Policy](docs/release-policy.md).
+
 ## Review this repository in 10 minutes
 
 Start here:
@@ -210,6 +218,8 @@ Start here:
 20. [Live Console Workspace](docs/live-console-workspace.md)
 21. [ADR 0014 — Server-projected Console capabilities](docs/adr/0014-server-projected-console-capabilities.md)
 22. [Console Capabilities](docs/console-capabilities.md)
+23. [ADR 0015 — Dependency-free Console renderer](docs/adr/0015-dependency-free-console-renderer.md)
+24. [Live Console Web Renderer](docs/live-console-web-renderer.md)
 15. `tests/application-case-service.test.ts`
 16. `tests/identity.test.ts`
 17. `tests/http-api.test.ts`
