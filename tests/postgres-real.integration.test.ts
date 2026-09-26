@@ -371,6 +371,75 @@ test(
     assert.equal(deadLetterResult.ok, true);
     assert.equal(deadLetterResult.status, "dead_letter");
 
+    const outboxHealth = JSON.parse(
+      sql(
+        "set role service_role; select public.get_care_outbox_health(" +
+        "'provider-db',false)::text;",
+      ),
+    );
+
+    assert.equal(
+      outboxHealth.tenantId,
+      "provider-db",
+    );
+    assert.deepEqual(
+      outboxHealth.counts,
+      {
+        pending: 0,
+        processing: 0,
+        failed: 0,
+        deadLetter: 1,
+        delivered: null,
+      },
+    );
+    assert.equal(
+      outboxHealth.oldestActionableAt,
+      null,
+    );
+    assert.equal(
+      typeof outboxHealth.oldestDeadLetterAt,
+      "string",
+    );
+    assert.equal(
+      outboxHealth.maxAttemptCount,
+      2,
+    );
+
+    const outboxHealthWithDelivered =
+      JSON.parse(
+        sql(
+          "set role service_role; select public.get_care_outbox_health(" +
+          "'provider-db',true)::text;",
+        ),
+      );
+
+    assert.equal(
+      outboxHealthWithDelivered.counts
+        .delivered,
+      2,
+    );
+
+    const healthSerialized =
+      JSON.stringify(
+        outboxHealthWithDelivered,
+      );
+
+    for (const forbidden of [
+      "payload",
+      "deliveryKey",
+      "lastError",
+      "caseId",
+      "subjectId",
+      "permanent synthetic failure",
+    ]) {
+      assert.equal(
+        healthSerialized.includes(
+          forbidden,
+        ),
+        false,
+      );
+    }
+
     const privileges = JSON.parse(
       sql(
         "select json_build_object(" +
