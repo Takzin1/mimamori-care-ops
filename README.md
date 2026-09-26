@@ -153,7 +153,8 @@ src/
   access/        tenant staff membership and authorization
   application/   operational orchestration
   http/          authenticated Web Request/Response transport
-  runtime/        server-only deployment composition
+  runtime/        server-only application/operational runtime composition
+  deployment/     validated staging/production environment + composition root
   client/         browser-safe HTTP API client
   session/        ephemeral browser session coordination
   console/        live Console workspace state

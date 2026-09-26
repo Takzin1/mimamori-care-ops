@@ -40,6 +40,7 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Reviewer demo deployment config | Implemented + tested | `demo/responder-console/vercel.json`; project import tracked in #22 |
 | Operational health/readiness + structured observability boundary | Implemented + tested | `src/ops/` + operational runtime tests |
 | Operational Supabase runtime composition | Implemented + tested | `src/runtime/operational-supabase-care-ops-runtime.ts` |
+| Fail-closed deployment environment + composition root | Implemented + tested | `src/deployment/` + deployment composition tests; provider environment not yet provisioned |
 | Provider-neutral request admission boundary | Implemented + tested | `src/ops/` + `tests/request-admission.test.ts`; production provider not provisioned |
 | Strict browser origin / CORS boundary | Implemented + tested | exact-origin policy + narrow preflight; production hostname not provisioned |
 | Synthetic staging boundary preflight | Implemented + tested | `src/ops/staging-preflight.ts` + `scripts/staging-preflight.ts` + regression tests; requires provisioned staging endpoint/origin |
@@ -70,7 +71,7 @@ Remaining work is primarily environment / organizational provisioning:
 
 1. complete one-time repository / reviewer settings (#10, #22)
 2. execute staging/production provisioning and operational drills tracked in #64 using the staging evidence template / production evidence index; run `npm run preflight:staging` after staging API + exact Console origin are provisioned
-3. configure real shared/edge admission, exact production origin(s), secrets, observability, backup/restore, and outbox provider credentials
+3. configure real shared/edge admission, exact production origin(s), secrets, observability, backup/restore, and outbox provider credentials using the validated `src/deployment/` composition path
 4. validate the live workflow with target operators using synthetic/scenario data
 5. complete privacy/legal/real-world PoC governance before any production PII or care data
 
