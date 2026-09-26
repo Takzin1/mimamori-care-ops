@@ -28,6 +28,9 @@ import type {
 import {
   PostgrestCaseRepository,
 } from "../persistence/postgrest-case-repository.ts";
+import {
+  normalizeOutboundRequestTimeoutMs,
+} from "../transport/outbound-timeout.ts";
 
 type FetchLike = (
   input: string | URL,
@@ -43,6 +46,7 @@ export interface SupabaseCareOpsRuntimeOptions {
   slaPolicies: Readonly<Record<string, CaseSlaPolicy>>;
   fetchImpl?: FetchLike;
   casePageSize?: number;
+  outboundRequestTimeoutMs?: number;
   maxCommandBodyBytes?: number;
   requestIdFactory?: RequestIdFactory;
   clock?: RuntimeClock;
@@ -84,6 +88,10 @@ function assertRuntimeConfig(
     );
   }
 
+  normalizeOutboundRequestTimeoutMs(
+    options.outboundRequestTimeoutMs,
+  );
+
   if (
     Object.keys(options.slaPolicies).length === 0
   ) {
@@ -105,12 +113,19 @@ export class SupabaseCareOpsRuntime {
       options.clock ??
       (() => new Date().toISOString());
 
+    const outboundRequestTimeoutMs =
+      normalizeOutboundRequestTimeoutMs(
+        options.outboundRequestTimeoutMs,
+      );
+
     const authenticator =
       new SupabaseAuthAuthenticator({
         baseUrl: options.supabaseUrl,
         publishableKey:
           options.publishableKey,
         fetchImpl: options.fetchImpl,
+        requestTimeoutMs:
+          outboundRequestTimeoutMs,
       });
 
     const memberships =
@@ -119,6 +134,8 @@ export class SupabaseCareOpsRuntime {
         serviceRoleKey:
           options.serviceRoleKey,
         fetchImpl: options.fetchImpl,
+        requestTimeoutMs:
+          outboundRequestTimeoutMs,
       });
 
     const repository =
@@ -128,6 +145,8 @@ export class SupabaseCareOpsRuntime {
           options.serviceRoleKey,
         fetchImpl: options.fetchImpl,
         pageSize: options.casePageSize,
+        requestTimeoutMs:
+          outboundRequestTimeoutMs,
       });
 
     const policies =
