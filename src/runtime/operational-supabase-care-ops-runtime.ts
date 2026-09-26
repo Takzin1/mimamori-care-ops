@@ -2,6 +2,7 @@ import {
   OperationalCareOpsRuntime,
 } from "../ops/operational-http-runtime.ts";
 import type {
+  CareOpsBrowserOriginPolicy,
   CareOpsRequestAdmission,
   OperationalCareOpsRuntimeOptions,
 } from "../ops/types.ts";
@@ -13,9 +14,10 @@ import {
 export interface OperationalSupabaseCareOpsRuntimeOptions {
   runtime: SupabaseCareOpsRuntimeOptions;
   admission: CareOpsRequestAdmission;
+  originPolicy: CareOpsBrowserOriginPolicy;
   operations?: Omit<
     OperationalCareOpsRuntimeOptions,
-    "handler" | "admission"
+    "handler" | "admission" | "originPolicy"
   >;
 }
 
@@ -28,6 +30,21 @@ function requireAdmission(
   ) {
     throw new Error(
       "request admission controller is required",
+    );
+  }
+
+  return value;
+}
+
+function requireOriginPolicy(
+  value: CareOpsBrowserOriginPolicy,
+): CareOpsBrowserOriginPolicy {
+  if (
+    !value ||
+    typeof value.allows !== "function"
+  ) {
+    throw new Error(
+      "browser origin policy is required",
     );
   }
 
@@ -47,6 +64,11 @@ export class OperationalSupabaseCareOpsRuntime {
         options.admission,
       );
 
+    const originPolicy =
+      requireOriginPolicy(
+        options.originPolicy,
+      );
+
     const careOps =
       new SupabaseCareOpsRuntime(
         options.runtime,
@@ -56,6 +78,7 @@ export class OperationalSupabaseCareOpsRuntime {
       new OperationalCareOpsRuntime({
         ...options.operations,
         admission,
+        originPolicy,
         handler: careOps,
       });
   }
