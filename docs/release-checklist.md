@@ -62,7 +62,9 @@ Do not place secret values, resident/care payloads, access tokens, or raw sensit
 - [ ] PUBLIC / anon / authenticated grants reviewed
 - [ ] service-role usage confined to trusted server environment
 - [ ] runtime composition credential-routing test passing
-- [ ] deployment adapter uses server runtime instead of direct repository access
+- [ ] deployment adapter uses `createCareOpsDeployment` / operational server runtime instead of direct repository access
+- [ ] deployment environment parser regression tests passing
+- [ ] API runtime environment contains no membership-admin / provider-delivery / backup-operator secret class
 - [ ] request-admission boundary regression tests passing
 - [ ] production shared/edge rate limiter configured
 - [ ] trusted admission key/source derivation reviewed
