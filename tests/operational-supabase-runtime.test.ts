@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ExactBrowserOriginPolicy,
   createOperationalSupabaseCareOpsRuntime,
   type CaseSlaPolicy,
 } from "../src/index.ts";
@@ -13,6 +14,11 @@ const allowAdmission = {
     allowed: true as const,
   }),
 };
+
+const originPolicy =
+  new ExactBrowserOriginPolicy([
+    "https://console.example.test",
+  ]);
 
 const policy: CaseSlaPolicy = {
   critical: {
@@ -51,6 +57,7 @@ test("operational Supabase runtime serves health/readiness without touching Supa
   const app =
     createOperationalSupabaseCareOpsRuntime({
       admission: allowAdmission,
+      originPolicy,
       runtime: {
         supabaseUrl:
           "https://project.supabase.test",
@@ -106,6 +113,7 @@ test("operational Supabase runtime public object does not expose runtime credent
   const app =
     createOperationalSupabaseCareOpsRuntime({
       admission: allowAdmission,
+      originPolicy,
       runtime: {
         supabaseUrl:
           "https://project.supabase.test",
