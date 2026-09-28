@@ -12,6 +12,15 @@ Voice transcript
 → human-reviewed communication draft
 → approved outbox message
 
+The realtime transport path is intentionally separated from the operational workflow:
+
+Authenticated operator
+→ short-lived realtime session request
+→ validated WSS session
+→ browser transport
+→ final provider turn
+→ Voice Operations workflow
+
 ## Safety boundary
 
 The Voice layer does not diagnose, decide final emergency severity, assign accountable ownership, accept a handoff, or complete a Case.
@@ -19,6 +28,8 @@ The Voice layer does not diagnose, decide final emergency severity, assign accou
 Near-miss / incident classification belongs to the Voice layer. The existing Case lifecycle remains unchanged.
 
 Only final AssemblyAI turns may enter the operational plan. Transcript evidence keeps the provider, transcript ID, language, timestamp, and source text.
+
+Browser clients must never receive a long-lived provider API key. A realtime session is issued through an authenticated server boundary and must be short-lived, WSS-only, and unexpired.
 
 ## Current implementation boundary
 
@@ -29,10 +40,15 @@ Implemented:
 - Japanese passthrough and Indonesian synthetic localization adapter
 - supervisor/family communication drafts
 - explicit human approval before creating an Outbox message
-- unit tests
+- validated short-lived realtime session contract
+- authenticated Voice Session HTTP API boundary
+- browser WebSocket transport abstraction with audio gating
+- unit tests for workflow, session validation, transport state, and auth boundary
 
 Not yet wired:
-- live AssemblyAI WebSocket/token exchange
+- live AssemblyAI provider session/token issuer
+- provider-specific realtime message parser
+- browser microphone PCM capture/resampling
 - Claude Haiku translation/extraction provider
 - provider delivery handler for LINE/SMS/email
 - production care data or production clinical policy
