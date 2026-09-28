@@ -6,6 +6,7 @@ export * from "./guidance.ts";
 export * from "./language.ts";
 export * from "./communication.ts";
 export * from "./workflow.ts";
+export * from "./service.ts";
 export * from "./realtime-session.ts";
 export * from "./realtime-transport.ts";
 export * from "./browser-audio.ts";

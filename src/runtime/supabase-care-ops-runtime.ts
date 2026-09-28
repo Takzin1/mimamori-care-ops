@@ -14,6 +14,9 @@ import {
   CareOpsHttpApi,
 } from "../http/care-ops-http-api.ts";
 import {
+  VoicePlanHttpApi,
+} from "../http/voice-plan-http-api.ts";
+import {
   VoiceSessionHttpApi,
 } from "../http/voice-session-http-api.ts";
 import type {
@@ -31,8 +34,9 @@ import type {
 import {
   PostgrestCaseRepository,
 } from "../persistence/postgrest-case-repository.ts";
-import type {
-  VoiceRealtimeSessionIssuer,
+import {
+  VoiceOpsService,
+  type VoiceRealtimeSessionIssuer,
 } from "../voice/index.ts";
 
 type FetchLike = (
@@ -48,6 +52,7 @@ export interface SupabaseCareOpsRuntimeOptions {
   serviceRoleKey: string;
   slaPolicies: Readonly<Record<string, CaseSlaPolicy>>;
   voiceSessionIssuer?: VoiceRealtimeSessionIssuer;
+  voiceOpsService?: VoiceOpsService;
   fetchImpl?: FetchLike;
   casePageSize?: number;
   outboundTimeoutMs?: number;
@@ -101,22 +106,38 @@ function assertRuntimeConfig(
   }
 }
 
-function isVoiceSessionPath(
+function voiceRouteKind(
   request: Request,
-): boolean {
+): "session" | "plan" | null {
   const pathname =
     new URL(request.url)
       .pathname;
 
-  return /^\/api\/care-ops\/tenants\/[^/]+\/voice\/session$/.test(
-    pathname,
-  );
+  if (
+    /^\/api\/care-ops\/tenants\/[^/]+\/voice\/session$/.test(
+      pathname,
+    )
+  ) {
+    return "session";
+  }
+
+  if (
+    /^\/api\/care-ops\/tenants\/[^/]+\/voice\/plan$/.test(
+      pathname,
+    )
+  ) {
+    return "plan";
+  }
+
+  return null;
 }
 
 export class SupabaseCareOpsRuntime {
   readonly #http: CareOpsHttpApi;
-  readonly #voiceHttp:
+  readonly #voiceSessionHttp:
     VoiceSessionHttpApi | null;
+  readonly #voicePlanHttp:
+    VoicePlanHttpApi | null;
 
   constructor(
     options: SupabaseCareOpsRuntimeOptions,
@@ -192,7 +213,13 @@ export class SupabaseCareOpsRuntime {
         options.requestIdFactory,
     });
 
-    this.#voiceHttp =
+    const voiceEnabled =
+      Boolean(
+        options.voiceSessionIssuer ||
+        options.voiceOpsService,
+      );
+
+    this.#voiceSessionHttp =
       options.voiceSessionIssuer
         ? new VoiceSessionHttpApi({
             gateway,
@@ -201,18 +228,40 @@ export class SupabaseCareOpsRuntime {
             now,
           })
         : null;
+
+    this.#voicePlanHttp =
+      voiceEnabled
+        ? new VoicePlanHttpApi({
+            gateway,
+            service:
+              options.voiceOpsService,
+            maxBodyBytes:
+              options.maxCommandBodyBytes,
+          })
+        : null;
   }
 
   handle(
     request: Request,
   ): Promise<Response> {
-    if (
-      this.#voiceHttp &&
-      isVoiceSessionPath(
+    const voiceRoute =
+      voiceRouteKind(
         request,
-      )
+      );
+
+    if (
+      voiceRoute === "session" &&
+      this.#voiceSessionHttp
     ) {
-      return this.#voiceHttp
+      return this.#voiceSessionHttp
+        .handle(request);
+    }
+
+    if (
+      voiceRoute === "plan" &&
+      this.#voicePlanHttp
+    ) {
+      return this.#voicePlanHttp
         .handle(request);
     }
 
