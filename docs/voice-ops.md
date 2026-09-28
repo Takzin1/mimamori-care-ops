@@ -17,7 +17,10 @@ The realtime transport path is intentionally separated from the operational work
 Authenticated operator
 → short-lived realtime session request
 → validated WSS session
-→ browser transport
+→ browser microphone capture
+→ mono resample
+→ PCM16 little-endian audio chunks
+→ realtime WebSocket transport
 → final provider turn
 → Voice Operations workflow
 
@@ -31,6 +34,8 @@ Only final AssemblyAI turns may enter the operational plan. Transcript evidence 
 
 Browser clients must never receive a long-lived provider API key. A realtime session is issued through an authenticated server boundary and must be short-lived, WSS-only, and unexpired.
 
+Microphone capture defaults to mono audio with echo cancellation, noise suppression, and automatic gain control requested from the browser. Audio is resampled to the provider session target rate and encoded as signed 16-bit little-endian PCM before transport.
+
 ## Current implementation boundary
 
 Implemented:
@@ -43,12 +48,12 @@ Implemented:
 - validated short-lived realtime session contract
 - authenticated Voice Session HTTP API boundary
 - browser WebSocket transport abstraction with audio gating
-- unit tests for workflow, session validation, transport state, and auth boundary
+- browser microphone capture + deterministic mono resampling + PCM16 encoder
+- unit tests for workflow, session validation, transport state, auth boundary, and PCM conversion
 
 Not yet wired:
 - live AssemblyAI provider session/token issuer
 - provider-specific realtime message parser
-- browser microphone PCM capture/resampling
 - Claude Haiku translation/extraction provider
 - provider delivery handler for LINE/SMS/email
 - production care data or production clinical policy
