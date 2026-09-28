@@ -13,6 +13,9 @@ import {
 import {
   CareOpsHttpApi,
 } from "../http/care-ops-http-api.ts";
+import {
+  VoiceSessionHttpApi,
+} from "../http/voice-session-http-api.ts";
 import type {
   RequestIdFactory,
 } from "../http/types.ts";
@@ -28,6 +31,9 @@ import type {
 import {
   PostgrestCaseRepository,
 } from "../persistence/postgrest-case-repository.ts";
+import type {
+  VoiceRealtimeSessionIssuer,
+} from "../voice/index.ts";
 
 type FetchLike = (
   input: string | URL,
@@ -41,6 +47,7 @@ export interface SupabaseCareOpsRuntimeOptions {
   publishableKey: string;
   serviceRoleKey: string;
   slaPolicies: Readonly<Record<string, CaseSlaPolicy>>;
+  voiceSessionIssuer?: VoiceRealtimeSessionIssuer;
   fetchImpl?: FetchLike;
   casePageSize?: number;
   outboundTimeoutMs?: number;
@@ -94,8 +101,22 @@ function assertRuntimeConfig(
   }
 }
 
+function isVoiceSessionPath(
+  request: Request,
+): boolean {
+  const pathname =
+    new URL(request.url)
+      .pathname;
+
+  return /^\/api\/care-ops\/tenants\/[^/]+\/voice\/session$/.test(
+    pathname,
+  );
+}
+
 export class SupabaseCareOpsRuntime {
   readonly #http: CareOpsHttpApi;
+  readonly #voiceHttp:
+    VoiceSessionHttpApi | null;
 
   constructor(
     options: SupabaseCareOpsRuntimeOptions,
@@ -170,12 +191,33 @@ export class SupabaseCareOpsRuntime {
       requestIdFactory:
         options.requestIdFactory,
     });
+
+    this.#voiceHttp =
+      options.voiceSessionIssuer
+        ? new VoiceSessionHttpApi({
+            gateway,
+            issuer:
+              options.voiceSessionIssuer,
+            now,
+          })
+        : null;
   }
 
   handle(
     request: Request,
   ): Promise<Response> {
-    return this.#http.handle(request);
+    if (
+      this.#voiceHttp &&
+      isVoiceSessionPath(
+        request,
+      )
+    ) {
+      return this.#voiceHttp
+        .handle(request);
+    }
+
+    return this.#http
+      .handle(request);
   }
 }
 
