@@ -111,6 +111,8 @@ test("authenticated operator can request voice session", async () => {
         provider: string;
         sessionId: string;
       };
+      evidenceReceipt:
+        string;
     };
 
   assert.equal(
@@ -120,6 +122,10 @@ test("authenticated operator can request voice session", async () => {
   assert.equal(
     body.session.sessionId,
     "session-001",
+  );
+  assert.equal(
+    body.evidenceReceipt,
+    "test-evidence-receipt",
   );
 });
 
