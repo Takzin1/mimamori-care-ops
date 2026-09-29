@@ -275,12 +275,40 @@ function deriveRuleBasedSituation(
     );
   const clarificationQuestions:
     string[] = [];
+  const uncertainFallMention =
+    containsAny(
+      text,
+      [
+        "転倒したか",
+        "転倒したのか",
+        "転んだか",
+        "倒れたか",
+      ],
+    ) &&
+    containsAny(
+      text,
+      [
+        "確認できていません",
+        "確認できない",
+        "確認していません",
+        "不明",
+        "わからない",
+        "分からない",
+      ],
+    );
+
+  if (uncertainFallMention) {
+    clarificationQuestions.push(
+      "転倒の有無",
+    );
+  }
 
   if (
     collapse ===
       "confirmed" &&
     fall ===
-      "unknown"
+      "unknown" &&
+    !uncertainFallMention
   ) {
     clarificationQuestions.push(
       "転倒したのか、体調不良などで倒れ込んだのか",
