@@ -74,3 +74,10 @@ Do not use real resident or care data.
 Do **not** promote this Preview to Production yet.
 
 Production requires a real shared/edge request admission implementation and explicit production origin/provider configuration.
+
+
+## Git integration status
+
+Vercel Git integration is connected for `Takzin1/mimamori-care-ops`.
+
+The Vercel Preview adapter was verified by GitHub Actions CI #144 before the first feature-branch Preview deployment trigger.
