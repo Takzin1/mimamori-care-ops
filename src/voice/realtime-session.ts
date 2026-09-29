@@ -17,6 +17,8 @@ export interface VoiceRealtimeSession {
 export interface VoiceRealtimeSessionRequest {
   tenantId: string;
   actorId: string;
+  caseId: string;
+  subjectId: string;
   locale: string;
 }
 
@@ -82,6 +84,14 @@ export function validateVoiceSessionRequest(
     actorId: identifier(
       request.actorId,
       "actorId",
+    ),
+    caseId: identifier(
+      request.caseId,
+      "caseId",
+    ),
+    subjectId: identifier(
+      request.subjectId,
+      "subjectId",
     ),
     locale: validLocale(
       request.locale,
