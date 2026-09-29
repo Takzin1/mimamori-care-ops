@@ -193,7 +193,8 @@ export class SupabaseCareOpsRuntime {
     const serverCredential =
       createSupabaseServerCredential({
         secretKey: options.secretKey,
-        serverCredential,
+        serviceRoleKey:
+          options.serviceRoleKey,
       });
 
     const authenticator =
