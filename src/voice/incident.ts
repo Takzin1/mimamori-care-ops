@@ -1,17 +1,26 @@
 import type {
   IncidentExtractor,
   IncidentObservation,
+  SituationUnderstandingProvider,
   VoiceIncidentDraft,
   VoiceTranscriptEvidence,
 } from "./types.ts";
+import {
+  RuleBasedSituationUnderstandingProvider,
+} from "./situation.ts";
 
 function containsAny(
   value: string,
   patterns: readonly string[],
 ): boolean {
-  const normalized = value.toLowerCase();
-  return patterns.some((pattern) =>
-    normalized.includes(pattern.toLowerCase())
+  const normalized =
+    value.toLowerCase();
+
+  return patterns.some(
+    (pattern) =>
+      normalized.includes(
+        pattern.toLowerCase(),
+      ),
   );
 }
 
@@ -30,157 +39,177 @@ function observation(
 }
 
 export class RuleBasedDemoIncidentExtractor
-  implements IncidentExtractor
-{
+implements IncidentExtractor {
+  readonly #situation:
+    SituationUnderstandingProvider;
+
+  constructor(
+    situation:
+      SituationUnderstandingProvider =
+      new RuleBasedSituationUnderstandingProvider(),
+  ) {
+    this.#situation =
+      situation;
+  }
+
   async extract(input: {
     subjectId: string;
-    transcript: VoiceTranscriptEvidence;
+    transcript:
+      VoiceTranscriptEvidence;
   }): Promise<VoiceIncidentDraft> {
-    const text = input.transcript.text;
+    const text =
+      input.transcript.text;
+    const situation =
+      await this.#situation
+        .understand(input);
 
-    const uncertainFall =
-      containsAny(text, [
-        "転倒したか",
-        "転倒したのか",
-        "転んだか",
-        "倒れたか",
-      ]) &&
-      containsAny(text, [
-        "確認できていません",
-        "確認できない",
-        "確認していません",
-        "不明",
-        "わからない",
-        "分からない",
-      ]);
+    const seated =
+      containsAny(
+        text,
+        [
+          "座っています",
+          "座ってます",
+          "座らせています",
+          "椅子に座って",
+          "腰掛けています",
+          "着座",
+          "sitting",
+          "duduk",
+        ],
+      );
 
-    const noFall =
-      !uncertainFall &&
-      containsAny(text, [
-      "転倒はしていません",
-      "転倒していません",
-      "転倒していない",
-      "転倒してない",
-      "転倒はありません",
-      "転倒なし",
-      "転倒には至っていません",
-      "転倒には至らず",
-      "転んでいません",
-      "転んでいない",
-      "転んでない",
-      "did not fall",
-      "didn't fall",
-      "did not actually fall",
-      "tidak jatuh",
-      "hampir jatuh",
-    ]);
-    const fell =
-      !uncertainFall &&
-      containsAny(text, [
-      "転倒しました",
-      "転倒した",
-      "転びました",
-      "転んだ",
-      "倒れました",
-      "fell down",
-      "did fall",
-      "jatuh",
-    ]) && !containsAny(text, [
-      "tidak jatuh",
-      "hampir jatuh",
-    ]);
+    const asksForHelp =
+      containsAny(
+        text,
+        [
+          "どうすれば",
+          "どうしたら",
+          "どう対応",
+          "対応を教えて",
+          "初めて",
+          "わからない",
+          "分からない",
+          "what should i do",
+          "what do i do",
+          "apa yang harus",
+          "tidak paham",
+        ],
+      );
 
-    const seated = containsAny(text, [
-      "座っています",
-      "座ってます",
-      "座らせています",
-      "椅子に座って",
-      "腰掛けています",
-      "着座",
-      "sitting",
-      "duduk",
-    ]);
+    const urgentSignal =
+      containsAny(
+        text,
+        [
+          "意識がない",
+          "意識ありません",
+          "呼びかけに反応がない",
+          "呼吸していない",
+          "呼吸がない",
+          "大量出血",
+          "unconscious",
+          "not breathing",
+          "severe bleeding",
+        ],
+      );
 
-    const asksForHelp = containsAny(text, [
-      "どうすれば",
-      "どうしたら",
-      "どう対応",
-      "対応を教えて",
-      "初めて",
-      "わからない",
-      "分からない",
-      "what should i do",
-      "what do i do",
-      "apa yang harus",
-      "tidak paham",
-    ]);
-
-    const urgentSignal = containsAny(text, [
-      "意識がない",
-      "意識ありません",
-      "呼びかけに反応がない",
-      "呼吸していない",
-      "呼吸がない",
-      "大量出血",
-      "unconscious",
-      "not breathing",
-      "severe bleeding",
-    ]);
+    const incidentLike =
+      situation.fall ===
+        "confirmed" ||
+      situation.collapse ===
+        "confirmed" ||
+      situation.fever ===
+        "confirmed";
 
     const kind =
-      noFall && !fell ? "near_miss" : "incident";
+      incidentLike
+        ? "incident"
+        : "near_miss";
 
-    const urgency = urgentSignal
-      ? "urgent"
-      : kind === "incident"
-        ? "attention"
-        : "routine";
+    const urgency =
+      urgentSignal
+        ? "urgent"
+        : incidentLike
+          ? "attention"
+          : "routine";
 
-    const recommendedPriority = urgentSignal
-      ? "critical"
-      : kind === "incident"
-        ? "high"
-        : "normal";
+    const recommendedPriority =
+      urgentSignal
+        ? "critical"
+        : incidentLike
+          ? "high"
+          : "normal";
 
-    const observations: IncidentObservation[] = [
-      observation(
-        "fall_occurred",
-        "転倒の有無",
-        fell ? "confirmed" : noFall ? "denied" : "unknown",
-      ),
-      observation(
-        "safe_position",
-        "安全な姿勢",
-        seated ? "confirmed" : "unknown",
-        seated ? "着座" : undefined,
-      ),
-      observation("consciousness", "意識状態", "unknown"),
-      observation("pain", "痛み", "unknown"),
-      observation("injury", "外傷", "unknown"),
-      observation(
-        "dizziness_continues",
-        "ふらつき継続",
-        "unknown",
-      ),
-    ];
+    const observations:
+      IncidentObservation[] = [
+        observation(
+          "fall_occurred",
+          "転倒の有無",
+          situation.fall,
+        ),
+        observation(
+          "collapse_occurred",
+          "倒れ込みの有無",
+          situation.collapse,
+        ),
+        observation(
+          "fever",
+          "発熱の有無",
+          situation.fever,
+        ),
+        observation(
+          "safe_position",
+          "安全な姿勢",
+          seated
+            ? "confirmed"
+            : "unknown",
+          seated
+            ? "着座"
+            : undefined,
+        ),
+        observation(
+          "consciousness",
+          "意識状態",
+          "unknown",
+        ),
+        observation(
+          "pain",
+          "痛み",
+          "unknown",
+        ),
+        observation(
+          "injury",
+          "外傷",
+          "unknown",
+        ),
+        observation(
+          "dizziness_continues",
+          "ふらつき継続",
+          "unknown",
+        ),
+      ];
 
-    const currentState = seated
-      ? "現在は着座している"
-      : "現在状態は追加確認が必要";
+    const currentState =
+      seated
+        ? "現在は着座している"
+        : situation.collapse ===
+            "confirmed"
+          ? "倒れているとの申告。現在状態は追加確認が必要"
+          : "現在状態は追加確認が必要";
 
     return {
       kind,
       urgency,
       recommendedPriority,
-      subjectId: input.subjectId,
+      subjectId:
+        input.subjectId,
       summary:
-        kind === "near_miss"
-          ? "立ち上がり等に伴う転倒未遂・ふらつきの可能性"
-          : "転倒または状態変化を伴うインシデントの可能性",
+        situation.summary,
       currentState,
-      needsGuidance: asksForHelp,
+      needsGuidance:
+        asksForHelp,
       observations,
-      evidence: input.transcript,
+      evidence:
+        input.transcript,
     };
   }
 }
