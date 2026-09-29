@@ -371,6 +371,25 @@ async function previewAccessToken() {
     .accessToken;
 }
 
+let previewAccessTokenPromise =
+  null;
+
+function cachedPreviewAccessToken() {
+  if (!previewAccessTokenPromise) {
+    previewAccessTokenPromise =
+      previewAccessToken()
+        .catch(
+          (error) => {
+            previewAccessTokenPromise =
+              null;
+            throw error;
+          },
+        );
+  }
+
+  return previewAccessTokenPromise;
+}
+
 const controller =
   createLiveVoiceController({
     onState:
@@ -462,7 +481,7 @@ liveStart.addEventListener(
     try {
       const accessToken =
         token.value.trim() ||
-        await previewAccessToken();
+        await cachedPreviewAccessToken();
 
       await controller.start({
         apiBase:
@@ -625,3 +644,9 @@ document
 
 show(0);
 setLiveState("idle");
+
+void cachedPreviewAccessToken()
+  .catch(() => {
+    // Protected Preview auth may require a fresh browser session.
+    // Start will retry without persisting credentials.
+  });
