@@ -87,6 +87,13 @@ const locale =
       .CARE_OPS_VOICE_LOCALE ??
     "ja-JP"
   ).trim();
+const smokeSuffix =
+  Date.now()
+    .toString(36);
+const caseId =
+  `CASE-VOICE-SMOKE-${smokeSuffix}`;
+const subjectId =
+  "subject-demo-smoke";
 
 const protectionBypass =
   process.env
@@ -136,6 +143,8 @@ const response =
       },
       body:
         JSON.stringify({
+          caseId,
+          subjectId,
           locale,
         }),
       cache:
