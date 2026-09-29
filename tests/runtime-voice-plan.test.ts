@@ -23,6 +23,7 @@ const voiceIntegrity = {
   async signCommunicationDraft(
     _tenantId,
     draft,
+    context,
   ) {
     return {
       ...draft,
@@ -31,6 +32,12 @@ const voiceIntegrity = {
           "hmac-sha256-v1",
         signature:
           "a".repeat(43),
+        caseVersion:
+          context.caseVersion,
+        issuedAt:
+          context.now,
+        expiresAt:
+          "2026-09-28T12:15:30Z",
       },
     };
   },
@@ -39,11 +46,19 @@ const voiceIntegrity = {
     draft,
   ) {
     const {
-      integrity:
-        _integrity,
+      integrity,
       ...unsigned
     } = draft;
-    return unsigned;
+    return {
+      draft:
+        unsigned,
+      caseVersion:
+        integrity.caseVersion,
+      issuedAt:
+        integrity.issuedAt,
+      expiresAt:
+        integrity.expiresAt,
+    };
   },
 };
 
