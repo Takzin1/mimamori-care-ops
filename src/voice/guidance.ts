@@ -52,11 +52,30 @@ export function recommendNextActions(
   );
 
   if (unknownChecks.length > 0) {
+    const fever =
+      incident.observations.find(
+        (item) =>
+          item.key === "fever",
+      );
+    const collapse =
+      incident.observations.find(
+        (item) =>
+          item.key ===
+            "collapse_occurred",
+      );
+    const medicalChange =
+      fever?.state ===
+        "confirmed" ||
+      collapse?.state ===
+        "confirmed";
+
     actions.push(
       action(
         "observe-condition",
         "状態を確認",
-        "意識、痛み、外傷、ふらつき継続の有無を確認してください。",
+        medicalChange
+          ? "意識、呼吸、体温、痛み、外傷など現在の状態を確認してください。"
+          : "意識、痛み、外傷、ふらつき継続の有無を確認してください。",
       ),
     );
   }
