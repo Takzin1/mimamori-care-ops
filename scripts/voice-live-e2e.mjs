@@ -310,10 +310,20 @@ async function jsonPost(
   return value;
 }
 
+const suffix =
+  Date.now()
+    .toString(36);
+const caseId =
+  `CASE-VOICE-E2E-${suffix}`;
+const subjectId =
+  "subject-demo-e2e";
+
 const sessionResult =
   await jsonPost(
     `/api/care-ops/tenants/${encodeURIComponent(tenantId)}/voice/session`,
     {
+      caseId,
+      subjectId,
       locale,
     },
     201,
@@ -348,15 +358,8 @@ const beforeOutboxTotal =
     beforeHealth,
   );
 
-const suffix =
-  Date.now()
-    .toString(36);
-const caseId =
-  `CASE-VOICE-E2E-${suffix}`;
 const transcriptId =
   `${sessionResult.session.sessionId}:1`;
-const subjectId =
-  "subject-demo-e2e";
 const capturedAt =
   new Date()
     .toISOString();
