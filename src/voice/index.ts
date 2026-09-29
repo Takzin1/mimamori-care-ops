@@ -4,6 +4,7 @@ export * from "./types.ts";
 export * from "./assemblyai.ts";
 export * from "./assemblyai-provider.ts";
 export * from "./incident.ts";
+export * from "./situation.ts";
 export * from "./guidance.ts";
 export * from "./language.ts";
 export * from "./claude-guidance.ts";
