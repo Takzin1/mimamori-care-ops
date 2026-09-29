@@ -602,4 +602,3 @@ test("signed communication Draft expires after TTL", async () => {
     /timing is invalid/,
   );
 });
-
