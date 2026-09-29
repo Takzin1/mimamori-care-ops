@@ -24,6 +24,12 @@ const locale =
   document.getElementById("live-locale");
 const token =
   document.getElementById("live-token");
+const proofSession =
+  document.getElementById("proof-session");
+const proofCase =
+  document.getElementById("proof-case");
+const proofOutbox =
+  document.getElementById("proof-outbox");
 
 let current = 0;
 let livePlan = null;
@@ -195,9 +201,19 @@ function renderDrafts(
   }
 }
 
-function renderPlan(plan) {
+function renderPlan(
+  plan,
+  caseProjection,
+) {
   livePlan =
     plan;
+
+  if (caseProjection) {
+    proofCase.textContent =
+      `${caseProjection.id} · ${caseProjection.status} · v${caseProjection.version}`;
+    proofCase.dataset.ready =
+      "true";
+  }
 
   text(
     "incident-kind",
@@ -252,6 +268,26 @@ function renderPlan(plan) {
 function setLiveState(state) {
   liveStatus.textContent =
     state;
+
+  if (state === "requesting-session") {
+    proofSession.textContent =
+      "requesting short-lived session";
+    proofSession.dataset.ready =
+      "false";
+  } else if (state === "connecting") {
+    proofSession.textContent =
+      "connecting AssemblyAI realtime";
+  } else if (state === "listening") {
+    proofSession.textContent =
+      "AssemblyAI realtime connected";
+    proofSession.dataset.ready =
+      "true";
+  } else if (state === "planning") {
+    proofSession.textContent =
+      "final Turn received";
+    proofSession.dataset.ready =
+      "true";
+  }
   liveStatus.dataset.state =
     state;
 
@@ -339,6 +375,18 @@ liveStart.addEventListener(
   async () => {
     livePlan = null;
     liveEvidence = null;
+    proofSession.textContent =
+      "not started";
+    proofSession.dataset.ready =
+      "false";
+    proofCase.textContent =
+      "not persisted";
+    proofCase.dataset.ready =
+      "false";
+    proofOutbox.textContent =
+      "not queued";
+    proofOutbox.dataset.ready =
+      "false";
     document.getElementById(
       "result",
     ).hidden = true;
@@ -399,19 +447,26 @@ document
       }
 
       try {
-        let queued = 0;
+        const queuedIds = [];
 
         for (
           const draft of
             livePlan.communicationDrafts
         ) {
-          await controller
-            .approve(draft);
-          queued += 1;
+          const queued =
+            await controller
+              .approve(draft);
+          queuedIds.push(
+            queued.id,
+          );
         }
 
+        proofOutbox.textContent =
+          `${queuedIds.length} queued · IDs ${queuedIds.join(", ")}`;
+        proofOutbox.dataset.ready =
+          "true";
         result.textContent =
-          `✓ ${queued} approved communication(s) queued to durable Outbox.`;
+          `✓ ${queuedIds.length} approved communication(s) queued to durable Outbox.`;
         result.hidden = false;
       } catch (error) {
         result.textContent =
@@ -433,6 +488,18 @@ document
       await controller.stop();
       livePlan = null;
       liveEvidence = null;
+      proofSession.textContent =
+        "not started";
+      proofSession.dataset.ready =
+        "false";
+      proofCase.textContent =
+        "not persisted";
+      proofCase.dataset.ready =
+        "false";
+      proofOutbox.textContent =
+        "not queued";
+      proofOutbox.dataset.ready =
+        "false";
       document.getElementById(
         "result",
       ).hidden = true;

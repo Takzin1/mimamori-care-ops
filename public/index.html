@@ -66,6 +66,21 @@
         <button id="live-start" class="primary">Live micを開始</button>
         <button id="live-stop" class="secondary" disabled>停止</button>
       </div>
+
+      <div class="live-proof" aria-label="Live execution evidence">
+        <div>
+          <span>SESSION</span>
+          <strong id="proof-session">not started</strong>
+        </div>
+        <div>
+          <span>CASE</span>
+          <strong id="proof-case">not persisted</strong>
+        </div>
+        <div>
+          <span>OUTBOX</span>
+          <strong id="proof-outbox">not queued</strong>
+        </div>
+      </div>
     </section>
 
     <nav class="steps" aria-label="Demo steps">
