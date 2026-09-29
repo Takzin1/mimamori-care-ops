@@ -532,14 +532,18 @@ export function createLiveVoiceController(
     state("planning");
 
     try {
-      await stopAudio();
+      const planRequest =
+        requestPlan(
+          evidence,
+        );
       closeSocket(
         "final turn received",
       );
+      const cleanup =
+        stopAudio();
 
-      await requestPlan(
-        evidence,
-      );
+      await planRequest;
+      await cleanup;
       state("planned");
     } catch (error) {
       handlers.onError?.(
@@ -555,24 +559,31 @@ export function createLiveVoiceController(
     }
   }
 
+  function requestMicrophoneStream() {
+    return navigator
+      .mediaDevices
+      .getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation:
+            true,
+          noiseSuppression:
+            true,
+          autoGainControl:
+            true,
+        },
+        video: false,
+      });
+  }
+
   async function startMicrophone(
     session,
   ) {
-    stream =
-      await navigator
-        .mediaDevices
-        .getUserMedia({
-          audio: {
-            channelCount: 1,
-            echoCancellation:
-              true,
-            noiseSuppression:
-              true,
-            autoGainControl:
-              true,
-          },
-          video: false,
-        });
+    if (!stream) {
+      throw new Error(
+        "Microphone stream is unavailable.",
+      );
+    }
 
     context =
       new AudioContext();
@@ -723,8 +734,8 @@ export function createLiveVoiceController(
       config;
     state("requesting-session");
 
-    const value =
-      await jsonRequest(
+    const sessionRequest =
+      jsonRequest(
         `${config.apiBase}/api/care-ops/tenants/${encodeURIComponent(config.tenantId)}/voice/session`,
         config.accessToken,
         {
@@ -736,6 +747,39 @@ export function createLiveVoiceController(
             config.locale,
         },
       );
+    const microphoneRequest =
+      requestMicrophoneStream();
+
+    let value;
+
+    try {
+      [
+        value,
+        stream,
+      ] =
+        await Promise.all([
+          sessionRequest,
+          microphoneRequest,
+        ]);
+    } catch (error) {
+      void microphoneRequest
+        .then(
+          (candidate) => {
+            for (
+              const track of
+                candidate.getTracks()
+            ) {
+              track.stop();
+            }
+          },
+        )
+        .catch(
+          () => {},
+        );
+      activeConfig = null;
+      state("error");
+      throw error;
+    }
 
     const session =
       value.session;
