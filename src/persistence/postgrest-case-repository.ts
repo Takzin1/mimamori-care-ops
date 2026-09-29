@@ -3,6 +3,11 @@ import {
   outboundTimeoutMs,
 } from "../outbound.ts";
 import {
+  createSupabaseServerCredential,
+  supabaseServerHeaders,
+  type SupabaseServerCredential,
+} from "../supabase/server-credential.ts";
+import {
   CaseConflictError,
 } from "../core/errors.ts";
 import {
@@ -35,7 +40,9 @@ type FetchLike = (
 
 export interface PostgrestCaseRepositoryOptions {
   baseUrl: string;
-  serviceRoleKey: string;
+  serverCredential?: SupabaseServerCredential;
+  secretKey?: string;
+  serviceRoleKey?: string;
   fetchImpl?: FetchLike;
   pageSize?: number;
   requestTimeoutMs?: number;
@@ -179,17 +186,21 @@ function isAppendRpcResult(value: unknown): value is AppendRpcResult {
 
 export class PostgrestCaseRepository implements CaseRepository {
   private readonly baseUrl: string;
-  private readonly serviceRoleKey: string;
+  private readonly serverCredential:
+    SupabaseServerCredential;
   private readonly fetchImpl: FetchLike;
   private readonly pageSize: number;
   private readonly requestTimeoutMs: number;
 
   constructor(options: PostgrestCaseRepositoryOptions) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl);
-    this.serviceRoleKey = requireText(
-      options.serviceRoleKey,
-      "service role key",
-    );
+    this.serverCredential =
+      options.serverCredential ??
+      createSupabaseServerCredential({
+        secretKey: options.secretKey,
+        serviceRoleKey:
+          options.serviceRoleKey,
+      });
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.pageSize = options.pageSize ?? 500;
     this.requestTimeoutMs = outboundTimeoutMs(
@@ -206,14 +217,16 @@ export class PostgrestCaseRepository implements CaseRepository {
   }
 
   private headers(): HeadersInit {
-    return {
-      apikey: this.serviceRoleKey,
-      authorization: `Bearer ${this.serviceRoleKey}`,
-      accept: "application/json",
-      "content-type": "application/json",
-      "accept-profile": "public",
-      "content-profile": "public",
-    };
+    return supabaseServerHeaders(
+      this.serverCredential,
+      {
+        accept: "application/json",
+        "content-type":
+          "application/json",
+        "accept-profile": "public",
+        "content-profile": "public",
+      },
+    );
   }
 
   private async requestJson(

@@ -15,7 +15,8 @@ export interface CareOpsDeploymentEnvironment {
   stage: CareOpsDeploymentStage;
   supabaseUrl: string;
   publishableKey: string;
-  serviceRoleKey: string;
+  secretKey?: string;
+  serviceRoleKey?: string;
   consoleOrigins: readonly string[];
   slaPolicies: Readonly<Record<string, CaseSlaPolicy>>;
   outboundTimeoutMs: number;
@@ -62,6 +63,14 @@ function required(
   }
 
   return value;
+}
+
+function optional(
+  input: DeploymentEnvironmentInput,
+  name: string,
+): string | undefined {
+  const value = input[name]?.trim();
+  return value || undefined;
 }
 
 function optionalInteger(
@@ -353,13 +362,14 @@ function parseSlaPolicies(
 function assertSecretSeparation(
   input: DeploymentEnvironmentInput,
   publishableKey: string,
-  serviceRoleKey: string,
+  serverCredentialKey: string,
 ): void {
   if (
-    publishableKey === serviceRoleKey
+    publishableKey ===
+    serverCredentialKey
   ) {
     throw new Error(
-      "Supabase publishable and service-role keys must be different",
+      "Supabase publishable and server credentials must be different",
     );
   }
 
@@ -385,21 +395,53 @@ export function parseCareOpsDeploymentEnvironment(
     input,
     "SUPABASE_PUBLISHABLE_KEY",
   );
-  const serviceRoleKey = required(
+  const secretKey = optional(
+    input,
+    "SUPABASE_SECRET_KEY",
+  );
+  const serviceRoleKey = optional(
     input,
     "SUPABASE_SERVICE_ROLE_KEY",
   );
 
+  if (!secretKey && !serviceRoleKey) {
+    throw new Error(
+      "SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY is required",
+    );
+  }
+
+  if (
+    secretKey &&
+    !secretKey.startsWith(
+      "sb_secret_",
+    )
+  ) {
+    throw new Error(
+      "SUPABASE_SECRET_KEY must use the sb_secret_ format",
+    );
+  }
+
+  if (
+    serviceRoleKey?.startsWith(
+      "sb_secret_",
+    )
+  ) {
+    throw new Error(
+      "sb_secret_ credentials must use SUPABASE_SECRET_KEY",
+    );
+  }
+
   assertSecretSeparation(
     input,
     publishableKey,
-    serviceRoleKey,
+    secretKey ?? serviceRoleKey!,
   );
 
   return {
     stage,
     supabaseUrl,
     publishableKey,
+    secretKey,
     serviceRoleKey,
     consoleOrigins:
       parseOrigins(input),

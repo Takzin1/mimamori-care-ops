@@ -30,8 +30,12 @@ Set the following **Preview-only** server variables:
 - `CARE_OPS_VOICE_INTEGRITY_SECRET`
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY` (preferred `sb_secret_...` server credential)
 - `CARE_OPS_SLA_POLICIES_JSON`
+
+Legacy compatibility fallback:
+
+- `SUPABASE_SERVICE_ROLE_KEY` (legacy JWT-based service role only)
 
 Optional:
 
@@ -125,3 +129,12 @@ The browser never receives this secret.
 It does not prove Supabase connectivity or AssemblyAI token issuance. Operational verification remains:
 
 `voice:probe → voice:smoke → voice:e2e → browser microphone`
+
+
+## Supabase server credential routing
+
+Preview prefers `SUPABASE_SECRET_KEY` using the modern `sb_secret_...` format. When present, Care Ops sends that credential only in the Supabase `apikey` header and never in `Authorization`.
+
+`SUPABASE_SERVICE_ROLE_KEY` remains a temporary compatibility fallback for legacy JWT-based projects. In that fallback mode only, the runtime preserves the historical `Authorization: Bearer <service_role>` behavior required by legacy PostgREST access.
+
+When both variables are configured, `SUPABASE_SECRET_KEY` wins. Do not place an `sb_secret_...` value in `SUPABASE_SERVICE_ROLE_KEY`.

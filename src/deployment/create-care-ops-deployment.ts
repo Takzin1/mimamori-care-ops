@@ -53,6 +53,8 @@ export function createCareOpsDeployment(
         config.supabaseUrl,
       publishableKey:
         config.publishableKey,
+      secretKey:
+        config.secretKey,
       serviceRoleKey:
         config.serviceRoleKey,
       slaPolicies:

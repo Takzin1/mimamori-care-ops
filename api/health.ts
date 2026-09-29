@@ -12,13 +12,16 @@ const REQUIRED = [
   "CARE_OPS_VOICE_INTEGRITY_SECRET",
   "SUPABASE_URL",
   "SUPABASE_PUBLISHABLE_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
   "CARE_OPS_SLA_POLICIES_JSON",
 ] as const;
 
+const SERVER_CREDENTIALS = [
+  "SUPABASE_SECRET_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+] as const;
+
 function configured(
-  name:
-    (typeof REQUIRED)[number],
+  name: string,
 ): boolean {
   return Boolean(
     process.env[name]
@@ -34,6 +37,9 @@ export function previewHealth():
   const configuredForPreview =
     preview &&
     REQUIRED.every(
+      configured,
+    ) &&
+    SERVER_CREDENTIALS.some(
       configured,
     );
 

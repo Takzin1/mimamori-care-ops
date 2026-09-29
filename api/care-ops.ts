@@ -71,10 +71,12 @@ function previewRuntime(
       requiredEnv(
         "SUPABASE_PUBLISHABLE_KEY",
       ),
+    SUPABASE_SECRET_KEY:
+      process.env
+        .SUPABASE_SECRET_KEY,
     SUPABASE_SERVICE_ROLE_KEY:
-      requiredEnv(
-        "SUPABASE_SERVICE_ROLE_KEY",
-      ),
+      process.env
+        .SUPABASE_SERVICE_ROLE_KEY,
     CARE_OPS_CONSOLE_ORIGINS:
       origin,
     CARE_OPS_SLA_POLICIES_JSON:

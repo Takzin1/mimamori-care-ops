@@ -133,10 +133,18 @@ Required API runtime variables:
 |---|---|
 | `CARE_OPS_ENVIRONMENT` | exactly `staging` or `production` |
 | `SUPABASE_URL` | HTTPS Supabase project URL |
-| `SUPABASE_PUBLISHABLE_KEY` | browser/auth verification publishable key |
-| `SUPABASE_SERVICE_ROLE_KEY` | server-only Care Ops runtime credential |
+| `SUPABASE_PUBLISHABLE_KEY` | browser/Auth API key; user JWT remains in `Authorization` |
+| `SUPABASE_SECRET_KEY` | preferred server-only `sb_secret_...` credential |
 | `CARE_OPS_CONSOLE_ORIGINS` | comma-separated canonical exact Console origins |
 | `CARE_OPS_SLA_POLICIES_JSON` | tenant -> priority SLA policy JSON |
+
+Legacy compatibility fallback:
+
+| Variable | Meaning |
+|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | legacy JWT-based server credential; used only when `SUPABASE_SECRET_KEY` is absent |
+
+When `SUPABASE_SECRET_KEY` is present, it takes precedence and is sent only as the `apikey` header. It must never be placed in `Authorization: Bearer`. The legacy service-role fallback retains Bearer behavior for compatibility.
 
 Optional bounded values:
 

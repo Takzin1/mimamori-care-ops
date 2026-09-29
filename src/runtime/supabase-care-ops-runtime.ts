@@ -32,6 +32,9 @@ import {
   SupabaseAuthAuthenticator,
 } from "../identity/supabase-authenticator.ts";
 import {
+  createSupabaseServerCredential,
+} from "../supabase/server-credential.ts";
+import {
   InMemoryTenantSlaPolicyDirectory,
 } from "../operations/policy-directory.ts";
 import type {
@@ -62,7 +65,8 @@ export type RuntimeClock = () => string;
 export interface SupabaseCareOpsRuntimeOptions {
   supabaseUrl: string;
   publishableKey: string;
-  serviceRoleKey: string;
+  secretKey?: string;
+  serviceRoleKey?: string;
   slaPolicies: Readonly<Record<string, CaseSlaPolicy>>;
   voiceSessionIssuer?: VoiceRealtimeSessionIssuer;
   voiceOpsService?: VoiceOpsService;
@@ -95,19 +99,24 @@ function assertRuntimeConfig(
     options.publishableKey,
     "Supabase publishable key",
   );
-  const serviceRoleKey = requiredText(
-    options.serviceRoleKey,
-    "Supabase service-role key",
-  );
+  const serverCredential =
+    createSupabaseServerCredential({
+      secretKey: options.secretKey,
+      serviceRoleKey:
+        options.serviceRoleKey,
+    });
 
   requiredText(
     options.supabaseUrl,
     "Supabase URL",
   );
 
-  if (publishableKey === serviceRoleKey) {
+  if (
+    publishableKey ===
+    serverCredential.apiKey
+  ) {
     throw new Error(
-      "Supabase publishable and service-role keys must be different",
+      "Supabase publishable and server credentials must be different",
     );
   }
 
@@ -181,6 +190,11 @@ export class SupabaseCareOpsRuntime {
     const now =
       options.clock ??
       (() => new Date().toISOString());
+    const serverCredential =
+      createSupabaseServerCredential({
+        secretKey: options.secretKey,
+        serverCredential,
+      });
 
     const authenticator =
       new SupabaseAuthAuthenticator({
@@ -195,8 +209,7 @@ export class SupabaseCareOpsRuntime {
     const memberships =
       new PostgrestTenantMembershipDirectory({
         baseUrl: options.supabaseUrl,
-        serviceRoleKey:
-          options.serviceRoleKey,
+        serverCredential,
         fetchImpl: options.fetchImpl,
         requestTimeoutMs:
           options.outboundTimeoutMs,
@@ -205,8 +218,7 @@ export class SupabaseCareOpsRuntime {
     const repository =
       new PostgrestCaseRepository({
         baseUrl: options.supabaseUrl,
-        serviceRoleKey:
-          options.serviceRoleKey,
+        serverCredential,
         fetchImpl: options.fetchImpl,
         pageSize: options.casePageSize,
         requestTimeoutMs:

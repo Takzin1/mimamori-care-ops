@@ -6,6 +6,11 @@ import {
   outboundTimeoutMs,
 } from "../outbound.ts";
 import {
+  createSupabaseServerCredential,
+  supabaseServerHeaders,
+  type SupabaseServerCredential,
+} from "../supabase/server-credential.ts";
+import {
   STAFF_ROLES,
   type StaffRole,
   type TenantMembership,
@@ -23,7 +28,9 @@ type FetchLike = (
 
 export interface PostgrestMembershipDirectoryOptions {
   baseUrl: string;
-  serviceRoleKey: string;
+  serverCredential?: SupabaseServerCredential;
+  secretKey?: string;
+  serviceRoleKey?: string;
   fetchImpl?: FetchLike;
   requestTimeoutMs?: number;
 }
@@ -93,7 +100,8 @@ function parseRow(row: MembershipRow): TenantMembership {
 export class PostgrestTenantMembershipDirectory
 implements TenantMembershipDirectory {
   private readonly baseUrl: string;
-  private readonly serviceRoleKey: string;
+  private readonly serverCredential:
+    SupabaseServerCredential;
   private readonly fetchImpl: FetchLike;
   private readonly requestTimeoutMs: number;
 
@@ -105,10 +113,13 @@ implements TenantMembershipDirectory {
     this.baseUrl = baseUrl.endsWith("/")
       ? baseUrl.slice(0, -1)
       : baseUrl;
-    this.serviceRoleKey = requireText(
-      options.serviceRoleKey,
-      "service role key",
-    );
+    this.serverCredential =
+      options.serverCredential ??
+      createSupabaseServerCredential({
+        secretKey: options.secretKey,
+        serviceRoleKey:
+          options.serviceRoleKey,
+      });
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.requestTimeoutMs = outboundTimeoutMs(
       options.requestTimeoutMs,
@@ -138,12 +149,13 @@ implements TenantMembershipDirectory {
         signal: outboundAbortSignal(
           this.requestTimeoutMs,
         ),
-        headers: {
-          apikey: this.serviceRoleKey,
-          authorization: `Bearer ${this.serviceRoleKey}`,
-          accept: "application/json",
-          "accept-profile": "public",
-        },
+        headers: supabaseServerHeaders(
+          this.serverCredential,
+          {
+            accept: "application/json",
+            "accept-profile": "public",
+          },
+        ),
       });
     } catch (error) {
       throw new CaseStoreTransportError(
