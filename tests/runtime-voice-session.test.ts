@@ -257,3 +257,46 @@ test("Supabase runtime mounts authenticated voice session only when issuer is co
     "test-receipt",
   );
 });
+
+
+test("Supabase runtime accepts modern secret key for Voice Outbox dependencies", () => {
+  const issuer: VoiceRealtimeSessionIssuer = {
+    async issue() {
+      return {
+        provider: "assemblyai",
+        sessionId: "session-modern-secret",
+        websocketUrl: "wss://voice.example.test/realtime",
+        issuedAt: "2026-09-28T12:00:00Z",
+        expiresAt: "2026-09-28T12:05:00Z",
+        audio: {
+          encoding: "pcm_s16le",
+          sampleRateHz: 16_000,
+        },
+      };
+    },
+  };
+
+  assert.doesNotThrow(() => {
+    createSupabaseCareOpsRuntime({
+      supabaseUrl:
+        "https://project.supabase.test",
+      publishableKey:
+        "sb_publishable_test_123",
+      secretKey:
+        "sb_secret_test_backend_1234567890",
+      slaPolicies: {
+        "provider-a":
+          policy,
+      },
+      voiceSessionIssuer:
+        issuer,
+      voiceIntegrity,
+      fetchImpl:
+        async () =>
+          json({
+            message:
+              "not called during construction",
+          }),
+    });
+  });
+});
