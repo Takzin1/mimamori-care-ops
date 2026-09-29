@@ -35,7 +35,7 @@ function restore(
   }
 }
 
-test("Vercel Preview health is ready only when all server configuration is present", async () => {
+test("Vercel Preview health reports configured only when all server configuration is present", async () => {
   const snapshot =
     Object.fromEntries(
       keys.map(
@@ -77,7 +77,7 @@ test("Vercel Preview health is ready only when all server configuration is prese
 
     const body =
       await response.json() as {
-        ready: boolean;
+        configured: boolean;
         mode: string;
         configuration: string;
         scope: string;
@@ -87,7 +87,7 @@ test("Vercel Preview health is ready only when all server configuration is prese
     assert.deepEqual(
       body,
       {
-        ready: true,
+        configured: true,
         mode: "preview",
         configuration:
           "present",
@@ -142,13 +142,13 @@ test("Vercel Preview health fails closed when configuration is incomplete", asyn
 
     const body =
       await response.json() as {
-        ready: boolean;
+        configured: boolean;
         mode: string;
         configuration: string;
       };
 
     assert.equal(
-      body.ready,
+      body.configured,
       false,
     );
     assert.equal(
@@ -160,7 +160,7 @@ test("Vercel Preview health fails closed when configuration is incomplete", asyn
   }
 });
 
-test("Vercel health never reports production as Voice-ready", async () => {
+test("Vercel health never reports Production as Voice-configured", async () => {
   const snapshot =
     Object.fromEntries(
       keys.map(
@@ -196,12 +196,12 @@ test("Vercel health never reports production as Voice-ready", async () => {
 
     const body =
       await response.json() as {
-        ready: boolean;
+        configured: boolean;
         mode: string;
       };
 
     assert.equal(
-      body.ready,
+      body.configured,
       false,
     );
     assert.equal(

@@ -151,12 +151,12 @@ const body =
 
 if (
   !health.ok ||
-  body?.ready !== true ||
+  body?.configured !== true ||
   body?.mode !==
     "preview"
 ) {
   throw new Error(
-    `Voice Preview is not ready: HTTP ${health.status} / ${body?.configuration ?? "unknown"}`,
+    `Voice Preview configuration preflight failed: HTTP ${health.status} / ${body?.configuration ?? "unknown"}`,
   );
 }
 
@@ -169,7 +169,7 @@ console.log(
       page:
         "Mimamori Ops Voice",
       health:
-        "ready",
+        "configuration-present",
       mode:
         body.mode,
       commit:

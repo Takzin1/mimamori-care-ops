@@ -31,7 +31,7 @@ export function previewHealth():
   const preview =
     process.env.VERCEL_ENV !==
       "production";
-  const ready =
+  const configuredForPreview =
     preview &&
     REQUIRED.every(
       configured,
@@ -39,13 +39,14 @@ export function previewHealth():
 
   return new Response(
     JSON.stringify({
-      ready,
+      configured:
+        configuredForPreview,
       mode:
         preview
           ? "preview"
           : "production-blocked",
       configuration:
-        ready
+        configuredForPreview
           ? "present"
           : "incomplete",
       scope:
@@ -58,7 +59,7 @@ export function previewHealth():
     }),
     {
       status:
-        ready
+        configuredForPreview
           ? 200
           : 503,
       headers: {
