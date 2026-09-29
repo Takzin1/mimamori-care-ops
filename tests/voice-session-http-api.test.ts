@@ -25,6 +25,14 @@ const issuer:
         request.actorId,
         "responder-demo",
       );
+      assert.equal(
+        request.caseId,
+        "CASE-VOICE-1",
+      );
+      assert.equal(
+        request.subjectId,
+        "subject-demo-1",
+      );
 
       return {
         provider:
@@ -93,6 +101,10 @@ test("authenticated operator can request voice session", async () => {
               "application/json",
           },
           body: JSON.stringify({
+            caseId:
+              "CASE-VOICE-1",
+            subjectId:
+              "subject-demo-1",
             locale:
               "ja-JP",
           }),
@@ -149,6 +161,10 @@ test("voice session endpoint rejects missing auth", async () => {
               "application/json",
           },
           body: JSON.stringify({
+            caseId:
+              "CASE-VOICE-1",
+            subjectId:
+              "subject-demo-1",
             locale:
               "ja-JP",
           }),
@@ -209,6 +225,10 @@ test("auditor cannot mint a Voice realtime session", async () => {
           },
           body:
             JSON.stringify({
+              caseId:
+                "CASE-VOICE-1",
+              subjectId:
+                "subject-demo-1",
               locale:
                 "ja-JP",
             }),
