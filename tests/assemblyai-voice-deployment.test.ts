@@ -135,9 +135,25 @@ test("AssemblyAI voice deployment keeps provider credential in server-side issue
           init = {},
         ) => {
           tokenRequestSeen = true;
+          const tokenUrl =
+            new URL(
+              input.toString(),
+            );
+
           assert.equal(
-            String(input),
+            tokenUrl.origin +
+              tokenUrl.pathname,
             "https://streaming.assemblyai.com/v3/token"
+          );
+          assert.equal(
+            tokenUrl.searchParams.get(
+              "expires_in_seconds"
+            ),
+            "300"
+          );
+          assert.equal(
+            init.method,
+            "GET"
           );
 
           const headers =
