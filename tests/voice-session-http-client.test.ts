@@ -44,6 +44,10 @@ test("voice session client uses Care Ops bearer auth and returns validated sessi
               ),
             ),
             {
+              caseId:
+                "CASE-VOICE-1",
+              subjectId:
+                "subject-demo-1",
               locale:
                 "ja-JP",
             },
@@ -85,6 +89,10 @@ test("voice session client uses Care Ops bearer auth and returns validated sessi
     await client.issue({
       tenantId:
         "tenant-demo",
+      caseId:
+        "CASE-VOICE-1",
+      subjectId:
+        "subject-demo-1",
       locale:
         "ja-JP",
     });
