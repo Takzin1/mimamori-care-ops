@@ -11,11 +11,13 @@ test("AssemblyAI voice deployment keeps provider credential in server-side issue
   const app =
     createAssemblyAiVoiceCareOpsDeployment({
       env: {
-        CARE_OPS_SUPABASE_URL:
+        CARE_OPS_ENVIRONMENT:
+          "staging",
+        SUPABASE_URL:
           "https://project.supabase.test",
-        CARE_OPS_SUPABASE_PUBLISHABLE_KEY:
+        SUPABASE_PUBLISHABLE_KEY:
           "publishable-key",
-        CARE_OPS_SUPABASE_SERVICE_ROLE_KEY:
+        SUPABASE_SERVICE_ROLE_KEY:
           "service-role-key",
         CARE_OPS_CONSOLE_ORIGINS:
           "https://care.example.test",
