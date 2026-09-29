@@ -259,23 +259,29 @@ implements VoiceRealtimeSessionIssuer {
     const issuedAt =
       this.#now();
 
+    const tokenUrl =
+      new URL(
+        this.#tokenEndpoint,
+      );
+
+    tokenUrl.searchParams.set(
+      "expires_in_seconds",
+      String(
+        this.#sessionTtlSeconds,
+      ),
+    );
+
     const response =
       await this.#fetchImpl(
-        this.#tokenEndpoint,
+        tokenUrl,
         {
-          method: "POST",
+          method: "GET",
           headers: {
             authorization:
               this.#apiKey,
             accept:
               "application/json",
-            "content-type":
-              "application/json",
           },
-          body: JSON.stringify({
-            expires_in_seconds:
-              this.#sessionTtlSeconds,
-          }),
           cache: "no-store",
           credentials: "omit",
           redirect: "error",
