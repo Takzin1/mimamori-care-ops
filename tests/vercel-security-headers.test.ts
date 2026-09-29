@@ -4,7 +4,7 @@ import {
   readFile,
 } from "node:fs/promises";
 
-test("Vercel Preview hardening denies framing and limits microphone/connect origins", async () => {
+test("Vercel Preview hardening allows only trusted Vercel framing and limits microphone/connect origins", async () => {
   const config =
     JSON.parse(
       await readFile(
@@ -32,10 +32,10 @@ test("Vercel Preview hardening denies framing and limits microphone/connect orig
     );
 
   assert.equal(
-    byKey.get(
+    byKey.has(
       "x-frame-options",
     ),
-    "DENY",
+    false,
   );
 
   assert.match(
@@ -51,6 +51,10 @@ test("Vercel Preview hardening denies framing and limits microphone/connect orig
     ) ?? "";
 
   assert.match(
+    csp,
+    /frame-ancestors 'self' https:\/\/vercel\.com https:\/\/\*\.vercel\.com https:\/\/vercel\.live/,
+  );
+  assert.doesNotMatch(
     csp,
     /frame-ancestors 'none'/,
   );
