@@ -304,8 +304,27 @@ implements VoiceRealtimeSessionIssuer {
       await response.json();
 
     if (!response.ok) {
+      const record =
+        jsonRecord(payload);
+      const providerMessage =
+        typeof record.error === "string"
+          ? record.error
+          : typeof record.message === "string"
+            ? record.message
+            : "no provider message";
+
+      console.error(
+        JSON.stringify({
+          event:
+            "assemblyai_token_request_failed",
+          status:
+            response.status,
+          providerMessage,
+        }),
+      );
+
       throw new Error(
-        "AssemblyAI token request failed",
+        `AssemblyAI token request failed with HTTP ${response.status}`,
       );
     }
 
