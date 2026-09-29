@@ -140,6 +140,54 @@ async function jsonRequest(
   return value;
 }
 
+async function jsonGet(
+  url,
+  token,
+) {
+  const response = await fetch(
+    url,
+    {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        authorization:
+          `Bearer ${token}`,
+      },
+      cache: "no-store",
+      credentials:
+        requestCredentials(
+          url,
+        ),
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+    },
+  );
+
+  const type =
+    response.headers
+      .get("content-type")
+      ?.split(";", 1)[0]
+      ?.trim()
+      .toLowerCase();
+
+  if (type !== "application/json") {
+    throw new Error(
+      "Care Ops API returned a non-JSON response.",
+    );
+  }
+
+  const value = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      value?.error?.message ??
+        "Care Ops API request failed.",
+    );
+  }
+
+  return value;
+}
+
 function clamp(value) {
   if (!Number.isFinite(value)) {
     return 0;
@@ -565,6 +613,25 @@ export function createLiveVoiceController(
     );
   }
 
+  async function outboxHealth() {
+    const config =
+      activeConfig;
+
+    if (!config) {
+      throw new Error(
+        "Live configuration is unavailable.",
+      );
+    }
+
+    const value =
+      await jsonGet(
+        `${config.apiBase}/api/care-ops/tenants/${encodeURIComponent(config.tenantId)}/voice/outbox/health`,
+        config.accessToken,
+      );
+
+    return value.outbox;
+  }
+
   async function approve(
     draft,
   ) {
@@ -754,5 +821,6 @@ export function createLiveVoiceController(
     start,
     stop,
     approve,
+    outboxHealth,
   };
 }

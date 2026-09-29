@@ -13,6 +13,7 @@ Voice-enabled deployments mount:
 - `POST /api/care-ops/tenants/:tenantId/voice/session`
 - `POST /api/care-ops/tenants/:tenantId/voice/plan`
 - `POST /api/care-ops/tenants/:tenantId/voice/communications/approve`
+- `GET /api/care-ops/tenants/:tenantId/voice/outbox/health`
 
 All three use the existing Care Ops bearer identity and tenant membership boundary.
 
@@ -75,3 +76,18 @@ Do not enter real resident names, care records, diagnoses, phone numbers, email 
 The system may create a Case and recommend SOP actions, but it does not diagnose, make final emergency decisions, assign accountable ownership, accept handoff, complete, or close a Case.
 
 Communication is not queued until a human confirms it.
+
+
+## Payload-free Outbox evidence
+
+After Human Confirm queues approved communication drafts, the Live Demo reads the authenticated, tenant-scoped Outbox health projection.
+
+The endpoint exposes only aggregate operational state:
+
+- pending
+- processing
+- failed
+- dead-letter
+- evaluated timestamp / oldest actionable timestamp / max attempt count
+
+It does not expose message payloads, destination addresses, delivery keys, Case IDs, resident identifiers, or approval text.

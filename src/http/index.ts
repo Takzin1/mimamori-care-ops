@@ -6,3 +6,4 @@ export * from "./care-ops-http-api.ts";
 export * from "./voice-session-http-api.ts";
 export * from "./voice-plan-http-api.ts";
 export * from "./voice-communication-http-api.ts";
+export * from "./voice-outbox-health-http-api.ts";

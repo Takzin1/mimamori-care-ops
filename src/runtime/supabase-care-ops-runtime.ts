@@ -20,6 +20,9 @@ import {
   VoiceCommunicationHttpApi,
 } from "../http/voice-communication-http-api.ts";
 import {
+  VoiceOutboxHealthHttpApi,
+} from "../http/voice-outbox-health-http-api.ts";
+import {
   VoiceSessionHttpApi,
 } from "../http/voice-session-http-api.ts";
 import type {
@@ -40,6 +43,9 @@ import {
 import {
   PostgrestOutboxStore,
 } from "../outbox/postgrest-outbox-store.ts";
+import {
+  PostgrestOutboxMonitor,
+} from "../outbox/monitor.ts";
 import {
   VoiceOpsService,
   type VoiceRealtimeSessionIssuer,
@@ -114,7 +120,7 @@ function assertRuntimeConfig(
 
 function voiceRouteKind(
   request: Request,
-): "session" | "plan" | "communication" | null {
+): "session" | "plan" | "communication" | "outbox-health" | null {
   const pathname =
     new URL(request.url)
       .pathname;
@@ -143,6 +149,14 @@ function voiceRouteKind(
     return "communication";
   }
 
+  if (
+    /^\/api\/care-ops\/tenants\/[^/]+\/voice\/outbox\/health$/.test(
+      pathname,
+    )
+  ) {
+    return "outbox-health";
+  }
+
   return null;
 }
 
@@ -154,6 +168,8 @@ export class SupabaseCareOpsRuntime {
     VoicePlanHttpApi | null;
   readonly #voiceCommunicationHttp:
     VoiceCommunicationHttpApi | null;
+  readonly #voiceOutboxHealthHttp:
+    VoiceOutboxHealthHttpApi | null;
 
   constructor(
     options: SupabaseCareOpsRuntimeOptions,
@@ -274,6 +290,24 @@ export class SupabaseCareOpsRuntime {
             now,
           })
         : null;
+
+    this.#voiceOutboxHealthHttp =
+      voiceEnabled
+        ? new VoiceOutboxHealthHttpApi({
+            gateway,
+            monitor:
+              new PostgrestOutboxMonitor({
+                baseUrl:
+                  options.supabaseUrl,
+                serviceRoleKey:
+                  options.serviceRoleKey,
+                fetchImpl:
+                  options.fetchImpl,
+                requestTimeoutMs:
+                  options.outboundTimeoutMs,
+              }),
+          })
+        : null;
   }
 
   handle(
@@ -305,6 +339,14 @@ export class SupabaseCareOpsRuntime {
       this.#voiceCommunicationHttp
     ) {
       return this.#voiceCommunicationHttp
+        .handle(request);
+    }
+
+    if (
+      voiceRoute === "outbox-health" &&
+      this.#voiceOutboxHealthHttp
+    ) {
+      return this.#voiceOutboxHealthHttp
         .handle(request);
     }
 

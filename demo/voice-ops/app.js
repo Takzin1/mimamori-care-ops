@@ -461,12 +461,19 @@ document
           );
         }
 
+        const health =
+          await controller
+            .outboxHealth();
+
+        const counts =
+          health?.counts ?? {};
+
         proofOutbox.textContent =
-          `${queuedIds.length} queued · IDs ${queuedIds.join(", ")}`;
+          `${queuedIds.length} queued · pending ${counts.pending ?? "?"} · failed ${counts.failed ?? "?"} · dead-letter ${counts.deadLetter ?? "?"}`;
         proofOutbox.dataset.ready =
           "true";
         result.textContent =
-          `✓ ${queuedIds.length} approved communication(s) queued to durable Outbox.`;
+          `✓ ${queuedIds.length} approved communication(s) queued to durable Outbox. Payload-free health verified.`;
         result.hidden = false;
       } catch (error) {
         result.textContent =

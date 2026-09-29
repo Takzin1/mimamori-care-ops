@@ -158,6 +158,35 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
 
       if (
         url.pathname ===
+          "/rest/v1/rpc/get_care_outbox_health"
+      ) {
+        assert.equal(
+          headers.get("apikey"),
+          "service-secret",
+        );
+
+        return json({
+          tenantId:
+            "provider-a",
+          evaluatedAt:
+            "2026-09-28T12:00:30Z",
+          counts: {
+            pending: 2,
+            processing: 0,
+            failed: 0,
+            deadLetter: 0,
+            delivered: null,
+          },
+          oldestActionableAt:
+            "2026-09-28T12:00:20Z",
+          oldestDeadLetterAt:
+            null,
+          maxAttemptCount: 0,
+        });
+      }
+
+      if (
+        url.pathname ===
           "/rest/v1/care_case_events"
       ) {
         return json(
@@ -273,5 +302,44 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
   assert.equal(
     body.plan.incident.kind,
     "near_miss",
+  );
+
+  const healthResponse =
+    await app.handle(
+      new Request(
+        "https://care.example.test/api/care-ops/tenants/provider-a/voice/outbox/health",
+        {
+          headers: {
+            authorization:
+              "Bearer user-token",
+          },
+        },
+      ),
+    );
+
+  assert.equal(
+    healthResponse.status,
+    200,
+  );
+
+  const health =
+    await healthResponse.json() as {
+      outbox: {
+        counts: {
+          pending: number;
+          failed: number;
+          deadLetter: number;
+        };
+      };
+    };
+
+  assert.deepEqual(
+    health.outbox.counts,
+    {
+      pending: 2,
+      processing: 0,
+      failed: 0,
+      deadLetter: 0,
+    },
   );
 });
