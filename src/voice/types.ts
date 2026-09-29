@@ -24,6 +24,22 @@ export interface VoiceTranscriptEvidence {
   capturedAt: string;
 }
 
+export interface SituationUnderstanding {
+  summary: string;
+  fall: ObservationState;
+  collapse: ObservationState;
+  fever: ObservationState;
+  needsClarification: boolean;
+  clarificationQuestions: string[];
+}
+
+export interface SituationUnderstandingProvider {
+  understand(input: {
+    subjectId: string;
+    transcript: VoiceTranscriptEvidence;
+  }): Promise<SituationUnderstanding>;
+}
+
 export interface IncidentObservation {
   key:
     | "consciousness"
@@ -31,6 +47,8 @@ export interface IncidentObservation {
     | "injury"
     | "dizziness_continues"
     | "fall_occurred"
+    | "collapse_occurred"
+    | "fever"
     | "safe_position";
   label: string;
   state: ObservationState;
