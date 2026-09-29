@@ -123,10 +123,34 @@ test("authenticated operator can request voice session", async () => {
     body.session.sessionId,
     "session-001",
   );
-  assert.equal(
-    body.evidenceReceipt,
-    "test-evidence-receipt",
+  assert.ok(
+    body.evidenceReceipt.length >
+      20,
   );
+
+  await integrity
+    .verifySessionReceipt({
+      receipt:
+        body.evidenceReceipt,
+      tenantId:
+        "tenant-demo",
+      actorId:
+        "responder-demo",
+      transcript: {
+        provider:
+          "assemblyai",
+        transcriptId:
+          "session-001:1",
+        text:
+          "synthetic final turn",
+        language:
+          "ja",
+        capturedAt:
+          "2026-09-28T12:00:30Z",
+      },
+      now:
+        "2026-09-28T12:00:31Z",
+    });
 });
 
 test("voice session endpoint rejects missing auth", async () => {
