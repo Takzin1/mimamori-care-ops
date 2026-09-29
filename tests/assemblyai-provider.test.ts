@@ -79,6 +79,10 @@ test("AssemblyAI issuer keeps long-lived key server-side and returns short-lived
         "tenant-demo",
       actorId:
         "responder-demo",
+      caseId:
+        "CASE-VOICE-1",
+      subjectId:
+        "subject-demo-1",
       locale:
         "ja-JP",
     });
@@ -107,6 +111,10 @@ test("AssemblyAI issuer keeps long-lived key server-side and returns short-lived
       "token",
     ),
     "short-lived-token",
+  );
+  assert.match(
+    session.sessionId,
+    /^aai-[0-9a-f-]{36}$/i,
   );
   assert.equal(
     session.expiresAt,
