@@ -220,13 +220,27 @@ function draftFromBody(
     );
   }
 
+  const id =
+    record.id.trim();
+  const caseId =
+    record.caseId;
+  const audience =
+    record.audience;
+
+  if (
+    !id.startsWith(
+      `${caseId}:${audience}:`,
+    )
+  ) {
+    throw new Error(
+      "communication draft identity does not match case and audience",
+    );
+  }
+
   return {
-    id:
-      record.id.trim(),
-    caseId:
-      record.caseId,
-    audience:
-      record.audience,
+    id,
+    caseId,
+    audience,
     channel:
       "message",
     body:
