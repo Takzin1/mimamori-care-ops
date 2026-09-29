@@ -123,9 +123,12 @@ function parseResponse(
     "response",
   );
 
+  const rawActions =
+    record.actions;
+
   if (
     !Array.isArray(
-      record.actions,
+      rawActions,
     )
   ) {
     throw new Error(
@@ -134,7 +137,7 @@ function parseResponse(
   }
 
   if (
-    record.actions.length !==
+    rawActions.length !==
       source.actions.length
   ) {
     throw new Error(
@@ -151,7 +154,7 @@ function parseResponse(
         ) => {
           const localized =
             object(
-              record.actions[
+              rawActions[
                 index
               ],
               `action ${index}`,
