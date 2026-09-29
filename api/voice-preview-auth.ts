@@ -137,7 +137,7 @@ function principalId(
     : null;
 }
 
-export default async function handler(
+async function handle(
   request: Request,
 ): Promise<Response> {
   if (
@@ -554,3 +554,6 @@ export default async function handler(
     );
   }
 }
+
+export const POST =
+  handle;
