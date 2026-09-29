@@ -7,88 +7,122 @@ import {
 import {
   OutboxDeliveryKeyConflictError,
 } from "../src/outbox/errors.ts";
+import {
+  HmacVoiceIntegrity,
+  type CommunicationDraft,
+} from "../src/voice/index.ts";
 
-const voiceIntegrity = {
-  async issueSessionReceipt() {
-    return "test-receipt";
-  },
-  async verifySessionReceipt() {},
-  async signCommunicationDraft(
-    _tenantId,
-    draft,
-  ) {
-    return {
-      ...draft,
-      integrity: {
-        version:
-          "hmac-sha256-v1",
-        signature:
-          "a".repeat(43),
-      },
-    };
-  },
-  async verifyCommunicationDraft(
-    _tenantId,
-    draft,
-  ) {
-    const {
-      integrity:
-        _integrity,
-      ...unsigned
-    } = draft;
-    return unsigned;
-  },
-};
+const integrity =
+  new HmacVoiceIntegrity(
+    "voice-communication-test-secret-0123456789",
+  );
 
-test("communication approval binds authenticated actor and enqueues without destination PII", async () => {
+const baseDraft:
+  CommunicationDraft = {
+    id:
+      "CASE-1:family:1",
+    caseId:
+      "CASE-1",
+    audience:
+      "family",
+    channel:
+      "message",
+    body:
+      "Synthetic family update",
+    requiresHumanApproval:
+      true,
+  };
+
+async function signed(
+  draft:
+    CommunicationDraft =
+      baseDraft,
+) {
+  return integrity
+    .signCommunicationDraft(
+      "tenant-demo",
+      draft,
+    );
+}
+
+function gateway(
+  role:
+    "responder" |
+    "dispatcher" |
+    "supervisor" |
+    "auditor" =
+      "responder",
+) {
+  return {
+    async operatorContext() {
+      return {
+        tenantId:
+          "tenant-demo",
+        actorId:
+          role === "auditor"
+            ? "auditor-demo"
+            : "responder-demo",
+        roles: [
+          role,
+        ],
+        queueVisibility:
+          role === "auditor"
+            ? "tenant" as const
+            : "responder" as const,
+      };
+    },
+  };
+}
+
+function outbox(
+  enqueue:
+    (input: any) =>
+      Promise<{
+        created: boolean;
+        id: number;
+      }>,
+) {
+  return {
+    enqueue,
+    async claim() {
+      return [];
+    },
+    async complete() {
+      return true;
+    },
+    async fail() {
+      return {
+        ok: true,
+        status:
+          "failed" as const,
+      };
+    },
+  };
+}
+
+test("communication approval binds authenticated actor and enqueues verified Draft without destination PII", async () => {
   const enqueued:
-    unknown[] = [];
+    any[] = [];
 
   const api =
     new VoiceCommunicationHttpApi({
-      gateway: {
-        async operatorContext() {
-          return {
-            tenantId:
-              "tenant-demo",
-            actorId:
-              "responder-demo",
-            roles: [
-              "responder",
-            ],
-            queueVisibility:
-              "responder",
-          };
-        },
-      },
-      integrity:
-        voiceIntegrity,
-      outbox: {
-        async enqueue(
-          input,
-        ) {
-          enqueued.push(
+      gateway:
+        gateway(),
+      integrity,
+      outbox:
+        outbox(
+          async (
             input,
-          );
-          return {
-            created: true,
-            id: 22,
-          };
-        },
-        async claim() {
-          return [];
-        },
-        async complete() {
-          return true;
-        },
-        async fail() {
-          return {
-            ok: true,
-            status:
-              "failed",
-          };
-        },
-      },
+          ) => {
+            enqueued.push(
+              input,
+            );
+            return {
+              created: true,
+              id: 22,
+            };
+          },
+        ),
       now: () =>
         "2026-09-29T02:30:00Z",
     });
@@ -105,28 +139,11 @@ test("communication approval binds authenticated actor and enqueues without dest
             "content-type":
               "application/json",
           },
-          body: JSON.stringify({
-            draft: {
-              id:
-                "CASE-1:family:1",
-              caseId:
-                "CASE-1",
-              audience:
-                "family",
-              channel:
-                "message",
-              body:
-                "Synthetic family update",
-              requiresHumanApproval:
-                true,
-              integrity: {
-                version:
-                  "hmac-sha256-v1",
-                signature:
-                  "a".repeat(43),
-              },
-            },
-          }),
+          body:
+            JSON.stringify({
+              draft:
+                await signed(),
+            }),
         },
       ),
     );
@@ -141,13 +158,7 @@ test("communication approval binds authenticated actor and enqueues without dest
   );
 
   const queued =
-    enqueued[0] as {
-      topic: string;
-      payload: Record<
-        string,
-        unknown
-      >;
-    };
+    enqueued[0];
 
   assert.equal(
     queued.topic,
@@ -180,45 +191,21 @@ test("auditor cannot approve communication", async () => {
 
   const api =
     new VoiceCommunicationHttpApi({
-      gateway: {
-        async operatorContext() {
-          return {
-            tenantId:
-              "tenant-demo",
-            actorId:
-              "auditor-demo",
-            roles: [
-              "auditor",
-            ],
-            queueVisibility:
-              "tenant",
-          };
-        },
-      },
-      integrity:
-        voiceIntegrity,
-      outbox: {
-        async enqueue() {
-          enqueued = true;
-          return {
-            created: true,
-            id: 1,
-          };
-        },
-        async claim() {
-          return [];
-        },
-        async complete() {
-          return true;
-        },
-        async fail() {
-          return {
-            ok: true,
-            status:
-              "failed",
-          };
-        },
-      },
+      gateway:
+        gateway(
+          "auditor",
+        ),
+      integrity,
+      outbox:
+        outbox(
+          async () => {
+            enqueued = true;
+            return {
+              created: true,
+              id: 1,
+            };
+          },
+        ),
     });
 
   const response =
@@ -233,28 +220,11 @@ test("auditor cannot approve communication", async () => {
             "content-type":
               "application/json",
           },
-          body: JSON.stringify({
-            draft: {
-              id:
-                "CASE-1:family:1",
-              caseId:
-                "CASE-1",
-              audience:
-                "family",
-              channel:
-                "message",
-              body:
-                "Synthetic family update",
-              requiresHumanApproval:
-                true,
-              integrity: {
-                version:
-                  "hmac-sha256-v1",
-                signature:
-                  "a".repeat(43),
-              },
-            },
-          }),
+          body:
+            JSON.stringify({
+              draft:
+                await signed(),
+            }),
         },
       ),
     );
@@ -269,51 +239,30 @@ test("auditor cannot approve communication", async () => {
   );
 });
 
-
 test("communication approval rejects draft identity mismatch before enqueue", async () => {
   let enqueued = false;
+  const mismatched:
+    CommunicationDraft = {
+      ...baseDraft,
+      id:
+        "CASE-OTHER:family:1",
+    };
 
   const api =
     new VoiceCommunicationHttpApi({
-      gateway: {
-        async operatorContext() {
-          return {
-            tenantId:
-              "tenant-demo",
-            actorId:
-              "responder-demo",
-            roles: [
-              "responder",
-            ],
-            queueVisibility:
-              "responder",
-          };
-        },
-      },
-      integrity:
-        voiceIntegrity,
-      outbox: {
-        async enqueue() {
-          enqueued = true;
-          return {
-            created: true,
-            id: 1,
-          };
-        },
-        async claim() {
-          return [];
-        },
-        async complete() {
-          return true;
-        },
-        async fail() {
-          return {
-            ok: true,
-            status:
-              "failed",
-          };
-        },
-      },
+      gateway:
+        gateway(),
+      integrity,
+      outbox:
+        outbox(
+          async () => {
+            enqueued = true;
+            return {
+              created: true,
+              id: 1,
+            };
+          },
+        ),
     });
 
   const response =
@@ -328,28 +277,13 @@ test("communication approval rejects draft identity mismatch before enqueue", as
             "content-type":
               "application/json",
           },
-          body: JSON.stringify({
-            draft: {
-              id:
-                "CASE-OTHER:family:1",
-              caseId:
-                "CASE-1",
-              audience:
-                "family",
-              channel:
-                "message",
-              body:
-                "Synthetic family update",
-              requiresHumanApproval:
-                true,
-              integrity: {
-                version:
-                  "hmac-sha256-v1",
-                signature:
-                  "a".repeat(43),
-              },
-            },
-          }),
+          body:
+            JSON.stringify({
+              draft:
+                await signed(
+                  mismatched,
+                ),
+            }),
         },
       ),
     );
@@ -364,50 +298,23 @@ test("communication approval rejects draft identity mismatch before enqueue", as
   );
 });
 
-
 test("re-approving the same communication draft fails closed without duplicate enqueue", async () => {
   const api =
     new VoiceCommunicationHttpApi({
-      gateway: {
-        async operatorContext() {
-          return {
-            tenantId:
-              "tenant-demo",
-            actorId:
-              "responder-demo",
-            roles: [
-              "responder",
-            ],
-            queueVisibility:
-              "responder",
-          };
-        },
-      },
-      integrity:
-        voiceIntegrity,
-      outbox: {
-        async enqueue(
-          input,
-        ) {
-          throw new OutboxDeliveryKeyConflictError(
-            input.tenantId,
-            input.deliveryKey,
-          );
-        },
-        async claim() {
-          return [];
-        },
-        async complete() {
-          return true;
-        },
-        async fail() {
-          return {
-            ok: true,
-            status:
-              "failed",
-          };
-        },
-      },
+      gateway:
+        gateway(),
+      integrity,
+      outbox:
+        outbox(
+          async (
+            input,
+          ) => {
+            throw new OutboxDeliveryKeyConflictError(
+              input.tenantId,
+              input.deliveryKey,
+            );
+          },
+        ),
     });
 
   const response =
@@ -425,26 +332,8 @@ test("re-approving the same communication draft fails closed without duplicate e
           },
           body:
             JSON.stringify({
-              draft: {
-                id:
-                  "CASE-1:family:1",
-                caseId:
-                  "CASE-1",
-                audience:
-                  "family",
-                channel:
-                  "message",
-                body:
-                  "Synthetic family update",
-                requiresHumanApproval:
-                  true,
-                integrity: {
-                  version:
-                    "hmac-sha256-v1",
-                  signature:
-                    "a".repeat(43),
-                },
-              },
+              draft:
+                await signed(),
             }),
         },
       ),
@@ -470,57 +359,29 @@ test("re-approving the same communication draft fails closed without duplicate e
 
 test("communication approval rejects signed Draft body tampering before enqueue", async () => {
   let enqueued = false;
-
-  const rejectingIntegrity = {
-    ...voiceIntegrity,
-    async verifyCommunicationDraft() {
-      throw new Error(
-        "Communication draft integrity verification failed",
-      );
-    },
+  const original =
+    await signed();
+  const tampered = {
+    ...original,
+    body:
+      "Tampered body",
   };
 
   const api =
     new VoiceCommunicationHttpApi({
-      gateway: {
-        async operatorContext() {
-          return {
-            tenantId:
-              "tenant-demo",
-            actorId:
-              "responder-demo",
-            roles: [
-              "responder",
-            ],
-            queueVisibility:
-              "responder",
-          };
-        },
-      },
-      integrity:
-        rejectingIntegrity,
-      outbox: {
-        async enqueue() {
-          enqueued = true;
-          return {
-            created: true,
-            id: 1,
-          };
-        },
-        async claim() {
-          return [];
-        },
-        async complete() {
-          return true;
-        },
-        async fail() {
-          return {
-            ok: true,
-            status:
-              "failed",
-          };
-        },
-      },
+      gateway:
+        gateway(),
+      integrity,
+      outbox:
+        outbox(
+          async () => {
+            enqueued = true;
+            return {
+              created: true,
+              id: 1,
+            };
+          },
+        ),
     });
 
   const response =
@@ -537,26 +398,8 @@ test("communication approval rejects signed Draft body tampering before enqueue"
           },
           body:
             JSON.stringify({
-              draft: {
-                id:
-                  "CASE-1:family:1",
-                caseId:
-                  "CASE-1",
-                audience:
-                  "family",
-                channel:
-                  "message",
-                body:
-                  "Tampered body",
-                requiresHumanApproval:
-                  true,
-                integrity: {
-                  version:
-                    "hmac-sha256-v1",
-                  signature:
-                    "a".repeat(43),
-                },
-              },
+              draft:
+                tampered,
             }),
         },
       ),
