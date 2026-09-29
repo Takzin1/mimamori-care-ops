@@ -389,6 +389,8 @@ liveStart.addEventListener(
       "not queued";
     proofOutbox.dataset.ready =
       "false";
+    approveButton.disabled =
+      false;
     document.getElementById(
       "result",
     ).hidden = true;

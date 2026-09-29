@@ -31,3 +31,25 @@ test("Live Voice browser sends cookies only to same-origin Preview API", async (
     /localStorage|sessionStorage|document\.cookie\s*=/,
   );
 });
+
+
+test("Human Confirm is re-enabled for reset and a new Live session", async () => {
+  const source =
+    await readFile(
+      new URL(
+        "../demo/voice-ops/app.js",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+
+  const resets =
+    source.match(
+      /approveButton\.disabled\s*=\s*false/g,
+    ) ?? [];
+
+  assert.ok(
+    resets.length >= 2,
+    "approval must be re-enabled on reset and new Live start",
+  );
+});
