@@ -309,8 +309,7 @@ export class SupabaseCareOpsRuntime {
               new PostgrestOutboxStore({
                 baseUrl:
                   options.supabaseUrl,
-                serviceRoleKey:
-                  options.serviceRoleKey,
+                serverCredential,
                 fetchImpl:
                   options.fetchImpl,
                 requestTimeoutMs:
@@ -330,8 +329,7 @@ export class SupabaseCareOpsRuntime {
               new PostgrestOutboxMonitor({
                 baseUrl:
                   options.supabaseUrl,
-                serviceRoleKey:
-                  options.serviceRoleKey,
+                serverCredential,
                 fetchImpl:
                   options.fetchImpl,
                 requestTimeoutMs:
