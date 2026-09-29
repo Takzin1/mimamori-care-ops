@@ -186,17 +186,8 @@ function isoAfter(
   ).toISOString();
 }
 
-function sessionId(
-  actorId: string,
-  issuedAt: string,
-): string {
-  const compactTime =
-    issuedAt.replace(
-      /[^0-9]/g,
-      "",
-    );
-
-  return `aai-${actorId}-${compactTime}`;
+function sessionId(): string {
+  return `aai-${crypto.randomUUID()}`;
 }
 
 export class AssemblyAiRealtimeSessionIssuer
@@ -359,10 +350,7 @@ implements VoiceRealtimeSessionIssuer {
       provider:
         "assemblyai",
       sessionId:
-        sessionId(
-          request.actorId,
-          issuedAt,
-        ),
+        sessionId(),
       websocketUrl:
         websocket.toString(),
       issuedAt,
