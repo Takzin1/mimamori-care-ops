@@ -113,8 +113,8 @@ Use a randomly generated, server-only value of at least 32 non-whitespace charac
 
 It protects two separate boundaries:
 
-- signed Voice session receipts binding tenant / actor / session / timing;
-- signed communication Drafts preventing browser-side Case, audience, channel, or message-body tampering.
+- signed Voice session receipts binding tenant / actor / Case / subject / session / timing;
+- signed communication Drafts binding canonical Case version plus a short expiry, preventing browser-side Case, audience, channel, message-body, or stale-state replay tampering.
 
 The browser never receives this secret.
 
