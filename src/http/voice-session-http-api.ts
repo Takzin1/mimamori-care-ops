@@ -127,9 +127,13 @@ function bearerToken(
   return token;
 }
 
-function localeFromBody(
+function sessionRequestFromBody(
   value: unknown,
-): string {
+): {
+  caseId: string;
+  subjectId: string;
+  locale: string;
+} {
   if (
     !value ||
     typeof value !== "object" ||
@@ -145,18 +149,47 @@ function localeFromBody(
       string,
       unknown
     >;
+  const allowed = [
+    "caseId",
+    "subjectId",
+    "locale",
+  ];
 
   if (
-    Object.keys(record).length !== 1 ||
+    Object.keys(record).length !==
+      allowed.length ||
+    Object.keys(record).some(
+      (key) =>
+        !allowed.includes(key),
+    ) ||
+    typeof record.caseId !==
+      "string" ||
+    typeof record.subjectId !==
+      "string" ||
     typeof record.locale !==
       "string"
   ) {
     throw new Error(
-      "request body must contain only locale",
+      "request body must contain only caseId, subjectId and locale",
     );
   }
 
-  return record.locale;
+  return {
+    caseId:
+      identifier(
+        encodeURIComponent(
+          record.caseId,
+        ),
+      ),
+    subjectId:
+      identifier(
+        encodeURIComponent(
+          record.subjectId,
+        ),
+      ),
+    locale:
+      record.locale,
+  };
 }
 
 function headers():
@@ -291,25 +324,33 @@ export class VoiceSessionHttpApi {
         operator,
       );
 
-      const locale =
-        localeFromBody(
+      const body =
+        sessionRequestFromBody(
           await readBoundedJson(
             request,
             this.#maxBodyBytes,
           ),
         );
 
+      const sessionRequest =
+        validateVoiceSessionRequest(
+          {
+            tenantId,
+            actorId:
+              operator.actorId,
+            caseId:
+              body.caseId,
+            subjectId:
+              body.subjectId,
+            locale:
+              body.locale,
+          },
+        );
+
       const issued =
         await this.#issuer
           .issue(
-            validateVoiceSessionRequest(
-              {
-                tenantId,
-                actorId:
-                  operator.actorId,
-                locale,
-              },
-            ),
+            sessionRequest,
           );
 
       const session =
@@ -324,6 +365,10 @@ export class VoiceSessionHttpApi {
             tenantId,
             actorId:
               operator.actorId,
+            caseId:
+              sessionRequest.caseId,
+            subjectId:
+              sessionRequest.subjectId,
             session,
           });
 
