@@ -293,27 +293,22 @@ export async function GET(
         linkResponse,
       );
     const properties =
-      link.properties;
-
-    if (
-      !properties ||
-      typeof properties !==
-        "object" ||
-      Array.isArray(
-        properties,
+      (
+        link.properties &&
+        typeof link.properties ===
+          "object" &&
+        !Array.isArray(
+          link.properties,
+        )
       )
-    ) {
-      return fail(
-        "generate_link_shape",
-        500,
-      );
-    }
+        ? (
+            link.properties as
+              Record<string, unknown>
+          )
+        : link;
 
     const hashedToken =
-      (
-        properties as
-          Record<string, unknown>
-      ).hashed_token;
+      properties.hashed_token;
 
     if (
       typeof hashedToken !==
