@@ -81,3 +81,20 @@ Production requires a real shared/edge request admission implementation and expl
 Vercel Git integration is connected for `Takzin1/mimamori-care-ops`.
 
 The Vercel Preview adapter was verified by GitHub Actions CI #144 before the first feature-branch Preview deployment trigger.
+
+
+## Preview readiness probe
+
+Before using a Care Ops access token, verify that the deployed Preview contains the expected Voice Demo and that all required server-side configuration is present:
+
+```sh
+CARE_OPS_API_BASE=https://<preview-host> npm run voice:probe
+```
+
+The probe does not use or print a Care Ops access token. It checks only:
+
+- the root page is the Mimamori Ops Voice demo;
+- `GET /api/health` reports Preview mode;
+- all required server-side Voice configuration is present.
+
+The health endpoint never reports Production as ready.

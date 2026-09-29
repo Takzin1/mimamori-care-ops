@@ -14,7 +14,8 @@
     "test:demo": "node --check demo/responder-console/app.js && node --check demo/voice-ops/live-controller.js && node --check demo/voice-ops/app.js && node --check public/live-controller.js && node --check public/app.js",
     "preflight:staging": "node scripts/staging-preflight.ts",
     "config:validate": "node scripts/deployment-config-validate.ts",
-    "voice:smoke": "node scripts/voice-live-smoke.mjs"
+    "voice:smoke": "node scripts/voice-live-smoke.mjs",
+    "voice:probe": "node scripts/voice-preview-probe.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.2"
