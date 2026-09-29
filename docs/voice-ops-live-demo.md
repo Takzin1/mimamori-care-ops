@@ -29,6 +29,8 @@ The operator enters only:
 
 - Care Ops API origin;
 - tenant ID;
+- synthetic subject ID;
+- proposed Case ID;
 - locale;
 - Care Ops access token.
 
@@ -114,7 +116,8 @@ The final Turn submitted to `/voice/plan` must:
 - carry that receipt;
 - use a transcript ID bound to the issued session ID;
 - remain within the issued session timing window;
-- match the authenticated tenant and actor.
+- match the authenticated tenant and actor;
+- match the Case ID and subject ID bound when the realtime session was issued.
 
 The receipt proves that Care Ops issued the AssemblyAI session used by the browser. It does **not** make the transcript text provider-signed, because the realtime Turn is relayed through the browser.
 
@@ -128,4 +131,6 @@ Communication Drafts are regenerated after Case persistence with the canonical s
 
 Human Confirm submits the signed Draft unchanged. The approval route verifies tenant-bound integrity before durable Outbox enqueue.
 
-Changing the body, Case ID, audience, channel, or approval requirement invalidates the signature.
+Changing the body, Case ID, audience, channel, approval requirement, signed Case version, issue time, or expiry invalidates the signature.
+
+Signed Drafts are short-lived. Human Confirm re-reads the current Case before durable enqueue and rejects the Draft if the Case version has advanced or the Case is already `COMPLETED` / `CLOSED`. This prevents a browser-held stale Draft from producing a later external effect.
