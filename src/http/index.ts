@@ -5,3 +5,4 @@ export * from "./command-parser.ts";
 export * from "./care-ops-http-api.ts";
 export * from "./voice-session-http-api.ts";
 export * from "./voice-plan-http-api.ts";
+export * from "./voice-communication-http-api.ts";

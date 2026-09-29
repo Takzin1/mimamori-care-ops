@@ -382,6 +382,7 @@ export function createLiveVoiceController(
 
     handlers.onPlan?.(
       value.plan,
+      value.case,
     );
   }
 
@@ -442,6 +443,17 @@ export function createLiveVoiceController(
 
     try {
       await stopAudio();
+
+      if (
+        socket &&
+        socket.readyState < 2
+      ) {
+        socket.close(
+          1000,
+          "final turn received",
+        );
+      }
+
       await requestPlan(
         evidence,
       );
@@ -536,6 +548,30 @@ export function createLiveVoiceController(
     silentGain.connect(
       context.destination,
     );
+  }
+
+  async function approve(
+    draft,
+  ) {
+    const config =
+      activeConfig;
+
+    if (!config) {
+      throw new Error(
+        "Live configuration is unavailable.",
+      );
+    }
+
+    const value =
+      await jsonRequest(
+        `${config.apiBase}/api/care-ops/tenants/${encodeURIComponent(config.tenantId)}/voice/communications/approve`,
+        config.accessToken,
+        {
+          draft,
+        },
+      );
+
+    return value.queued;
   }
 
   async function start(input) {
@@ -702,5 +738,6 @@ export function createLiveVoiceController(
   return {
     start,
     stop,
+    approve,
   };
 }

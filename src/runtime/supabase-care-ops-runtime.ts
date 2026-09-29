@@ -17,6 +17,9 @@ import {
   VoicePlanHttpApi,
 } from "../http/voice-plan-http-api.ts";
 import {
+  VoiceCommunicationHttpApi,
+} from "../http/voice-communication-http-api.ts";
+import {
   VoiceSessionHttpApi,
 } from "../http/voice-session-http-api.ts";
 import type {
@@ -34,6 +37,9 @@ import type {
 import {
   PostgrestCaseRepository,
 } from "../persistence/postgrest-case-repository.ts";
+import {
+  PostgrestOutboxStore,
+} from "../outbox/postgrest-outbox-store.ts";
 import {
   VoiceOpsService,
   type VoiceRealtimeSessionIssuer,
@@ -108,7 +114,7 @@ function assertRuntimeConfig(
 
 function voiceRouteKind(
   request: Request,
-): "session" | "plan" | null {
+): "session" | "plan" | "communication" | null {
   const pathname =
     new URL(request.url)
       .pathname;
@@ -129,6 +135,14 @@ function voiceRouteKind(
     return "plan";
   }
 
+  if (
+    /^\/api\/care-ops\/tenants\/[^/]+\/voice\/communications\/approve$/.test(
+      pathname,
+    )
+  ) {
+    return "communication";
+  }
+
   return null;
 }
 
@@ -138,6 +152,8 @@ export class SupabaseCareOpsRuntime {
     VoiceSessionHttpApi | null;
   readonly #voicePlanHttp:
     VoicePlanHttpApi | null;
+  readonly #voiceCommunicationHttp:
+    VoiceCommunicationHttpApi | null;
 
   constructor(
     options: SupabaseCareOpsRuntimeOptions,
@@ -239,6 +255,25 @@ export class SupabaseCareOpsRuntime {
               options.maxCommandBodyBytes,
           })
         : null;
+
+    this.#voiceCommunicationHttp =
+      voiceEnabled
+        ? new VoiceCommunicationHttpApi({
+            gateway,
+            outbox:
+              new PostgrestOutboxStore({
+                baseUrl:
+                  options.supabaseUrl,
+                serviceRoleKey:
+                  options.serviceRoleKey,
+                fetchImpl:
+                  options.fetchImpl,
+                requestTimeoutMs:
+                  options.outboundTimeoutMs,
+              }),
+            now,
+          })
+        : null;
   }
 
   handle(
@@ -262,6 +297,14 @@ export class SupabaseCareOpsRuntime {
       this.#voicePlanHttp
     ) {
       return this.#voicePlanHttp
+        .handle(request);
+    }
+
+    if (
+      voiceRoute === "communication" &&
+      this.#voiceCommunicationHttp
+    ) {
+      return this.#voiceCommunicationHttp
         .handle(request);
     }
 

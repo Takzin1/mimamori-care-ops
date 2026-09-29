@@ -356,7 +356,7 @@ liveStart.addEventListener(
         subjectId:
           "subject-demo-001",
         caseId:
-          "CASE-VOICE-DEMO",
+          `CASE-VOICE-${Date.now()}`,
       });
     } catch (error) {
       setLiveState(
@@ -385,10 +385,41 @@ document
   )
   .addEventListener(
     "click",
-    () => {
-      document.getElementById(
-        "result",
-      ).hidden = false;
+    async () => {
+      const result =
+        document.getElementById(
+          "result",
+        );
+
+      if (!livePlan) {
+        result.textContent =
+          "✓ Synthetic human approval captured.";
+        result.hidden = false;
+        return;
+      }
+
+      try {
+        let queued = 0;
+
+        for (
+          const draft of
+            livePlan.communicationDrafts
+        ) {
+          await controller
+            .approve(draft);
+          queued += 1;
+        }
+
+        result.textContent =
+          `✓ ${queued} approved communication(s) queued to durable Outbox.`;
+        result.hidden = false;
+      } catch (error) {
+        result.textContent =
+          error instanceof Error
+            ? error.message
+            : "Communication approval failed.";
+        result.hidden = false;
+      }
     },
   );
 
