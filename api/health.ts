@@ -20,6 +20,9 @@ const SERVER_CREDENTIALS = [
   "SUPABASE_SERVICE_ROLE_KEY",
 ] as const;
 
+const SERVER_CREDENTIAL_REQUIREMENT =
+  "SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY";
+
 function configured(
   name: string,
 ): boolean {
@@ -29,19 +32,38 @@ function configured(
   );
 }
 
+function missingConfiguration():
+  readonly string[] {
+  const missing = REQUIRED.filter(
+    (name) => !configured(name),
+  );
+
+  if (
+    !SERVER_CREDENTIALS.some(
+      configured,
+    )
+  ) {
+    return [
+      ...missing,
+      SERVER_CREDENTIAL_REQUIREMENT,
+    ];
+  }
+
+  return missing;
+}
+
 export function previewHealth():
   Response {
   const preview =
     process.env.VERCEL_ENV !==
       "production";
+  const missing =
+    preview
+      ? missingConfiguration()
+      : [];
   const configuredForPreview =
     preview &&
-    REQUIRED.every(
-      configured,
-    ) &&
-    SERVER_CREDENTIALS.some(
-      configured,
-    );
+    missing.length === 0;
 
   return new Response(
     JSON.stringify({
@@ -57,6 +79,7 @@ export function previewHealth():
           : "incomplete",
       scope:
         "configuration-only",
+      missing,
       commit:
         process.env
           .VERCEL_GIT_COMMIT_SHA
