@@ -15,7 +15,6 @@ import {
   assertCanUseVoiceOps,
   createCommunicationDrafts,
   VoiceOpsService,
-  type VoiceIntegrity,
   type VoiceTranscriptEvidence,
 } from "../voice/index.ts";
 import {
@@ -46,8 +45,6 @@ export interface VoicePlanGateway {
 export interface VoicePlanHttpApiOptions {
   gateway: VoicePlanGateway;
   service?: VoiceOpsService;
-  integrity: VoiceIntegrity;
-  now?: () => string;
   maxBodyBytes?: number;
 }
 
@@ -248,10 +245,6 @@ export class VoicePlanHttpApi {
     VoicePlanGateway;
   readonly #service:
     VoiceOpsService;
-  readonly #integrity:
-    VoiceIntegrity;
-  readonly #now:
-    () => string;
   readonly #maxBodyBytes:
     number;
 
@@ -264,13 +257,6 @@ export class VoicePlanHttpApi {
     this.#service =
       options.service ??
       new VoiceOpsService();
-    this.#integrity =
-      options.integrity;
-    this.#now =
-      options.now ??
-      (() =>
-        new Date()
-          .toISOString());
     this.#maxBodyBytes =
       options.maxBodyBytes ??
       DEFAULT_MAX_BODY_BYTES;
@@ -367,7 +353,6 @@ export class VoicePlanHttpApi {
           "subjectId",
           "locale",
           "transcript",
-          "evidenceReceipt",
         ];
 
       if (
@@ -388,35 +373,6 @@ export class VoicePlanHttpApi {
           body.caseId,
           "caseId",
         );
-      const evidence =
-        transcript(
-          body.transcript,
-        );
-
-      if (
-        typeof body.evidenceReceipt !==
-          "string" ||
-        !body.evidenceReceipt
-          .trim()
-      ) {
-        throw new Error(
-          "evidenceReceipt is required",
-        );
-      }
-
-      await this.#integrity
-        .verifySessionReceipt({
-          receipt:
-            body.evidenceReceipt
-              .trim(),
-          tenantId,
-          actorId:
-            operator.actorId,
-          transcript:
-            evidence,
-          now:
-            this.#now(),
-        });
 
       const plan =
         await this.#service
@@ -433,7 +389,9 @@ export class VoicePlanHttpApi {
                 body.locale,
               ),
             transcript:
-              evidence,
+              transcript(
+                body.transcript,
+              ),
           });
 
       const opened =
@@ -446,28 +404,15 @@ export class VoicePlanHttpApi {
               plan.signal,
           });
 
-      const canonicalDrafts =
-        createCommunicationDrafts({
-          caseId:
-            opened.aggregate.id,
-          incident:
-            plan.incident,
-        });
-      const signedDrafts =
-        await Promise.all(
-          canonicalDrafts.map(
-            (draft) =>
-              this.#integrity
-                .signCommunicationDraft(
-                  tenantId,
-                  draft,
-                ),
-          ),
-        );
       const canonicalPlan = {
         ...plan,
         communicationDrafts:
-          signedDrafts,
+          createCommunicationDrafts({
+            caseId:
+              opened.aggregate.id,
+            incident:
+              plan.incident,
+          }),
       };
 
       return response(
@@ -475,8 +420,6 @@ export class VoicePlanHttpApi {
         {
           plan:
             canonicalPlan,
-          evidenceProvenance:
-            "client_relayed_session_bound",
           case: {
             id:
               opened.aggregate.id,

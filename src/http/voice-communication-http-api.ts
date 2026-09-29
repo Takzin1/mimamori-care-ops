@@ -18,8 +18,6 @@ import {
   assertCanUseVoiceOps,
   toCommunicationOutbox,
   type CommunicationDraft,
-  type SignedCommunicationDraft,
-  type VoiceIntegrity,
 } from "../voice/index.ts";
 import {
   readBoundedJson,
@@ -42,8 +40,6 @@ export interface VoiceCommunicationHttpApiOptions {
     VoiceCommunicationGateway;
   outbox:
     OutboxStore;
-  integrity:
-    VoiceIntegrity;
   now?: () => string;
 }
 
@@ -113,7 +109,7 @@ function tenantFromPath(
 
 function draftFromBody(
   value: unknown,
-): SignedCommunicationDraft {
+): CommunicationDraft {
   if (
     !value ||
     typeof value !== "object" ||
@@ -167,7 +163,6 @@ function draftFromBody(
     "channel",
     "body",
     "requiresHumanApproval",
-    "integrity",
   ];
 
   const keys =
@@ -210,13 +205,7 @@ function draftFromBody(
     record.body.length >
       8_000 ||
     record.requiresHumanApproval !==
-      true ||
-    !record.integrity ||
-    typeof record.integrity !==
-      "object" ||
-    Array.isArray(
-      record.integrity,
-    )
+      true
   ) {
     throw new Error(
       "communication draft is invalid",
@@ -248,28 +237,6 @@ function draftFromBody(
     );
   }
 
-  const integrity =
-    record.integrity as Record<
-      string,
-      unknown
-    >;
-
-  if (
-    Object.keys(integrity).length !==
-      2 ||
-    integrity.version !==
-      "hmac-sha256-v1" ||
-    typeof integrity.signature !==
-      "string" ||
-    !/^[A-Za-z0-9_-]{32,256}$/.test(
-      integrity.signature,
-    )
-  ) {
-    throw new Error(
-      "communication draft integrity is invalid",
-    );
-  }
-
   return {
     id,
     caseId,
@@ -280,12 +247,6 @@ function draftFromBody(
       record.body.trim(),
     requiresHumanApproval:
       true,
-    integrity: {
-      version:
-        "hmac-sha256-v1",
-      signature:
-        integrity.signature,
-    },
   };
 }
 
@@ -316,8 +277,6 @@ export class VoiceCommunicationHttpApi {
     VoiceCommunicationGateway;
   readonly #outbox:
     OutboxStore;
-  readonly #integrity:
-    VoiceIntegrity;
   readonly #now:
     () => string;
 
@@ -329,8 +288,6 @@ export class VoiceCommunicationHttpApi {
       options.gateway;
     this.#outbox =
       options.outbox;
-    this.#integrity =
-      options.integrity;
     this.#now =
       options.now ??
       (() =>
@@ -408,16 +365,9 @@ export class VoiceCommunicationHttpApi {
           ),
         );
 
-      const verifiedDraft =
-        await this.#integrity
-          .verifyCommunicationDraft(
-            tenantId,
-            draft,
-          );
-
       const approved =
         approveCommunication(
-          verifiedDraft,
+          draft,
           operator.actorId,
           this.#now(),
         );

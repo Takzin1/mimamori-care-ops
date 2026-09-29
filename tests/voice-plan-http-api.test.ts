@@ -5,54 +5,9 @@ import {
   VoicePlanHttpApi,
 } from "../src/http/index.ts";
 
-const voiceIntegrity = {
-  async issueSessionReceipt() {
-    return "test-receipt";
-  },
-  async verifySessionReceipt(
-    input,
-  ) {
-    assert.equal(
-      input.receipt,
-      "test-receipt",
-    );
-  },
-  async signCommunicationDraft(
-    _tenantId,
-    draft,
-  ) {
-    return {
-      ...draft,
-      integrity: {
-        version:
-          "hmac-sha256-v1",
-        signature:
-          "a".repeat(43),
-      },
-    };
-  },
-  async verifyCommunicationDraft(
-    _tenantId,
-    draft,
-  ) {
-    const {
-      integrity:
-        _integrity,
-      ...unsigned
-    } = draft;
-    return unsigned;
-  },
-};
-
-
-
 test("authenticated voice plan endpoint turns final transcript into incident guidance", async () => {
   const api =
     new VoicePlanHttpApi({
-      integrity:
-        voiceIntegrity,
-      now: () =>
-        "2026-09-28T12:00:10Z",
       gateway: {
         async operatorContext(
           input,
@@ -185,8 +140,6 @@ test("authenticated voice plan endpoint turns final transcript into incident gui
               capturedAt:
                 "2026-09-28T12:00:00Z",
             },
-            evidenceReceipt:
-              "test-receipt",
           }),
         },
       ),
@@ -255,10 +208,6 @@ test("auditor cannot create a Voice Case", async () => {
 
   const api =
     new VoicePlanHttpApi({
-      integrity:
-        voiceIntegrity,
-      now: () =>
-        "2026-09-28T12:00:10Z",
       gateway: {
         async operatorContext() {
           return {
@@ -332,10 +281,6 @@ test("auditor cannot create a Voice Case", async () => {
 test("signal replay rebinds communication drafts to canonical stored Case ID", async () => {
   const api =
     new VoicePlanHttpApi({
-      integrity:
-        voiceIntegrity,
-      now: () =>
-        "2026-09-28T12:00:10Z",
       gateway: {
         async operatorContext() {
           return {
