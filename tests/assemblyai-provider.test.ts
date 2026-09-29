@@ -20,13 +20,29 @@ test("AssemblyAI issuer keeps long-lived key server-side and returns short-lived
           input,
           init,
         ) => {
+          const tokenUrl =
+            new URL(
+              input.toString(),
+            );
+
           assert.equal(
-            String(input),
+            tokenUrl.origin +
+              tokenUrl.pathname,
             "https://streaming.assemblyai.com/v3/token",
           );
           assert.equal(
+            tokenUrl.searchParams.get(
+              "expires_in_seconds",
+            ),
+            "120",
+          );
+          assert.equal(
             init?.method,
-            "POST",
+            "GET",
+          );
+          assert.equal(
+            init?.body,
+            undefined,
           );
 
           const headers =
@@ -39,18 +55,6 @@ test("AssemblyAI issuer keeps long-lived key server-side and returns short-lived
               "authorization",
             ),
             "server-secret-key",
-          );
-
-          assert.deepEqual(
-            JSON.parse(
-              String(
-                init?.body,
-              ),
-            ),
-            {
-              expires_in_seconds:
-                120,
-            },
           );
 
           return new Response(
