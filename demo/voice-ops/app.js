@@ -30,6 +30,8 @@ const proofCase =
   document.getElementById("proof-case");
 const proofOutbox =
   document.getElementById("proof-outbox");
+const approveButton =
+  document.getElementById("approve");
 
 let current = 0;
 let livePlan = null;
@@ -427,10 +429,7 @@ liveStop.addEventListener(
   },
 );
 
-document
-  .getElementById(
-    "approve",
-  )
+approveButton
   .addEventListener(
     "click",
     async () => {
@@ -446,8 +445,12 @@ document
         return;
       }
 
+      approveButton.disabled =
+        true;
+
+      const queuedIds = [];
+
       try {
-        const queuedIds = [];
 
         for (
           const draft of
@@ -461,21 +464,43 @@ document
           );
         }
 
-        const health =
-          await controller
-            .outboxHealth();
-
-        const counts =
-          health?.counts ?? {};
-
         proofOutbox.textContent =
-          `${queuedIds.length} queued · pending ${counts.pending ?? "?"} · delivered ${counts.delivered ?? "?"} · failed ${counts.failed ?? "?"} · dead-letter ${counts.deadLetter ?? "?"}`;
+          `${queuedIds.length} approved communication(s) durably queued`;
         proofOutbox.dataset.ready =
           "true";
         result.textContent =
-          `✓ ${queuedIds.length} approved communication(s) queued to durable Outbox. Payload-free health verified.`;
+          `✓ ${queuedIds.length} approved communication(s) queued. Verifying payload-free health…`;
         result.hidden = false;
+
+        try {
+          const health =
+            await controller
+              .outboxHealth();
+
+          const counts =
+            health?.counts ?? {};
+
+          proofOutbox.textContent =
+            `${queuedIds.length} queued · pending ${counts.pending ?? "?"} · delivered ${counts.delivered ?? "?"} · failed ${counts.failed ?? "?"} · dead-letter ${counts.deadLetter ?? "?"}`;
+          result.textContent =
+            `✓ ${queuedIds.length} approved communication(s) queued to durable Outbox. Payload-free health verified.`;
+        } catch {
+          result.textContent =
+            `✓ ${queuedIds.length} approved communication(s) queued to durable Outbox. Health verification is temporarily unavailable.`;
+        }
       } catch (error) {
+        if (
+          queuedIds.length === 0
+        ) {
+          approveButton.disabled =
+            false;
+        } else {
+          proofOutbox.textContent =
+            `${queuedIds.length} communication(s) queued before verification stopped`;
+          proofOutbox.dataset.ready =
+            "true";
+        }
+
         result.textContent =
           error instanceof Error
             ? error.message
@@ -507,6 +532,8 @@ document
         "not queued";
       proofOutbox.dataset.ready =
         "false";
+      approveButton.disabled =
+        false;
       document.getElementById(
         "result",
       ).hidden = true;

@@ -92,7 +92,7 @@ export function toCommunicationOutbox(
     tenantId,
     topic: "care_ops.communication",
     deliveryKey:
-      `${approved.draft.id}:${approved.approvedAt}`,
+      `voice-communication:${approved.draft.id}`,
     payload: {
       caseId: approved.draft.caseId,
       audience: approved.draft.audience,

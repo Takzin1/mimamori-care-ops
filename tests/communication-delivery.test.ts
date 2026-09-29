@@ -16,7 +16,7 @@ function outbox(
     topic:
       COMMUNICATION_OUTBOX_TOPIC,
     deliveryKey:
-      "CASE-1:family:1:2026-09-29T02:00:00Z",
+      "voice-communication:CASE-1:family:1",
     payload,
     status:
       "processing",
@@ -72,7 +72,7 @@ test("approved communication outbox handler sends only approval-bearing payload"
       tenantId:
         "tenant-demo",
       deliveryKey:
-        "CASE-1:family:1:2026-09-29T02:00:00Z",
+        "voice-communication:CASE-1:family:1",
       caseId:
         "CASE-1",
       audience:

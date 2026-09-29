@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 import {
   VoiceCommunicationHttpApi,
 } from "../src/http/index.ts";
+import {
+  OutboxDeliveryKeyConflictError,
+} from "../src/outbox/errors.ts";
 
 test("communication approval binds authenticated actor and enqueues without destination PII", async () => {
   const enqueued:
@@ -302,5 +305,101 @@ test("communication approval rejects draft identity mismatch before enqueue", as
   assert.equal(
     enqueued,
     false,
+  );
+});
+
+
+test("re-approving the same communication draft fails closed without duplicate enqueue", async () => {
+  const api =
+    new VoiceCommunicationHttpApi({
+      gateway: {
+        async operatorContext() {
+          return {
+            tenantId:
+              "tenant-demo",
+            actorId:
+              "responder-demo",
+            roles: [
+              "responder",
+            ],
+            queueVisibility:
+              "responder",
+          };
+        },
+      },
+      outbox: {
+        async enqueue(
+          input,
+        ) {
+          throw new OutboxDeliveryKeyConflictError(
+            input.tenantId,
+            input.deliveryKey,
+          );
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
+    });
+
+  const response =
+    await api.handle(
+      new Request(
+        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/communications/approve",
+        {
+          method:
+            "POST",
+          headers: {
+            authorization:
+              "Bearer user-token",
+            "content-type":
+              "application/json",
+          },
+          body:
+            JSON.stringify({
+              draft: {
+                id:
+                  "CASE-1:family:1",
+                caseId:
+                  "CASE-1",
+                audience:
+                  "family",
+                channel:
+                  "message",
+                body:
+                  "Synthetic family update",
+                requiresHumanApproval:
+                  true,
+              },
+            }),
+        },
+      ),
+    );
+
+  assert.equal(
+    response.status,
+    409,
+  );
+
+  const body =
+    await response.json() as {
+      error: {
+        code: string;
+      };
+    };
+
+  assert.equal(
+    body.error.code,
+    "COMMUNICATION_ALREADY_APPROVED",
   );
 });

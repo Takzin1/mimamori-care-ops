@@ -92,3 +92,14 @@ The endpoint exposes only aggregate operational state:
 - evaluated timestamp / oldest actionable timestamp / max attempt count
 
 It does not expose message payloads, destination addresses, delivery keys, Case IDs, resident identifiers, or approval text.
+
+
+## Duplicate approval boundary
+
+Each communication Draft maps to a stable tenant-scoped Outbox delivery key:
+
+`voice-communication:<draft-id>`
+
+A second approval attempt for the same Draft cannot create a second durable message. If the same delivery key is reused with a different approval payload, the Outbox boundary fails closed and the HTTP API returns `409 COMMUNICATION_ALREADY_APPROVED`.
+
+The browser also disables the Human Confirm button after durable enqueue. If payload-free health verification fails after enqueue, the UI reports that verification is unavailable without re-enabling approval and risking a duplicate external effect.

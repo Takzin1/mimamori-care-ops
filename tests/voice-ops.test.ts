@@ -102,8 +102,26 @@ test("communication requires explicit approval before outbox payload", () => {
 
   assert.equal(queued.topic, "care_ops.communication");
   assert.equal(
+    queued.deliveryKey,
+    "voice-communication:CASE-1:family:1",
+  );
+  assert.equal(
     (queued.payload as { approvedBy: string }).approvedBy,
     "responder-demo",
+  );
+
+  const replay = toCommunicationOutbox(
+    "tenant-demo",
+    approveCommunication(
+      draft,
+      "responder-demo",
+      "2026-09-28T16:26:00+09:00",
+    ),
+  );
+
+  assert.equal(
+    replay.deliveryKey,
+    queued.deliveryKey,
   );
 });
 

@@ -11,6 +11,9 @@ import type {
   OutboxStore,
 } from "../outbox/types.ts";
 import {
+  OutboxDeliveryKeyConflictError,
+} from "../outbox/errors.ts";
+import {
   approveCommunication,
   toCommunicationOutbox,
   type CommunicationDraft,
@@ -227,9 +230,17 @@ function draftFromBody(
   const audience =
     record.audience;
 
+  const expectedPrefix =
+    `${caseId}:${audience}:`;
+
   if (
     !id.startsWith(
-      `${caseId}:${audience}:`,
+      expectedPrefix,
+    ) ||
+    !/^[A-Za-z0-9._-]{1,32}$/.test(
+      id.slice(
+        expectedPrefix.length,
+      ),
     )
   ) {
     throw new Error(
@@ -433,6 +444,23 @@ export class VoiceCommunicationHttpApi {
                 "FORBIDDEN",
               message:
                 "Access denied",
+            },
+          },
+        );
+      }
+
+      if (
+        error instanceof
+          OutboxDeliveryKeyConflictError
+      ) {
+        return json(
+          409,
+          {
+            error: {
+              code:
+                "COMMUNICATION_ALREADY_APPROVED",
+              message:
+                "This communication draft has already been approved",
             },
           },
         );
