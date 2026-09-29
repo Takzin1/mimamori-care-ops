@@ -202,6 +202,10 @@ test("AssemblyAI voice deployment keeps provider credential in server-side issue
           },
           body:
             JSON.stringify({
+              caseId:
+                "CASE-VOICE-1",
+              subjectId:
+                "subject-demo-1",
               locale:
                 "ja-JP"
             })
