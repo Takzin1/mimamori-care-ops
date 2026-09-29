@@ -388,6 +388,11 @@ export class VoicePlanHttpApi {
           body.caseId,
           "caseId",
         );
+      const subjectId =
+        safeId(
+          body.subjectId,
+          "subjectId",
+        );
       const evidence =
         transcript(
           body.transcript,
@@ -412,6 +417,8 @@ export class VoicePlanHttpApi {
           tenantId,
           actorId:
             operator.actorId,
+          caseId,
+          subjectId,
           transcript:
             evidence,
           now:
@@ -423,11 +430,7 @@ export class VoicePlanHttpApi {
           .plan({
             tenantId,
             caseId,
-            subjectId:
-              safeId(
-                body.subjectId,
-                "subjectId",
-              ),
+            subjectId,
             locale:
               locale(
                 body.locale,
@@ -453,6 +456,8 @@ export class VoicePlanHttpApi {
           incident:
             plan.incident,
         });
+      const draftIssuedAt =
+        this.#now();
       const signedDrafts =
         await Promise.all(
           canonicalDrafts.map(
@@ -461,6 +466,13 @@ export class VoicePlanHttpApi {
                 .signCommunicationDraft(
                   tenantId,
                   draft,
+                  {
+                    caseVersion:
+                      opened.aggregate
+                        .version,
+                    now:
+                      draftIssuedAt,
+                  },
                 ),
           ),
         );
