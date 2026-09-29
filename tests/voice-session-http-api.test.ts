@@ -154,3 +154,66 @@ test("voice session endpoint rejects missing auth", async () => {
     401,
   );
 });
+
+
+test("auditor cannot mint a Voice realtime session", async () => {
+  let issued = false;
+
+  const api =
+    new VoiceSessionHttpApi({
+      gateway: {
+        async operatorContext() {
+          return {
+            tenantId:
+              "tenant-demo",
+            actorId:
+              "auditor-demo",
+            roles: [
+              "auditor",
+            ],
+            queueVisibility:
+              "tenant",
+          };
+        },
+      },
+      issuer: {
+        async issue() {
+          issued = true;
+          throw new Error(
+            "must not issue",
+          );
+        },
+      },
+      now: () => now,
+    });
+
+  const response =
+    await api.handle(
+      new Request(
+        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/session",
+        {
+          method: "POST",
+          headers: {
+            authorization:
+              "Bearer token-demo",
+            "content-type":
+              "application/json",
+          },
+          body:
+            JSON.stringify({
+              locale:
+                "ja-JP",
+            }),
+        },
+      ),
+    );
+
+  assert.equal(
+    response.status,
+    403,
+  );
+  assert.equal(
+    issued,
+    false,
+  );
+});

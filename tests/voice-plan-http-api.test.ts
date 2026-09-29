@@ -201,3 +201,227 @@ test("authenticated voice plan endpoint turns final transcript into incident gui
     2,
   );
 });
+
+
+test("auditor cannot create a Voice Case", async () => {
+  let opened = false;
+
+  const api =
+    new VoicePlanHttpApi({
+      gateway: {
+        async operatorContext() {
+          return {
+            tenantId:
+              "tenant-demo",
+            actorId:
+              "auditor-demo",
+            roles: [
+              "auditor",
+            ],
+            queueVisibility:
+              "tenant",
+          };
+        },
+        async openFromSignal() {
+          opened = true;
+          throw new Error(
+            "must not open",
+          );
+        },
+      },
+    });
+
+  const response =
+    await api.handle(
+      new Request(
+        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/plan",
+        {
+          method: "POST",
+          headers: {
+            authorization:
+              "Bearer token-demo",
+            "content-type":
+              "application/json",
+          },
+          body:
+            JSON.stringify({
+              caseId:
+                "CASE-AUDIT-1",
+              subjectId:
+                "subject-demo",
+              locale:
+                "ja-JP",
+              transcript: {
+                provider:
+                  "assemblyai",
+                transcriptId:
+                  "session-audit:1",
+                text:
+                  "ふらつきました。",
+                language:
+                  "ja",
+                capturedAt:
+                  "2026-09-28T12:00:00Z",
+              },
+            }),
+        },
+      ),
+    );
+
+  assert.equal(
+    response.status,
+    403,
+  );
+  assert.equal(
+    opened,
+    false,
+  );
+});
+
+test("signal replay rebinds communication drafts to canonical stored Case ID", async () => {
+  const api =
+    new VoicePlanHttpApi({
+      gateway: {
+        async operatorContext() {
+          return {
+            tenantId:
+              "tenant-demo",
+            actorId:
+              "responder-demo",
+            roles: [
+              "responder",
+            ],
+            queueVisibility:
+              "responder",
+          };
+        },
+        async openFromSignal(
+          input,
+        ) {
+          return {
+            aggregate: {
+              id:
+                "CASE-CANONICAL",
+              tenantId:
+                input.tenantId,
+              subjectId:
+                input.signal.subjectId,
+              sourceType:
+                input.signal.type,
+              sourceAdapter:
+                input.signal.sourceAdapter,
+              sourceSignalId:
+                input.signal.id,
+              priority:
+                input.signal.priority,
+              status:
+                "NEW",
+              version: 1,
+              assigneeId:
+                null,
+              handoffTargetAssigneeId:
+                null,
+              createdAt:
+                "2026-09-28T12:00:00Z",
+              acknowledgedAt:
+                null,
+              assignedAt:
+                null,
+              actionStartedAt:
+                null,
+              handoffRequestedAt:
+                null,
+              handoffAcceptedAt:
+                null,
+              completedAt:
+                null,
+              closedAt:
+                null,
+            },
+            event: {
+              type:
+                "case_created",
+              tenantId:
+                input.tenantId,
+              caseId:
+                "CASE-CANONICAL",
+              subjectId:
+                input.signal.subjectId,
+              sourceType:
+                input.signal.type,
+              sourceAdapter:
+                input.signal.sourceAdapter,
+              sourceSignalId:
+                input.signal.id,
+              priority:
+                input.signal.priority,
+              at:
+                "2026-09-28T12:00:00Z",
+            },
+            created:
+              false,
+          };
+        },
+      },
+    });
+
+  const response =
+    await api.handle(
+      new Request(
+        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/plan",
+        {
+          method: "POST",
+          headers: {
+            authorization:
+              "Bearer token-demo",
+            "content-type":
+              "application/json",
+          },
+          body:
+            JSON.stringify({
+              caseId:
+                "CASE-RETRY-PROPOSAL",
+              subjectId:
+                "subject-demo-001",
+              locale:
+                "ja-JP",
+              transcript: {
+                provider:
+                  "assemblyai",
+                transcriptId:
+                  "session-replay:1",
+                text:
+                  "立ち上がり時にふらつきました。転倒はしていません。",
+                language:
+                  "ja",
+                capturedAt:
+                  "2026-09-28T12:00:00Z",
+              },
+            }),
+        },
+      ),
+    );
+
+  assert.equal(
+    response.status,
+    200,
+  );
+
+  const body =
+    await response.json();
+
+  assert.equal(
+    body.case.id,
+    "CASE-CANONICAL",
+  );
+  assert.ok(
+    body.plan.communicationDrafts.every(
+      (draft) =>
+        draft.caseId ===
+          "CASE-CANONICAL" &&
+        draft.id.startsWith(
+          "CASE-CANONICAL:",
+        ),
+    ),
+  );
+});

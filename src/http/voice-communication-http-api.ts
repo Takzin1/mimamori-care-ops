@@ -15,6 +15,7 @@ import {
 } from "../outbox/errors.ts";
 import {
   approveCommunication,
+  assertCanUseVoiceOps,
   toCommunicationOutbox,
   type CommunicationDraft,
 } from "../voice/index.ts";
@@ -104,18 +105,6 @@ function tenantFromPath(
   )
     ? tenant
     : null;
-}
-
-function canApprove(
-  operator:
-    OperatorContextProjection,
-): boolean {
-  return operator.roles.some(
-    (role) =>
-      role === "responder" ||
-      role === "dispatcher" ||
-      role === "supervisor",
-  );
 }
 
 function draftFromBody(
@@ -364,15 +353,9 @@ export class VoiceCommunicationHttpApi {
             tenantId,
           });
 
-      if (
-        !canApprove(
-          operator,
-        )
-      ) {
-        throw new CaseAccessDeniedError(
-          "command_forbidden",
-        );
-      }
+      assertCanUseVoiceOps(
+        operator,
+      );
 
       const draft =
         draftFromBody(

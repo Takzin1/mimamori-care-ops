@@ -8,6 +8,7 @@ import {
   AuthenticationError,
 } from "../identity/types.ts";
 import {
+  assertCanUseVoiceOps,
   validateVoiceRealtimeSession,
   validateVoiceSessionRequest,
   type VoiceRealtimeSessionIssuer,
@@ -279,6 +280,10 @@ export class VoiceSessionHttpApi {
             accessToken,
             tenantId,
           });
+
+      assertCanUseVoiceOps(
+        operator,
+      );
 
       const locale =
         localeFromBody(

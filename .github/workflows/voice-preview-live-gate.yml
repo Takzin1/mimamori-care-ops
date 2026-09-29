@@ -3,10 +3,6 @@ name: Voice Preview Live Gate
 on:
   workflow_dispatch:
     inputs:
-      preview_url:
-        description: Vercel Preview origin, e.g. https://example.vercel.app
-        required: true
-        type: string
       tenant_id:
         description: Synthetic Care Ops tenant ID
         required: true
@@ -25,6 +21,9 @@ jobs:
   live-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: voice-preview
+    env:
+      CARE_OPS_API_BASE: ${{ vars.CARE_OPS_PREVIEW_ORIGIN }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -35,15 +34,27 @@ jobs:
       - name: Install locked toolchain
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Guard trusted Preview origin
+        run: |
+          node -e '
+            const raw = process.env.CARE_OPS_API_BASE?.trim();
+            if (!raw) throw new Error("CARE_OPS_PREVIEW_ORIGIN repository/environment variable is required");
+            const url = new URL(raw);
+            if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || (url.pathname && url.pathname !== "/")) {
+              throw new Error("CARE_OPS_PREVIEW_ORIGIN must be an https origin");
+            }
+            if (!url.hostname.endsWith(".vercel.app")) {
+              throw new Error("CARE_OPS_PREVIEW_ORIGIN must use a Vercel Preview hostname");
+            }
+          '
+
       - name: Preview readiness
         env:
-          CARE_OPS_API_BASE: ${{ inputs.preview_url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: npm run voice:probe
 
       - name: AssemblyAI session boundary
         env:
-          CARE_OPS_API_BASE: ${{ inputs.preview_url }}
           CARE_OPS_TENANT_ID: ${{ inputs.tenant_id }}
           CARE_OPS_VOICE_LOCALE: ${{ inputs.locale }}
           CARE_OPS_ACCESS_TOKEN: ${{ secrets.CARE_OPS_PREVIEW_ACCESS_TOKEN }}
@@ -52,7 +63,6 @@ jobs:
 
       - name: Synthetic Care Ops E2E
         env:
-          CARE_OPS_API_BASE: ${{ inputs.preview_url }}
           CARE_OPS_TENANT_ID: ${{ inputs.tenant_id }}
           CARE_OPS_VOICE_LOCALE: ${{ inputs.locale }}
           CARE_OPS_ACCESS_TOKEN: ${{ secrets.CARE_OPS_PREVIEW_ACCESS_TOKEN }}

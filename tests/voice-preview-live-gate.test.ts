@@ -26,6 +26,22 @@ test("Voice Preview live gate is manual, pinned, and keeps secrets in env", asyn
     source,
     /actions\/setup-node@[0-9a-f]{40}/,
   );
+  assert.doesNotMatch(
+    source,
+    /inputs\.preview_url/,
+  );
+  assert.match(
+    source,
+    /vars\.CARE_OPS_PREVIEW_ORIGIN/,
+  );
+  assert.match(
+    source,
+    /environment:\s*voice-preview/,
+  );
+  assert.match(
+    source,
+    /\.vercel\.app/,
+  );
   assert.match(
     source,
     /secrets\.CARE_OPS_PREVIEW_ACCESS_TOKEN/,

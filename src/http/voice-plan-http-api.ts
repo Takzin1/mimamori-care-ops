@@ -12,6 +12,8 @@ import {
   AuthenticationError,
 } from "../identity/types.ts";
 import {
+  assertCanUseVoiceOps,
+  createCommunicationDrafts,
   VoiceOpsService,
   type VoiceTranscriptEvidence,
 } from "../voice/index.ts";
@@ -311,11 +313,16 @@ export class VoicePlanHttpApi {
           request,
         );
 
-      await this.#gateway
-        .operatorContext({
-          accessToken,
-          tenantId,
-        });
+      const operator =
+        await this.#gateway
+          .operatorContext({
+            accessToken,
+            tenantId,
+          });
+
+      assertCanUseVoiceOps(
+        operator,
+      );
 
       const raw =
         await readBoundedJson(
@@ -397,10 +404,22 @@ export class VoicePlanHttpApi {
               plan.signal,
           });
 
+      const canonicalPlan = {
+        ...plan,
+        communicationDrafts:
+          createCommunicationDrafts({
+            caseId:
+              opened.aggregate.id,
+            incident:
+              plan.incident,
+          }),
+      };
+
       return response(
         200,
         {
-          plan,
+          plan:
+            canonicalPlan,
           case: {
             id:
               opened.aggregate.id,
