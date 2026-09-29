@@ -542,8 +542,29 @@ export function createLiveVoiceController(
       const cleanup =
         stopAudio();
 
-      await planRequest;
-      await cleanup;
+      const [
+        planResult,
+        cleanupResult,
+      ] =
+        await Promise.allSettled([
+          planRequest,
+          cleanup,
+        ]);
+
+      if (
+        cleanupResult.status ===
+          "rejected"
+      ) {
+        throw cleanupResult.reason;
+      }
+
+      if (
+        planResult.status ===
+          "rejected"
+      ) {
+        throw planResult.reason;
+      }
+
       state("planned");
     } catch (error) {
       handlers.onError?.(
