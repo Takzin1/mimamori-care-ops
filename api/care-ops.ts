@@ -165,7 +165,18 @@ function originalRequest(
 function configError(
   error: unknown,
 ): Response {
-  void error;
+  const detail =
+    error instanceof Error
+      ? error.message
+      : "unknown preview configuration error";
+
+  console.error(
+    JSON.stringify({
+      event:
+        "preview_configuration_error",
+      detail,
+    }),
+  );
 
   return new Response(
     JSON.stringify({
