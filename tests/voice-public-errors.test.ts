@@ -19,6 +19,7 @@ const integrity:
     async signCommunicationDraft(
       _tenantId,
       draft,
+      context,
     ) {
       return {
         ...draft,
@@ -27,6 +28,12 @@ const integrity:
             "hmac-sha256-v1",
           signature:
             "a".repeat(43),
+          caseVersion:
+            context.caseVersion,
+          issuedAt:
+            context.now,
+          expiresAt:
+            "2026-09-28T12:15:00Z",
         },
       };
     },
@@ -35,11 +42,19 @@ const integrity:
       draft,
     ) {
       const {
-        integrity:
-          _integrity,
+        integrity,
         ...unsigned
       } = draft;
-      return unsigned;
+      return {
+        draft:
+          unsigned,
+        caseVersion:
+          integrity.caseVersion,
+        issuedAt:
+          integrity.issuedAt,
+        expiresAt:
+          integrity.expiresAt,
+      };
     },
   };
 
@@ -89,6 +104,10 @@ test("Voice session public error hides provider details", async () => {
           },
           body:
             JSON.stringify({
+              caseId:
+                "CASE-ERR-SESSION",
+              subjectId:
+                "subject-demo",
               locale:
                 "ja-JP",
             }),
@@ -227,6 +246,11 @@ test("Communication public error hides Draft verification details", async () => 
         async operatorContext() {
           return operator();
         },
+        async get() {
+          throw new Error(
+            "must not read Case",
+          );
+        },
       },
       integrity:
         rejectingIntegrity,
@@ -284,6 +308,12 @@ test("Communication public error hides Draft verification details", async () => 
                     "hmac-sha256-v1",
                   signature:
                     "a".repeat(43),
+                  caseVersion:
+                    1,
+                  issuedAt:
+                    "2026-09-28T12:00:00Z",
+                  expiresAt:
+                    "2026-09-28T12:15:00Z",
                 },
               },
             }),
