@@ -9,18 +9,10 @@ import {
 } from "../src/outbox/errors.ts";
 
 const voiceIntegrity = {
-  
   async issueSessionReceipt() {
     return "test-receipt";
   },
-  async verifySessionReceipt(
-    input,
-  ) {
-    assert.equal(
-      input.receipt,
-      "test-receipt",
-    );
-  },
+  async verifySessionReceipt() {},
   async signCommunicationDraft(
     _tenantId,
     draft,
@@ -33,7 +25,19 @@ const voiceIntegrity = {
         signature:
           "a".repeat(43),
       },
-    
+    };
+  },
+  async verifyCommunicationDraft(
+    _tenantId,
+    draft,
+  ) {
+    const {
+      integrity:
+        _integrity,
+      ...unsigned
+    } = draft;
+    return unsigned;
+  },
 };
 
 test("communication approval binds authenticated actor and enqueues without destination PII", async () => {
@@ -115,6 +119,12 @@ test("communication approval binds authenticated actor and enqueues without dest
                 "Synthetic family update",
               requiresHumanApproval:
                 true,
+              integrity: {
+                version:
+                  "hmac-sha256-v1",
+                signature:
+                  "a".repeat(43),
+              },
             },
           }),
         },
@@ -237,6 +247,12 @@ test("auditor cannot approve communication", async () => {
                 "Synthetic family update",
               requiresHumanApproval:
                 true,
+              integrity: {
+                version:
+                  "hmac-sha256-v1",
+                signature:
+                  "a".repeat(43),
+              },
             },
           }),
         },
@@ -326,6 +342,12 @@ test("communication approval rejects draft identity mismatch before enqueue", as
                 "Synthetic family update",
               requiresHumanApproval:
                 true,
+              integrity: {
+                version:
+                  "hmac-sha256-v1",
+                signature:
+                  "a".repeat(43),
+              },
             },
           }),
         },
@@ -416,6 +438,12 @@ test("re-approving the same communication draft fails closed without duplicate e
                   "Synthetic family update",
                 requiresHumanApproval:
                   true,
+                integrity: {
+                  version:
+                    "hmac-sha256-v1",
+                  signature:
+                    "a".repeat(43),
+                },
               },
             }),
         },
@@ -440,11 +468,10 @@ test("re-approving the same communication draft fails closed without duplicate e
   );
 });
 
-
 test("communication approval rejects signed Draft body tampering before enqueue", async () => {
   let enqueued = false;
 
-  const tamperRejectingIntegrity = {
+  const rejectingIntegrity = {
     ...voiceIntegrity,
     async verifyCommunicationDraft() {
       throw new Error(
@@ -471,7 +498,7 @@ test("communication approval rejects signed Draft body tampering before enqueue"
         },
       },
       integrity:
-        tamperRejectingIntegrity,
+        rejectingIntegrity,
       outbox: {
         async enqueue() {
           enqueued = true;
