@@ -336,8 +336,10 @@ implements VoiceIntegrity {
         .verify(
           "HMAC",
           await this.#key,
-          base64UrlToBytes(
-            signature,
+          Uint8Array.from(
+            base64UrlToBytes(
+              signature,
+            ),
           ),
           new TextEncoder()
             .encode(

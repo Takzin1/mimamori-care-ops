@@ -11,6 +11,7 @@ import {
   assertCanUseVoiceOps,
   validateVoiceRealtimeSession,
   validateVoiceSessionRequest,
+  type VoiceIntegrity,
   type VoiceRealtimeSessionIssuer,
 } from "../voice/index.ts";
 import {
@@ -34,6 +35,7 @@ export interface VoiceSessionGateway {
 export interface VoiceSessionHttpApiOptions {
   gateway: VoiceSessionGateway;
   issuer: VoiceRealtimeSessionIssuer;
+  integrity: VoiceIntegrity;
   now?: () => string;
   maxBodyBytes?: number;
 }
@@ -189,6 +191,8 @@ export class VoiceSessionHttpApi {
     VoiceSessionGateway;
   readonly #issuer:
     VoiceRealtimeSessionIssuer;
+  readonly #integrity:
+    VoiceIntegrity;
   readonly #now:
     () => string;
   readonly #maxBodyBytes:
@@ -202,6 +206,8 @@ export class VoiceSessionHttpApi {
       options.gateway;
     this.#issuer =
       options.issuer;
+    this.#integrity =
+      options.integrity;
     this.#now =
       options.now ??
       (() =>
@@ -312,10 +318,20 @@ export class VoiceSessionHttpApi {
           this.#now(),
         );
 
+      const evidenceReceipt =
+        await this.#integrity
+          .issueSessionReceipt({
+            tenantId,
+            actorId:
+              operator.actorId,
+            session,
+          });
+
       return response(
         201,
         {
           session,
+          evidenceReceipt,
         },
       );
     } catch (error) {

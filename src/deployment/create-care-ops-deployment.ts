@@ -10,6 +10,7 @@ import {
   type OperationalSupabaseCareOpsRuntime,
 } from "../runtime/index.ts";
 import type {
+  VoiceIntegrity,
   VoiceOpsService,
   VoiceRealtimeSessionIssuer,
 } from "../voice/index.ts";

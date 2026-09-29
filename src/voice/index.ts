@@ -1,3 +1,4 @@
+export * from "./integrity.ts";
 export * from "./access.ts";
 export * from "./types.ts";
 export * from "./assemblyai.ts";
