@@ -11,11 +11,13 @@ import {
 import type {
   GuidanceTranslator,
   IncidentExtractor,
+  SituationUnderstandingProvider,
   VoiceTranscriptEvidence,
 } from "./types.ts";
 
 export interface VoiceOpsServiceOptions {
   extractor?: IncidentExtractor;
+  situationProvider?: SituationUnderstandingProvider;
   translator?: GuidanceTranslator;
 }
 
@@ -31,7 +33,9 @@ export class VoiceOpsService {
   ) {
     this.#extractor =
       options.extractor ??
-      new RuleBasedDemoIncidentExtractor();
+      new RuleBasedDemoIncidentExtractor(
+        options.situationProvider,
+      );
     this.#translator =
       options.translator ??
       new DemoIndonesianGuidanceTranslator();
