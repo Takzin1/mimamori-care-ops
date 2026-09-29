@@ -183,6 +183,8 @@ export class BrowserMicrophoneCapture {
   #processor:
     ScriptProcessorNode | null =
       null;
+  #silentGain:
+    GainNode | null = null;
 
   constructor(
     options:
@@ -260,6 +262,10 @@ export class BrowserMicrophoneCapture {
             1,
             1,
           );
+      const silentGain =
+        context.createGain();
+
+      silentGain.gain.value = 0;
 
       processor.onaudioprocess =
         (event) => {
@@ -292,6 +298,9 @@ export class BrowserMicrophoneCapture {
         processor,
       );
       processor.connect(
+        silentGain,
+      );
+      silentGain.connect(
         context.destination,
       );
 
@@ -303,6 +312,8 @@ export class BrowserMicrophoneCapture {
         source;
       this.#processor =
         processor;
+      this.#silentGain =
+        silentGain;
     } catch (error) {
       for (
         const track of
@@ -322,6 +333,8 @@ export class BrowserMicrophoneCapture {
     this.#processor
       ?.disconnect();
     this.#source
+      ?.disconnect();
+    this.#silentGain
       ?.disconnect();
 
     if (this.#processor) {
@@ -352,5 +365,6 @@ export class BrowserMicrophoneCapture {
     this.#context = null;
     this.#source = null;
     this.#processor = null;
+    this.#silentGain = null;
   }
 }
