@@ -10,6 +10,7 @@ import {
   type OperationalSupabaseCareOpsRuntime,
 } from "../runtime/index.ts";
 import type {
+  VoiceOpsService,
   VoiceRealtimeSessionIssuer,
 } from "../voice/index.ts";
 import {
@@ -26,6 +27,7 @@ export interface CareOpsDeploymentOptions {
   env: DeploymentEnvironmentInput;
   admission: CareOpsRequestAdmission;
   voiceSessionIssuer?: VoiceRealtimeSessionIssuer;
+  voiceOpsService?: VoiceOpsService;
   logger?: CareOpsStructuredLogger;
   metrics?: CareOpsMetricsSink;
   readinessChecks?: readonly CareOpsReadinessCheck[];
@@ -55,6 +57,8 @@ export function createCareOpsDeployment(
         config.slaPolicies,
       voiceSessionIssuer:
         options.voiceSessionIssuer,
+      voiceOpsService:
+        options.voiceOpsService,
       outboundTimeoutMs:
         config.outboundTimeoutMs,
       maxCommandBodyBytes:
