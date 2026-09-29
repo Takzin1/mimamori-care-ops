@@ -344,7 +344,9 @@ export class VoiceCommunicationHttpApi {
           operator,
         )
       ) {
-        throw new CaseAccessDeniedError();
+        throw new CaseAccessDeniedError(
+          "command_forbidden",
+        );
       }
 
       const draft =
