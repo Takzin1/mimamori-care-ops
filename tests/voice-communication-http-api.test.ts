@@ -217,3 +217,90 @@ test("auditor cannot approve communication", async () => {
     false,
   );
 });
+
+
+test("communication approval rejects draft identity mismatch before enqueue", async () => {
+  let enqueued = false;
+
+  const api =
+    new VoiceCommunicationHttpApi({
+      gateway: {
+        async operatorContext() {
+          return {
+            tenantId:
+              "tenant-demo",
+            actorId:
+              "responder-demo",
+            roles: [
+              "responder",
+            ],
+            queueVisibility:
+              "responder",
+          };
+        },
+      },
+      outbox: {
+        async enqueue() {
+          enqueued = true;
+          return {
+            created: true,
+            id: 1,
+          };
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
+    });
+
+  const response =
+    await api.handle(
+      new Request(
+        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/communications/approve",
+        {
+          method: "POST",
+          headers: {
+            authorization:
+              "Bearer user-token",
+            "content-type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            draft: {
+              id:
+                "CASE-OTHER:family:1",
+              caseId:
+                "CASE-1",
+              audience:
+                "family",
+              channel:
+                "message",
+              body:
+                "Synthetic family update",
+              requiresHumanApproval:
+                true,
+            },
+          }),
+        },
+      ),
+    );
+
+  assert.equal(
+    response.status,
+    400,
+  );
+  assert.equal(
+    enqueued,
+    false,
+  );
+});
