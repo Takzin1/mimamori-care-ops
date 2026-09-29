@@ -93,7 +93,7 @@ test("Live UI auto-mints only when the token input is empty", async () => {
   );
   assert.ok(
     source.includes(
-      "await previewAccessToken()",
+      "await cachedPreviewAccessToken()",
     ),
   );
   assert.ok(
