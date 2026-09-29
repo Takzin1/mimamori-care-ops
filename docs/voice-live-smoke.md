@@ -49,4 +49,18 @@ The E2E command uses a synthetic transcript to verify the deployed backend path:
 
 It does not use microphone audio and therefore does not replace the final browser microphone test.
 
-For GitHub Actions, run the manual **Voice Preview Live Gate** workflow with a Preview URL and synthetic tenant. Store the Care Ops bearer as `CARE_OPS_PREVIEW_ACCESS_TOKEN` and the Vercel bypass as `VERCEL_AUTOMATION_BYPASS_SECRET` in GitHub Actions secrets.
+For GitHub Actions, run the manual **Voice Preview Live Gate** workflow with a synthetic tenant. The secret-bearing job does not accept an arbitrary URL input.
+
+
+## GitHub Actions trusted Preview origin
+
+Configure the protected `voice-preview` GitHub Environment with:
+
+Environment/repository variable:
+- `CARE_OPS_PREVIEW_ORIGIN` — trusted `https://*.vercel.app` Preview origin
+
+Environment secrets:
+- `CARE_OPS_PREVIEW_ACCESS_TOKEN`
+- `VERCEL_AUTOMATION_BYPASS_SECRET`
+
+The workflow validates the trusted Vercel origin before sending either secret.

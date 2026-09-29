@@ -163,17 +163,15 @@ function originalRequest(
 function configError(
   error: unknown,
 ): Response {
-  const message =
-    error instanceof Error
-      ? error.message
-      : "Voice Ops preview configuration failed";
+  void error;
 
   return new Response(
     JSON.stringify({
       error: {
         code:
           "PREVIEW_CONFIGURATION_ERROR",
-        message,
+        message:
+          "Voice Ops preview configuration is unavailable",
       },
     }),
     {

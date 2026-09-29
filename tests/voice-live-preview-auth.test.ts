@@ -53,3 +53,32 @@ test("Human Confirm is re-enabled for reset and a new Live session", async () =>
     "approval must be re-enabled on reset and new Live start",
   );
 });
+
+
+test("Live Voice controller cleans failed sockets and preserves planning state", async () => {
+  const source =
+    await readFile(
+      new URL(
+        "../demo/voice-ops/live-controller.js",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+
+  assert.match(
+    source,
+    /function closeSocket/,
+  );
+  assert.match(
+    source,
+    /activeEvidenceReceipt\s*=\s*null/,
+  );
+  assert.match(
+    source,
+    /!stopping\s*&&\s*!planning/,
+  );
+  assert.match(
+    source,
+    /closeSocket\(\s*"connection failed"/,
+  );
+});

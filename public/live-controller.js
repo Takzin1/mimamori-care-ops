@@ -352,6 +352,7 @@ export function createLiveVoiceController(
   let activeEvidenceReceipt = null;
   let activeConfig = null;
   let stopping = false;
+  let planning = false;
 
   function state(value) {
     handlers.onState?.(value);
@@ -388,6 +389,32 @@ export function createLiveVoiceController(
     context = null;
   }
 
+  function closeSocket(
+    reason,
+  ) {
+    const current =
+      socket;
+    socket = null;
+
+    if (!current) {
+      return;
+    }
+
+    current.onopen = null;
+    current.onmessage = null;
+    current.onerror = null;
+    current.onclose = null;
+
+    if (
+      current.readyState < 2
+    ) {
+      current.close(
+        1000,
+        reason,
+      );
+    }
+  }
+
   async function stop() {
     if (stopping) {
       return;
@@ -398,17 +425,12 @@ export function createLiveVoiceController(
     try {
       await stopAudio();
 
-      if (
-        socket &&
-        socket.readyState < 2
-      ) {
-        socket.close(
-          1000,
-          "demo complete",
-        );
-      }
+      closeSocket(
+        "demo complete",
+      );
     } finally {
       socket = null;
+      planning = false;
       activeSession = null;
       activeEvidenceReceipt = null;
       activeConfig = null;
@@ -506,20 +528,14 @@ export function createLiveVoiceController(
       evidence,
     );
 
+    planning = true;
     state("planning");
 
     try {
       await stopAudio();
-
-      if (
-        socket &&
-        socket.readyState < 2
-      ) {
-        socket.close(
-          1000,
-          "final turn received",
-        );
-      }
+      closeSocket(
+        "final turn received",
+      );
 
       await requestPlan(
         evidence,
@@ -534,6 +550,8 @@ export function createLiveVoiceController(
             ),
       );
       state("error");
+    } finally {
+      planning = false;
     }
   }
 
@@ -776,44 +794,59 @@ export function createLiveVoiceController(
       () => {
         socket = null;
 
-        if (!stopping) {
+        if (
+          !stopping &&
+          !planning
+        ) {
           state("closed");
         }
       };
 
-    await new Promise(
-      (resolve, reject) => {
-        const current =
-          socket;
+    try {
+      await new Promise(
+        (resolve, reject) => {
+          const current =
+            socket;
 
-        if (!current) {
-          reject(
-            new Error(
-              "WebSocket was not created.",
-            ),
-          );
-          return;
-        }
-
-        current.onopen =
-          () => resolve();
-
-        const previousError =
-          current.onerror;
-
-        current.onerror =
-          (event) => {
-            previousError?.(
-              event,
-            );
+          if (!current) {
             reject(
               new Error(
-                "AssemblyAI realtime connection failed.",
+                "WebSocket was not created.",
               ),
             );
-          };
-      },
-    );
+            return;
+          }
+
+          current.onopen =
+            () => resolve();
+
+          const previousError =
+            current.onerror;
+
+          current.onerror =
+            (event) => {
+              previousError?.(
+                event,
+              );
+              reject(
+                new Error(
+                  "AssemblyAI realtime connection failed.",
+                ),
+              );
+            };
+        },
+      );
+    } catch (error) {
+      await stopAudio();
+      closeSocket(
+        "connection failed",
+      );
+      activeSession = null;
+      activeEvidenceReceipt = null;
+      activeConfig = null;
+      state("error");
+      throw error;
+    }
 
     state("microphone");
 
@@ -824,6 +857,7 @@ export function createLiveVoiceController(
       state("listening");
     } catch (error) {
       await stop();
+      state("error");
       throw error;
     }
   }

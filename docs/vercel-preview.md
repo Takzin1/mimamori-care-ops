@@ -27,6 +27,7 @@ The Vercel Git integration will create a Preview Deployment for the branch.
 Set the following **Preview-only** server variables:
 
 - `ASSEMBLYAI_API_KEY`
+- `CARE_OPS_VOICE_INTEGRITY_SECRET`
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -98,3 +99,29 @@ The probe does not use or print a Care Ops access token. It checks only:
 - all required server-side Voice configuration is present.
 
 The health endpoint never reports Production as ready.
+
+
+## Voice integrity secret
+
+Preview requires `CARE_OPS_VOICE_INTEGRITY_SECRET`.
+
+Use a randomly generated, server-only value of at least 32 non-whitespace characters. Do not reuse the AssemblyAI or Supabase credentials.
+
+It protects two separate boundaries:
+
+- signed Voice session receipts binding tenant / actor / session / timing;
+- signed communication Drafts preventing browser-side Case, audience, channel, or message-body tampering.
+
+The browser never receives this secret.
+
+## Health semantics
+
+`GET /api/health` is a **configuration-presence check only** and reports:
+
+```json
+{"scope":"configuration-only"}
+```
+
+It does not prove Supabase connectivity or AssemblyAI token issuance. Operational verification remains:
+
+`voice:probe → voice:smoke → voice:e2e → browser microphone`

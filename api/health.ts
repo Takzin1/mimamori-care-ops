@@ -48,6 +48,8 @@ export function previewHealth():
         ready
           ? "present"
           : "incomplete",
+      scope:
+        "configuration-only",
       commit:
         process.env
           .VERCEL_GIT_COMMIT_SHA

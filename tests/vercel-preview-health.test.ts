@@ -80,6 +80,7 @@ test("Vercel Preview health is ready only when all server configuration is prese
         ready: boolean;
         mode: string;
         configuration: string;
+        scope: string;
         commit: string | null;
       };
 
@@ -90,6 +91,8 @@ test("Vercel Preview health is ready only when all server configuration is prese
         mode: "preview",
         configuration:
           "present",
+        scope:
+          "configuration-only",
         commit:
           "1234567890ab",
       },

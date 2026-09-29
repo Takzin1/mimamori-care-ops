@@ -103,3 +103,29 @@ Each communication Draft maps to a stable tenant-scoped Outbox delivery key:
 A second approval attempt for the same Draft cannot create a second durable message. If the same delivery key is reused with a different approval payload, the Outbox boundary fails closed and the HTTP API returns `409 COMMUNICATION_ALREADY_APPROVED`.
 
 The browser also disables the Human Confirm button after durable enqueue. If payload-free health verification fails after enqueue, the UI reports that verification is unavailable without re-enabling approval and risking a duplicate external effect.
+
+
+## Session-bound evidence semantics
+
+Care Ops returns a server-signed receipt when it mints the short-lived AssemblyAI realtime session.
+
+The final Turn submitted to `/voice/plan` must:
+
+- carry that receipt;
+- use a transcript ID bound to the issued session ID;
+- remain within the issued session timing window;
+- match the authenticated tenant and actor.
+
+The receipt proves that Care Ops issued the AssemblyAI session used by the browser. It does **not** make the transcript text provider-signed, because the realtime Turn is relayed through the browser.
+
+The precise evidence label is:
+
+`client_relayed_session_bound`
+
+## Signed communication Drafts
+
+Communication Drafts are regenerated after Case persistence with the canonical stored Case ID, then signed server-side.
+
+Human Confirm submits the signed Draft unchanged. The approval route verifies tenant-bound integrity before durable Outbox enqueue.
+
+Changing the body, Case ID, audience, channel, or approval requirement invalidates the signature.
