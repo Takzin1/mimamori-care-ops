@@ -145,12 +145,24 @@ export class VoiceSessionHttpClient {
 
   async issue(input: {
     tenantId: string;
+    caseId: string;
+    subjectId: string;
     locale: string;
   }): Promise<VoiceRealtimeSession> {
     const tenantId =
       identifier(
         input.tenantId,
         "tenantId",
+      );
+    const caseId =
+      identifier(
+        input.caseId,
+        "caseId",
+      );
+    const subjectId =
+      identifier(
+        input.subjectId,
+        "subjectId",
       );
     const preferredLocale =
       locale(
@@ -179,6 +191,8 @@ export class VoiceSessionHttpClient {
               "application/json",
           },
           body: JSON.stringify({
+            caseId,
+            subjectId,
             locale:
               preferredLocale,
           }),
