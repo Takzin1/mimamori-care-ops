@@ -57,6 +57,8 @@ test("AssemblyAI voice deployment keeps provider credential in server-side issue
       },
       assemblyAiApiKey:
         "server-secret-key",
+      voiceIntegritySecret:
+        "voice-integrity-deployment-secret-0123456789",
       admission: {
         async admit() {
           return {
@@ -205,7 +207,14 @@ test("AssemblyAI voice deployment keeps provider credential in server-side issue
       session: {
         websocketUrl: string;
       };
+      evidenceReceipt:
+        string;
     };
+
+  assert.ok(
+    body.evidenceReceipt.length >
+      20,
+  );
 
   const url =
     new URL(

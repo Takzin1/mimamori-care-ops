@@ -181,6 +181,8 @@ if (!response.ok) {
 
 const session =
   value?.session;
+const evidenceReceipt =
+  value?.evidenceReceipt;
 
 if (
   !session ||
@@ -190,6 +192,9 @@ if (
     "string" ||
   typeof session.expiresAt !==
     "string" ||
+  typeof evidenceReceipt !==
+    "string" ||
+  !evidenceReceipt.trim() ||
   !session.audio ||
   !Number.isInteger(
     session.audio
@@ -240,6 +245,8 @@ console.log(
           .encoding,
       expiresAt:
         session.expiresAt,
+      evidenceBinding:
+        "session-receipt-present",
     },
     null,
     2,

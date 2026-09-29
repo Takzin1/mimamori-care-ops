@@ -8,6 +8,34 @@ import {
   OutboxDeliveryKeyConflictError,
 } from "../src/outbox/errors.ts";
 
+const voiceIntegrity = {
+  
+  async issueSessionReceipt() {
+    return "test-receipt";
+  },
+  async verifySessionReceipt(
+    input,
+  ) {
+    assert.equal(
+      input.receipt,
+      "test-receipt",
+    );
+  },
+  async signCommunicationDraft(
+    _tenantId,
+    draft,
+  ) {
+    return {
+      ...draft,
+      integrity: {
+        version:
+          "hmac-sha256-v1",
+        signature:
+          "a".repeat(43),
+      },
+    
+};
+
 test("communication approval binds authenticated actor and enqueues without destination PII", async () => {
   const enqueued:
     unknown[] = [];
@@ -29,6 +57,8 @@ test("communication approval binds authenticated actor and enqueues without dest
           };
         },
       },
+      integrity:
+        voiceIntegrity,
       outbox: {
         async enqueue(
           input,
@@ -155,6 +185,8 @@ test("auditor cannot approve communication", async () => {
           };
         },
       },
+      integrity:
+        voiceIntegrity,
       outbox: {
         async enqueue() {
           enqueued = true;
@@ -242,6 +274,8 @@ test("communication approval rejects draft identity mismatch before enqueue", as
           };
         },
       },
+      integrity:
+        voiceIntegrity,
       outbox: {
         async enqueue() {
           enqueued = true;
@@ -327,6 +361,8 @@ test("re-approving the same communication draft fails closed without duplicate e
           };
         },
       },
+      integrity:
+        voiceIntegrity,
       outbox: {
         async enqueue(
           input,
@@ -401,5 +437,110 @@ test("re-approving the same communication draft fails closed without duplicate e
   assert.equal(
     body.error.code,
     "COMMUNICATION_ALREADY_APPROVED",
+  );
+});
+
+
+test("communication approval rejects signed Draft body tampering before enqueue", async () => {
+  let enqueued = false;
+
+  const tamperRejectingIntegrity = {
+    ...voiceIntegrity,
+    async verifyCommunicationDraft() {
+      throw new Error(
+        "Communication draft integrity verification failed",
+      );
+    },
+  };
+
+  const api =
+    new VoiceCommunicationHttpApi({
+      gateway: {
+        async operatorContext() {
+          return {
+            tenantId:
+              "tenant-demo",
+            actorId:
+              "responder-demo",
+            roles: [
+              "responder",
+            ],
+            queueVisibility:
+              "responder",
+          };
+        },
+      },
+      integrity:
+        tamperRejectingIntegrity,
+      outbox: {
+        async enqueue() {
+          enqueued = true;
+          return {
+            created: true,
+            id: 1,
+          };
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
+    });
+
+  const response =
+    await api.handle(
+      new Request(
+        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/communications/approve",
+        {
+          method: "POST",
+          headers: {
+            authorization:
+              "Bearer user-token",
+            "content-type":
+              "application/json",
+          },
+          body:
+            JSON.stringify({
+              draft: {
+                id:
+                  "CASE-1:family:1",
+                caseId:
+                  "CASE-1",
+                audience:
+                  "family",
+                channel:
+                  "message",
+                body:
+                  "Tampered body",
+                requiresHumanApproval:
+                  true,
+                integrity: {
+                  version:
+                    "hmac-sha256-v1",
+                  signature:
+                    "a".repeat(43),
+                },
+              },
+            }),
+        },
+      ),
+    );
+
+  assert.equal(
+    response.status,
+    400,
+  );
+  assert.equal(
+    enqueued,
+    false,
   );
 });

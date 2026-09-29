@@ -1,0 +1,632 @@
+import type {
+  CommunicationDraft,
+} from "./types.ts";
+import type {
+  VoiceRealtimeSession,
+} from "./realtime-session.ts";
+import type {
+  VoiceTranscriptEvidence,
+} from "./types.ts";
+
+const VERSION =
+  "hmac-sha256-v1";
+const MAX_SECRET =
+  16 * 1024;
+const MAX_RECEIPT =
+  16 * 1024;
+const CLOCK_SKEW_MS =
+  30_000;
+const RECEIPT_GRACE_MS =
+  60_000;
+
+export interface SignedCommunicationDraft
+extends CommunicationDraft {
+  integrity: {
+    version:
+      typeof VERSION;
+    signature: string;
+  };
+}
+
+export interface VoiceSessionReceiptClaims {
+  tenantId: string;
+  actorId: string;
+  sessionId: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+export interface VoiceIntegrity {
+  issueSessionReceipt(input: {
+    tenantId: string;
+    actorId: string;
+    session:
+      VoiceRealtimeSession;
+  }): Promise<string>;
+
+  verifySessionReceipt(input: {
+    receipt: string;
+    tenantId: string;
+    actorId: string;
+    transcript:
+      VoiceTranscriptEvidence;
+    now: string;
+  }): Promise<void>;
+
+  signCommunicationDraft(
+    tenantId: string,
+    draft:
+      CommunicationDraft,
+  ): Promise<
+    SignedCommunicationDraft
+  >;
+
+  verifyCommunicationDraft(
+    tenantId: string,
+    draft:
+      SignedCommunicationDraft,
+  ): Promise<
+    CommunicationDraft
+  >;
+}
+
+function requiredSecret(
+  value: string,
+): string {
+  const normalized =
+    value.trim();
+
+  if (
+    normalized.length < 32 ||
+    normalized.length >
+      MAX_SECRET ||
+    /\s/.test(normalized)
+  ) {
+    throw new Error(
+      "Voice integrity secret must be 32+ non-whitespace characters",
+    );
+  }
+
+  return normalized;
+}
+
+function bytesToBase64Url(
+  bytes: Uint8Array,
+): string {
+  let binary = "";
+
+  for (
+    const byte of bytes
+  ) {
+    binary +=
+      String.fromCharCode(
+        byte,
+      );
+  }
+
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
+}
+
+function base64UrlToBytes(
+  value: string,
+): Uint8Array {
+  if (
+    !/^[A-Za-z0-9_-]+$/.test(
+      value,
+    )
+  ) {
+    throw new Error(
+      "Voice integrity value is malformed",
+    );
+  }
+
+  const padded =
+    value
+      .replaceAll("-", "+")
+      .replaceAll("_", "/")
+      .padEnd(
+        Math.ceil(
+          value.length / 4,
+        ) * 4,
+        "=",
+      );
+  const binary =
+    atob(padded);
+  const bytes =
+    new Uint8Array(
+      binary.length,
+    );
+
+  for (
+    let index = 0;
+    index <
+      binary.length;
+    index += 1
+  ) {
+    bytes[index] =
+      binary.charCodeAt(
+        index,
+      );
+  }
+
+  return bytes;
+}
+
+function exactObject(
+  value: unknown,
+  keys:
+    readonly string[],
+): Record<string, unknown> {
+  if (
+    !value ||
+    typeof value !==
+      "object" ||
+    Array.isArray(value)
+  ) {
+    throw new Error(
+      "Voice integrity payload is invalid",
+    );
+  }
+
+  const record =
+    value as Record<
+      string,
+      unknown
+    >;
+  const actual =
+    Object.keys(record);
+
+  if (
+    actual.length !==
+      keys.length ||
+    actual.some(
+      (key) =>
+        !keys.includes(key),
+    )
+  ) {
+    throw new Error(
+      "Voice integrity payload fields are invalid",
+    );
+  }
+
+  return record;
+}
+
+function stringField(
+  value: unknown,
+  label: string,
+): string {
+  if (
+    typeof value !==
+      "string" ||
+    !value.trim() ||
+    value.length > 512
+  ) {
+    throw new Error(
+      `Voice integrity ${label} is invalid`,
+    );
+  }
+
+  return value;
+}
+
+function timestamp(
+  value: string,
+  label: string,
+): number {
+  const parsed =
+    Date.parse(value);
+
+  if (
+    !Number.isFinite(parsed)
+  ) {
+    throw new Error(
+      `Voice integrity ${label} timestamp is invalid`,
+    );
+  }
+
+  return parsed;
+}
+
+function sessionPayload(
+  claims:
+    VoiceSessionReceiptClaims,
+): string {
+  return JSON.stringify({
+    version:
+      VERSION,
+    tenantId:
+      claims.tenantId,
+    actorId:
+      claims.actorId,
+    sessionId:
+      claims.sessionId,
+    issuedAt:
+      claims.issuedAt,
+    expiresAt:
+      claims.expiresAt,
+  });
+}
+
+function draftPayload(
+  tenantId: string,
+  draft:
+    CommunicationDraft,
+): string {
+  return JSON.stringify({
+    version:
+      VERSION,
+    tenantId,
+    id:
+      draft.id,
+    caseId:
+      draft.caseId,
+    audience:
+      draft.audience,
+    channel:
+      draft.channel,
+    body:
+      draft.body,
+    requiresHumanApproval:
+      draft.requiresHumanApproval,
+  });
+}
+
+export class HmacVoiceIntegrity
+implements VoiceIntegrity {
+  readonly #key:
+    Promise<CryptoKey>;
+
+  constructor(
+    secret: string,
+  ) {
+    const raw =
+      new TextEncoder()
+        .encode(
+          requiredSecret(
+            secret,
+          ),
+        );
+
+    this.#key =
+      crypto.subtle.importKey(
+        "raw",
+        raw,
+        {
+          name:
+            "HMAC",
+          hash:
+            "SHA-256",
+        },
+        false,
+        [
+          "sign",
+          "verify",
+        ],
+      );
+  }
+
+  async #sign(
+    payload: string,
+  ): Promise<string> {
+    const signature =
+      await crypto.subtle.sign(
+        "HMAC",
+        await this.#key,
+        new TextEncoder()
+          .encode(payload),
+      );
+
+    return bytesToBase64Url(
+      new Uint8Array(
+        signature,
+      ),
+    );
+  }
+
+  async #verify(
+    payload: string,
+    signature: string,
+  ): Promise<boolean> {
+    try {
+      return await crypto.subtle
+        .verify(
+          "HMAC",
+          await this.#key,
+          base64UrlToBytes(
+            signature,
+          ),
+          new TextEncoder()
+            .encode(
+              payload,
+            ),
+        );
+    } catch {
+      return false;
+    }
+  }
+
+  async issueSessionReceipt(
+    input: {
+      tenantId: string;
+      actorId: string;
+      session:
+        VoiceRealtimeSession;
+    },
+  ): Promise<string> {
+    const claims = {
+      tenantId:
+        input.tenantId,
+      actorId:
+        input.actorId,
+      sessionId:
+        input.session
+          .sessionId,
+      issuedAt:
+        input.session
+          .issuedAt,
+      expiresAt:
+        input.session
+          .expiresAt,
+    };
+
+    const payload =
+      sessionPayload(
+        claims,
+      );
+    const payloadEncoded =
+      bytesToBase64Url(
+        new TextEncoder()
+          .encode(payload),
+      );
+    const signature =
+      await this.#sign(
+        payload,
+      );
+
+    return `${payloadEncoded}.${signature}`;
+  }
+
+  async verifySessionReceipt(
+    input: {
+      receipt: string;
+      tenantId: string;
+      actorId: string;
+      transcript:
+        VoiceTranscriptEvidence;
+      now: string;
+    },
+  ): Promise<void> {
+    if (
+      input.receipt.length >
+        MAX_RECEIPT
+    ) {
+      throw new Error(
+        "Voice session receipt is invalid",
+      );
+    }
+
+    const parts =
+      input.receipt
+        .split(".");
+
+    if (
+      parts.length !== 2
+    ) {
+      throw new Error(
+        "Voice session receipt is invalid",
+      );
+    }
+
+    const payloadBytes =
+      base64UrlToBytes(
+        parts[0]!,
+      );
+    const payload =
+      new TextDecoder()
+        .decode(
+          payloadBytes,
+        );
+
+    if (
+      !await this.#verify(
+        payload,
+        parts[1]!,
+      )
+    ) {
+      throw new Error(
+        "Voice session receipt signature is invalid",
+      );
+    }
+
+    let parsed: unknown;
+
+    try {
+      parsed =
+        JSON.parse(
+          payload,
+        );
+    } catch {
+      throw new Error(
+        "Voice session receipt payload is invalid",
+      );
+    }
+
+    const record =
+      exactObject(
+        parsed,
+        [
+          "version",
+          "tenantId",
+          "actorId",
+          "sessionId",
+          "issuedAt",
+          "expiresAt",
+        ],
+      );
+
+    if (
+      record.version !==
+        VERSION
+    ) {
+      throw new Error(
+        "Voice session receipt version is invalid",
+      );
+    }
+
+    const tenantId =
+      stringField(
+        record.tenantId,
+        "tenantId",
+      );
+    const actorId =
+      stringField(
+        record.actorId,
+        "actorId",
+      );
+    const sessionId =
+      stringField(
+        record.sessionId,
+        "sessionId",
+      );
+    const issuedAt =
+      stringField(
+        record.issuedAt,
+        "issuedAt",
+      );
+    const expiresAt =
+      stringField(
+        record.expiresAt,
+        "expiresAt",
+      );
+
+    if (
+      tenantId !==
+        input.tenantId ||
+      actorId !==
+        input.actorId
+    ) {
+      throw new Error(
+        "Voice session receipt identity mismatch",
+      );
+    }
+
+    const transcriptId =
+      input.transcript
+        .transcriptId;
+
+    if (
+      transcriptId !==
+        sessionId &&
+      !transcriptId.startsWith(
+        `${sessionId}:`,
+      )
+    ) {
+      throw new Error(
+        "Voice transcript is not bound to the issued session",
+      );
+    }
+
+    const issuedAtMs =
+      timestamp(
+        issuedAt,
+        "issuedAt",
+      );
+    const expiresAtMs =
+      timestamp(
+        expiresAt,
+        "expiresAt",
+      );
+    const capturedAtMs =
+      timestamp(
+        input.transcript
+          .capturedAt,
+        "capturedAt",
+      );
+    const nowMs =
+      timestamp(
+        input.now,
+        "now",
+      );
+
+    if (
+      expiresAtMs <=
+        issuedAtMs ||
+      capturedAtMs <
+        issuedAtMs -
+          CLOCK_SKEW_MS ||
+      capturedAtMs >
+        expiresAtMs +
+          CLOCK_SKEW_MS ||
+      nowMs >
+        expiresAtMs +
+          RECEIPT_GRACE_MS
+    ) {
+      throw new Error(
+        "Voice session receipt timing is invalid",
+      );
+    }
+  }
+
+  async signCommunicationDraft(
+    tenantId: string,
+    draft:
+      CommunicationDraft,
+  ): Promise<
+    SignedCommunicationDraft
+  > {
+    const payload =
+      draftPayload(
+        tenantId,
+        draft,
+      );
+
+    return {
+      ...draft,
+      integrity: {
+        version:
+          VERSION,
+        signature:
+          await this.#sign(
+            payload,
+          ),
+      },
+    };
+  }
+
+  async verifyCommunicationDraft(
+    tenantId: string,
+    draft:
+      SignedCommunicationDraft,
+  ): Promise<
+    CommunicationDraft
+  > {
+    if (
+      draft.integrity
+        .version !== VERSION ||
+      !await this.#verify(
+        draftPayload(
+          tenantId,
+          draft,
+        ),
+        draft.integrity
+          .signature,
+      )
+    ) {
+      throw new Error(
+        "Communication draft integrity verification failed",
+      );
+    }
+
+    const {
+      integrity:
+        _integrity,
+      ...unsigned
+    } = draft;
+
+    return unsigned;
+  }
+}

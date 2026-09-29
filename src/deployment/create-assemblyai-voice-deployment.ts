@@ -4,6 +4,7 @@ import {
 } from "./create-care-ops-deployment.ts";
 import {
   AssemblyAiRealtimeSessionIssuer,
+  HmacVoiceIntegrity,
 } from "../voice/index.ts";
 
 export interface AssemblyAiVoiceCareOpsDeploymentOptions
@@ -12,6 +13,7 @@ extends Omit<
   "voiceSessionIssuer"
 > {
   assemblyAiApiKey: string;
+  voiceIntegritySecret: string;
   assemblyAiFetchImpl?: typeof fetch;
 }
 
@@ -21,6 +23,7 @@ export function createAssemblyAiVoiceCareOpsDeployment(
 ) {
   const {
     assemblyAiApiKey,
+    voiceIntegritySecret,
     assemblyAiFetchImpl,
     ...careOps
   } = options;
@@ -38,5 +41,9 @@ export function createAssemblyAiVoiceCareOpsDeployment(
   return createCareOpsDeployment({
     ...careOps,
     voiceSessionIssuer,
+    voiceIntegrity:
+      new HmacVoiceIntegrity(
+        voiceIntegritySecret,
+      ),
   });
 }

@@ -8,6 +8,45 @@ import {
 
 const minute = 60_000;
 
+const voiceIntegrity = {
+  async issueSessionReceipt() {
+    return "test-receipt";
+  },
+  async verifySessionReceipt(
+    input,
+  ) {
+    assert.equal(
+      input.receipt,
+      "test-receipt",
+    );
+  },
+  async signCommunicationDraft(
+    _tenantId,
+    draft,
+  ) {
+    return {
+      ...draft,
+      integrity: {
+        version:
+          "hmac-sha256-v1",
+        signature:
+          "a".repeat(43),
+      },
+    };
+  },
+  async verifyCommunicationDraft(
+    _tenantId,
+    draft,
+  ) {
+    const {
+      integrity:
+        _integrity,
+      ...unsigned
+    } = draft;
+    return unsigned;
+  },
+};
+
 const policy: CaseSlaPolicy = {
   critical: {
     acknowledgeWithinMs: 2 * minute,
@@ -244,6 +283,7 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
           };
         },
       },
+      voiceIntegrity,
       fetchImpl,
       clock: () =>
         "2026-09-28T12:00:30Z",
@@ -280,6 +320,8 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
               capturedAt:
                 "2026-09-28T12:00:10Z",
             },
+            evidenceReceipt:
+              "test-receipt",
           }),
         },
       ),

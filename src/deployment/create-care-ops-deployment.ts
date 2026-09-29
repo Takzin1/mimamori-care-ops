@@ -28,6 +28,7 @@ export interface CareOpsDeploymentOptions {
   admission: CareOpsRequestAdmission;
   voiceSessionIssuer?: VoiceRealtimeSessionIssuer;
   voiceOpsService?: VoiceOpsService;
+  voiceIntegrity?: VoiceIntegrity;
   logger?: CareOpsStructuredLogger;
   metrics?: CareOpsMetricsSink;
   readinessChecks?: readonly CareOpsReadinessCheck[];
@@ -59,6 +60,8 @@ export function createCareOpsDeployment(
         options.voiceSessionIssuer,
       voiceOpsService:
         options.voiceOpsService,
+      voiceIntegrity:
+        options.voiceIntegrity,
       outboundTimeoutMs:
         config.outboundTimeoutMs,
       maxCommandBodyBytes:

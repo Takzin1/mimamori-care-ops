@@ -4,12 +4,17 @@ import assert from "node:assert/strict";
 import {
   VoiceSessionHttpApi,
 } from "../src/http/index.ts";
-import type {
-  VoiceRealtimeSessionIssuer,
+import {
+  HmacVoiceIntegrity,
+  type VoiceRealtimeSessionIssuer,
 } from "../src/voice/index.ts";
 
 const now =
   "2026-09-28T12:00:00Z";
+const integrity =
+  new HmacVoiceIntegrity(
+    "voice-session-test-secret-0123456789",
+  );
 
 const issuer:
   VoiceRealtimeSessionIssuer = {
@@ -71,6 +76,7 @@ test("authenticated operator can request voice session", async () => {
         },
       },
       issuer,
+      integrity,
       now: () => now,
     });
 
@@ -128,6 +134,7 @@ test("voice session endpoint rejects missing auth", async () => {
         },
       },
       issuer,
+      integrity,
       now: () => now,
     });
 
@@ -184,6 +191,7 @@ test("auditor cannot mint a Voice realtime session", async () => {
           );
         },
       },
+      integrity,
       now: () => now,
     });
 

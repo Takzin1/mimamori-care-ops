@@ -48,6 +48,7 @@ import {
 } from "../outbox/monitor.ts";
 import {
   VoiceOpsService,
+  type VoiceIntegrity,
   type VoiceRealtimeSessionIssuer,
 } from "../voice/index.ts";
 
@@ -65,6 +66,7 @@ export interface SupabaseCareOpsRuntimeOptions {
   slaPolicies: Readonly<Record<string, CaseSlaPolicy>>;
   voiceSessionIssuer?: VoiceRealtimeSessionIssuer;
   voiceOpsService?: VoiceOpsService;
+  voiceIntegrity?: VoiceIntegrity;
   fetchImpl?: FetchLike;
   casePageSize?: number;
   outboundTimeoutMs?: number;
@@ -251,12 +253,23 @@ export class SupabaseCareOpsRuntime {
         options.voiceOpsService,
       );
 
+    if (
+      voiceEnabled &&
+      !options.voiceIntegrity
+    ) {
+      throw new Error(
+        "Voice integrity is required when Voice Ops is enabled",
+      );
+    }
+
     this.#voiceSessionHttp =
       options.voiceSessionIssuer
         ? new VoiceSessionHttpApi({
             gateway,
             issuer:
               options.voiceSessionIssuer,
+            integrity:
+              options.voiceIntegrity!,
             now,
           })
         : null;
@@ -267,6 +280,9 @@ export class SupabaseCareOpsRuntime {
             gateway,
             service:
               options.voiceOpsService,
+            integrity:
+              options.voiceIntegrity!,
+            now,
             maxBodyBytes:
               options.maxCommandBodyBytes,
           })
@@ -287,6 +303,8 @@ export class SupabaseCareOpsRuntime {
                 requestTimeoutMs:
                   options.outboundTimeoutMs,
               }),
+            integrity:
+              options.voiceIntegrity!,
             now,
           })
         : null;

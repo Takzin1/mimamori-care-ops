@@ -96,6 +96,10 @@ function previewRuntime(
         requiredEnv(
           "ASSEMBLYAI_API_KEY",
         ),
+      voiceIntegritySecret:
+        requiredEnv(
+          "CARE_OPS_VOICE_INTEGRITY_SECRET",
+        ),
       admission: {
         admit() {
           return {

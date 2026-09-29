@@ -7,6 +7,7 @@ import {
 
 const keys = [
   "ASSEMBLYAI_API_KEY",
+  "CARE_OPS_VOICE_INTEGRITY_SECRET",
   "SUPABASE_URL",
   "SUPABASE_PUBLISHABLE_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
@@ -55,6 +56,8 @@ test("Vercel Preview health is ready only when all server configuration is prese
       "1234567890abcdef";
     process.env.ASSEMBLYAI_API_KEY =
       "assembly-secret";
+    process.env.CARE_OPS_VOICE_INTEGRITY_SECRET =
+      "voice-integrity-test-secret-0123456789";
     process.env.SUPABASE_URL =
       "https://project.supabase.test";
     process.env.SUPABASE_PUBLISHABLE_KEY =
@@ -115,6 +118,8 @@ test("Vercel Preview health fails closed when configuration is incomplete", asyn
       "preview";
     delete process.env
       .ASSEMBLYAI_API_KEY;
+    process.env.CARE_OPS_VOICE_INTEGRITY_SECRET =
+      "voice-integrity-test-secret-0123456789";
     process.env.SUPABASE_URL =
       "https://project.supabase.test";
     process.env.SUPABASE_PUBLISHABLE_KEY =
@@ -172,7 +177,7 @@ test("Vercel health never reports production as Voice-ready", async () => {
 
     for (
       const key of
-        keys.slice(0, 5)
+        keys.slice(0, 6)
     ) {
       process.env[key] =
         "configured";

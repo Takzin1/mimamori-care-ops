@@ -310,6 +310,32 @@ async function jsonPost(
   return value;
 }
 
+const sessionResult =
+  await jsonPost(
+    `/api/care-ops/tenants/${encodeURIComponent(tenantId)}/voice/session`,
+    {
+      locale,
+    },
+    201,
+  );
+
+if (
+  sessionResult?.session?.provider !==
+    "assemblyai" ||
+  typeof sessionResult?.session
+    ?.sessionId !==
+    "string" ||
+  typeof sessionResult
+    ?.evidenceReceipt !==
+    "string" ||
+  !sessionResult.evidenceReceipt
+    .trim()
+) {
+  throw new Error(
+    "Voice session binding response shape is invalid",
+  );
+}
+
 const healthPath =
   `/api/care-ops/tenants/${encodeURIComponent(tenantId)}/voice/outbox/health`;
 
@@ -328,7 +354,7 @@ const suffix =
 const caseId =
   `CASE-VOICE-E2E-${suffix}`;
 const transcriptId =
-  `voice-e2e-${suffix}`;
+  `${sessionResult.session.sessionId}:1`;
 const subjectId =
   "subject-demo-e2e";
 const capturedAt =
@@ -352,6 +378,8 @@ const planResult =
           "ja",
         capturedAt,
       },
+      evidenceReceipt:
+        sessionResult.evidenceReceipt,
     },
     200,
   );

@@ -9,6 +9,45 @@ import {
 
 const minute = 60_000;
 
+const voiceIntegrity = {
+  async issueSessionReceipt() {
+    return "test-receipt";
+  },
+  async verifySessionReceipt(
+    input,
+  ) {
+    assert.equal(
+      input.receipt,
+      "test-receipt",
+    );
+  },
+  async signCommunicationDraft(
+    _tenantId,
+    draft,
+  ) {
+    return {
+      ...draft,
+      integrity: {
+        version:
+          "hmac-sha256-v1",
+        signature:
+          "a".repeat(43),
+      },
+    };
+  },
+  async verifyCommunicationDraft(
+    _tenantId,
+    draft,
+  ) {
+    const {
+      integrity:
+        _integrity,
+      ...unsigned
+    } = draft;
+    return unsigned;
+  },
+};
+
 const policy: CaseSlaPolicy = {
   critical: {
     acknowledgeWithinMs: 2 * minute,
@@ -168,6 +207,7 @@ test("Supabase runtime mounts authenticated voice session only when issuer is co
       },
       voiceSessionIssuer:
         issuer,
+      voiceIntegrity,
       fetchImpl,
       clock: () =>
         "2026-09-28T12:00:30Z",
@@ -204,10 +244,16 @@ test("Supabase runtime mounts authenticated voice session only when issuer is co
       session: {
         sessionId: string;
       };
+      evidenceReceipt:
+        string;
     };
 
   assert.equal(
     body.session.sessionId,
     "session-runtime",
+  );
+  assert.equal(
+    body.evidenceReceipt,
+    "test-receipt",
   );
 });

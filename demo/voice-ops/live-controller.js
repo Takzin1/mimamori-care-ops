@@ -349,6 +349,7 @@ export function createLiveVoiceController(
   let processor = null;
   let silentGain = null;
   let activeSession = null;
+  let activeEvidenceReceipt = null;
   let activeConfig = null;
   let stopping = false;
 
@@ -409,6 +410,7 @@ export function createLiveVoiceController(
     } finally {
       socket = null;
       activeSession = null;
+      activeEvidenceReceipt = null;
       activeConfig = null;
       stopping = false;
       state("idle");
@@ -440,6 +442,8 @@ export function createLiveVoiceController(
             config.locale,
           transcript:
             evidence,
+          evidenceReceipt:
+            activeEvidenceReceipt,
         },
       );
 
@@ -713,6 +717,8 @@ export function createLiveVoiceController(
 
     const session =
       value.session;
+    const evidenceReceipt =
+      value.evidenceReceipt;
 
     if (
       !session ||
@@ -722,6 +728,9 @@ export function createLiveVoiceController(
         "string" ||
       !session.websocketUrl
         .startsWith("wss://") ||
+      typeof evidenceReceipt !==
+        "string" ||
+      !evidenceReceipt.trim() ||
       !session.audio ||
       !Number.isInteger(
         session.audio
@@ -735,6 +744,8 @@ export function createLiveVoiceController(
 
     activeSession =
       session;
+    activeEvidenceReceipt =
+      evidenceReceipt;
     state("connecting");
 
     socket =
