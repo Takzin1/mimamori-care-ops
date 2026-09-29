@@ -4,10 +4,6 @@
     "api/care-ops.ts": {
       "maxDuration": 30,
       "includeFiles": "src/**/*.ts"
-    },
-    "api/voice-synthetic-e2e.ts": {
-      "maxDuration": 30,
-      "includeFiles": "{src/**/*.ts,api/care-ops.ts}"
     }
   },
   "rewrites": [
