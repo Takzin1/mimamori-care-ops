@@ -118,7 +118,8 @@ implements IncidentExtractor {
       situation.collapse ===
         "confirmed" ||
       situation.fever ===
-        "confirmed";
+        "confirmed" ||
+      situation.needsClarification;
 
     const kind =
       incidentLike
