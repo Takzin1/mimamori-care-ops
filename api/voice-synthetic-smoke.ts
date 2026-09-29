@@ -513,6 +513,3 @@ export async function GET(
     );
   }
 }
-
-export const HEAD =
-  GET;
