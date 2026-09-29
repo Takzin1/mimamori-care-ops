@@ -245,3 +245,147 @@ test("Indonesian no-fall wording does not collide with generic jatuh token", asy
     "near_miss",
   );
 });
+
+
+test("fever with collapse does not become an explicit fall", async () => {
+  const extractor =
+    new RuleBasedDemoIncidentExtractor();
+
+  const result =
+    await extractor.extract({
+      subjectId:
+        "subject-demo-fever-collapse",
+      transcript: {
+        provider:
+          "assemblyai",
+        transcriptId:
+          "voice-fever-collapse",
+        text:
+          "高熱を出して倒れています。どうしたらいいですか？",
+        language:
+          "ja",
+        capturedAt,
+      },
+    });
+
+  assert.equal(
+    result.kind,
+    "incident",
+  );
+  assert.equal(
+    result.observations.find(
+      (item) =>
+        item.key ===
+          "fall_occurred",
+    )?.state,
+    "unknown",
+  );
+  assert.equal(
+    result.observations.find(
+      (item) =>
+        item.key ===
+          "collapse_occurred",
+    )?.state,
+    "confirmed",
+  );
+  assert.equal(
+    result.observations.find(
+      (item) =>
+        item.key === "fever",
+    )?.state,
+    "confirmed",
+  );
+  assert.match(
+    result.summary,
+    /発熱.*倒れ込み/,
+  );
+});
+
+test("explicit Japanese fall remains an explicit fall", async () => {
+  const extractor =
+    new RuleBasedDemoIncidentExtractor();
+
+  const result =
+    await extractor.extract({
+      subjectId:
+        "subject-demo-fall",
+      transcript: {
+        provider:
+          "assemblyai",
+        transcriptId:
+          "voice-fall",
+        text:
+          "利用者が転倒しました。今は座っています。",
+        language:
+          "ja",
+        capturedAt,
+      },
+    });
+
+  assert.equal(
+    result.observations.find(
+      (item) =>
+        item.key ===
+          "fall_occurred",
+    )?.state,
+    "confirmed",
+  );
+  assert.equal(
+    result.observations.find(
+      (item) =>
+        item.key ===
+          "collapse_occurred",
+    )?.state,
+    "unknown",
+  );
+});
+
+test("fever-collapse family draft does not invent dizziness wording", async () => {
+  const transcript =
+    normalizeAssemblyAiTurn({
+      transcriptId:
+        "voice-fever-draft",
+      text:
+        "高熱を出して倒れています。どうしたらいいですか？",
+      language:
+        "ja",
+      capturedAt,
+      isFinal:
+        true,
+    });
+
+  const result =
+    await buildVoiceOpsPlan({
+      tenantId:
+        "tenant-demo",
+      caseId:
+        "CASE-FEVER-1",
+      subjectId:
+        "subject-demo-fever",
+      locale:
+        "ja-JP",
+      transcript,
+      extractor:
+        new RuleBasedDemoIncidentExtractor(),
+      translator:
+        new DemoIndonesianGuidanceTranslator(),
+    });
+
+  const family =
+    result.communicationDrafts
+      .find(
+        (item) =>
+          item.audience ===
+            "family",
+      );
+
+  assert.ok(family);
+  assert.match(
+    family.body,
+    /発熱/,
+  );
+  assert.doesNotMatch(
+    family.body,
+    /一時的なふらつき/,
+  );
+});
