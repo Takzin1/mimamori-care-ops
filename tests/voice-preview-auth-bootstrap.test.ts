@@ -14,41 +14,60 @@ test("Preview auth bootstrap is preview-only, same-origin, and returns no refres
       "utf8",
     );
 
-  assert.match(
-    source,
-    /VERCEL_ENV !==s*"preview"/,
+  assert.ok(
+    source.includes(
+      "process.env.VERCEL_ENV !==",
+    ),
   );
-  assert.match(
-    source,
-    /origin !==s*target\.origin/,
+  assert.ok(
+    source.includes(
+      "\"preview\"",
+    ),
   );
-  assert.match(
-    source,
-    /\.vercel\.app/,
+  assert.ok(
+    source.includes(
+      "origin !==",
+    ),
   );
-  assert.match(
-    source,
-    /SUPABASE_SECRET_KEY/,
+  assert.ok(
+    source.includes(
+      "target.origin",
+    ),
   );
-  assert.match(
-    source,
-    /voice-preview-responder/,
+  assert.ok(
+    source.includes(
+      ".vercel.app",
+    ),
   );
-  assert.match(
-    source,
-    /tenant-demo/,
+  assert.ok(
+    source.includes(
+      "SUPABASE_SECRET_KEY",
+    ),
   );
-  assert.match(
-    source,
-    /accessToken/,
+  assert.ok(
+    source.includes(
+      "voice-preview-responder",
+    ),
   );
-  assert.doesNotMatch(
-    source,
-    /refresh_token/,
+  assert.ok(
+    source.includes(
+      "tenant-demo",
+    ),
   );
-  assert.match(
-    source,
-    /export const POST/,
+  assert.ok(
+    source.includes(
+      "accessToken",
+    ),
+  );
+  assert.ok(
+    !source.includes(
+      "refresh_token",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "export const POST",
+    ),
   );
 });
 
@@ -62,24 +81,34 @@ test("Live UI auto-mints only when the token input is empty", async () => {
       "utf8",
     );
 
-  assert.match(
-    source,
-    /previewAccessToken/,
+  assert.ok(
+    source.includes(
+      "previewAccessToken",
+    ),
   );
-  assert.match(
-    source,
-    /token\.value\.trim\(\)\s*\|\|\s*await previewAccessToken\(\)/,
+  assert.ok(
+    source.includes(
+      "token.value.trim() ||",
+    ),
   );
-  assert.match(
-    source,
-    /credentials:\s*"same-origin"/,
+  assert.ok(
+    source.includes(
+      "await previewAccessToken()",
+    ),
   );
-  assert.doesNotMatch(
-    source,
-    /localStorage/,
+  assert.ok(
+    source.includes(
+      'credentials:\n          "same-origin"',
+    ),
   );
-  assert.doesNotMatch(
-    source,
-    /sessionStorage/,
+  assert.ok(
+    !source.includes(
+      "localStorage",
+    ),
+  );
+  assert.ok(
+    !source.includes(
+      "sessionStorage",
+    ),
   );
 });
