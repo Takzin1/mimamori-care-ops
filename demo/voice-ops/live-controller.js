@@ -728,6 +728,10 @@ export function createLiveVoiceController(
         `${config.apiBase}/api/care-ops/tenants/${encodeURIComponent(config.tenantId)}/voice/session`,
         config.accessToken,
         {
+          caseId:
+            config.caseId,
+          subjectId:
+            config.subjectId,
           locale:
             config.locale,
         },
