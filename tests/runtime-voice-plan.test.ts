@@ -54,6 +54,9 @@ function json(
 }
 
 test("voice-enabled runtime mounts authenticated live plan route", async () => {
+  let storedSnapshot: Record<string, unknown> | null = null;
+  let storedEvent: Record<string, unknown> | null = null;
+
   const fetchImpl =
     async (
       input:
@@ -119,6 +122,11 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
             ),
           );
 
+        storedSnapshot =
+          body.p_snapshot;
+        storedEvent =
+          body.p_event;
+
         return json({
           ok: true,
           created: true,
@@ -128,6 +136,44 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
           snapshot:
             body.p_snapshot,
         });
+      }
+
+      if (
+        url.pathname ===
+          "/rest/v1/care_cases"
+      ) {
+        return json(
+          storedSnapshot
+            ? [
+                {
+                  case_id:
+                    storedSnapshot.id,
+                  snapshot:
+                    storedSnapshot,
+                },
+              ]
+            : [],
+        );
+      }
+
+      if (
+        url.pathname ===
+          "/rest/v1/care_case_events"
+      ) {
+        return json(
+          storedEvent &&
+          storedSnapshot
+            ? [
+                {
+                  case_id:
+                    storedSnapshot.id,
+                  sequence: 1,
+                  event:
+                    storedEvent,
+                },
+              ]
+            : [],
+        );
       }
 
       throw new Error(
