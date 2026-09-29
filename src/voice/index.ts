@@ -7,6 +7,8 @@ export * from "./language.ts";
 export * from "./claude-guidance.ts";
 export * from "./communication.ts";
 export * from "./communication-delivery.ts";
+export * from "./webhook-communication-sender.ts";
+export * from "./communication-worker.ts";
 export * from "./workflow.ts";
 export * from "./service.ts";
 export * from "./realtime-session.ts";
