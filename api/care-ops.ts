@@ -203,7 +203,7 @@ function configError(
   );
 }
 
-export async function handle(
+async function handle(
   request: Request,
 ): Promise<Response> {
   try {
