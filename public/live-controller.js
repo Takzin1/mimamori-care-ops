@@ -76,6 +76,18 @@ function requireLocale(value) {
   return normalized;
 }
 
+function requestCredentials(
+  url,
+) {
+  const target =
+    new URL(url);
+
+  return target.origin ===
+    window.location.origin
+      ? "same-origin"
+      : "omit";
+}
+
 async function jsonRequest(
   url,
   token,
@@ -94,7 +106,10 @@ async function jsonRequest(
       },
       body: JSON.stringify(body),
       cache: "no-store",
-      credentials: "omit",
+      credentials:
+        requestCredentials(
+          url,
+        ),
       redirect: "error",
       referrerPolicy: "no-referrer",
     },
