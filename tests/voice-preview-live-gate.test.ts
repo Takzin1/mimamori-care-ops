@@ -42,9 +42,29 @@ test("Voice Preview live gate is manual, pinned, and keeps secrets in env", asyn
     source,
     /\.vercel\.app/,
   );
+  assert.doesNotMatch(
+    source,
+    /CARE_OPS_PREVIEW_ACCESS_TOKEN/,
+  );
   assert.match(
     source,
-    /secrets\.CARE_OPS_PREVIEW_ACCESS_TOKEN/,
+    /vars\.CARE_OPS_SUPABASE_URL/,
+  );
+  assert.match(
+    source,
+    /vars\.CARE_OPS_SUPABASE_PUBLISHABLE_KEY/,
+  );
+  assert.match(
+    source,
+    /secrets\.CARE_OPS_PREVIEW_AUTH_EMAIL/,
+  );
+  assert.match(
+    source,
+    /secrets\.CARE_OPS_PREVIEW_AUTH_PASSWORD/,
+  );
+  assert.match(
+    source,
+    /scripts\/voice-preview-auth\.mjs/,
   );
   assert.match(
     source,
@@ -52,7 +72,7 @@ test("Voice Preview live gate is manual, pinned, and keeps secrets in env", asyn
   );
   assert.doesNotMatch(
     source,
-    /echo\s+.*CARE_OPS_PREVIEW_ACCESS_TOKEN/,
+    /echo\s+.*CARE_OPS_ACCESS_TOKEN/,
   );
   assert.doesNotMatch(
     source,
