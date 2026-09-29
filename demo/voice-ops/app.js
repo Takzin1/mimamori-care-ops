@@ -307,6 +307,70 @@ function setLiveState(state) {
     !active;
 }
 
+async function previewAccessToken() {
+  const response =
+    await fetch(
+      "/api/voice-preview-auth",
+      {
+        method:
+          "POST",
+        headers: {
+          accept:
+            "application/json",
+        },
+        cache:
+          "no-store",
+        credentials:
+          "same-origin",
+        redirect:
+          "error",
+        referrerPolicy:
+          "no-referrer",
+      },
+    );
+
+  const type =
+    response.headers
+      .get(
+        "content-type",
+      )
+      ?.split(
+        ";",
+        1,
+      )[0]
+      ?.trim()
+      .toLowerCase();
+
+  if (
+    type !==
+      "application/json"
+  ) {
+    throw new Error(
+      "Protected Preview authentication returned a non-JSON response.",
+    );
+  }
+
+  const value =
+    await response.json();
+
+  if (
+    !response.ok ||
+    typeof value
+      ?.accessToken !==
+      "string" ||
+    !value.accessToken
+      .trim()
+  ) {
+    throw new Error(
+      value?.error?.message ??
+        "Protected Preview authentication failed.",
+    );
+  }
+
+  return value
+    .accessToken;
+}
+
 const controller =
   createLiveVoiceController({
     onState:
@@ -396,13 +460,16 @@ liveStart.addEventListener(
     ).hidden = true;
 
     try {
+      const accessToken =
+        token.value.trim() ||
+        await previewAccessToken();
+
       await controller.start({
         apiBase:
           apiBase.value,
         tenantId:
           tenant.value,
-        accessToken:
-          token.value,
+        accessToken,
         locale:
           locale.value,
         subjectId:
