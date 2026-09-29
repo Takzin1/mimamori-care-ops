@@ -4,6 +4,10 @@ import {
 import type {
   OperatorContextProjection,
 } from "../application/capabilities.ts";
+import type {
+  AttentionSignal,
+  CaseOpenResult,
+} from "../application/types.ts";
 import {
   AuthenticationError,
 } from "../identity/types.ts";
@@ -27,6 +31,13 @@ export interface VoicePlanGateway {
     accessToken: string;
     tenantId: string;
   }): Promise<OperatorContextProjection>;
+
+  openFromSignal(input: {
+    accessToken: string;
+    tenantId: string;
+    caseId: string;
+    signal: AttentionSignal;
+  }): Promise<CaseOpenResult>;
 }
 
 export interface VoicePlanHttpApiOptions {
@@ -350,15 +361,17 @@ export class VoicePlanHttpApi {
         );
       }
 
+      const caseId =
+        safeId(
+          body.caseId,
+          "caseId",
+        );
+
       const plan =
         await this.#service
           .plan({
             tenantId,
-            caseId:
-              safeId(
-                body.caseId,
-                "caseId",
-              ),
+            caseId,
             subjectId:
               safeId(
                 body.subjectId,
@@ -374,10 +387,30 @@ export class VoicePlanHttpApi {
               ),
           });
 
+      const opened =
+        await this.#gateway
+          .openFromSignal({
+            accessToken,
+            tenantId,
+            caseId,
+            signal:
+              plan.signal,
+          });
+
       return response(
         200,
         {
           plan,
+          case: {
+            id:
+              opened.aggregate.id,
+            version:
+              opened.aggregate.version,
+            status:
+              opened.aggregate.status,
+            created:
+              opened.created,
+          },
         },
       );
     } catch (error) {

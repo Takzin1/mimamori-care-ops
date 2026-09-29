@@ -29,6 +29,83 @@ test("authenticated voice plan endpoint turns final transcript into incident gui
               "responder",
           };
         },
+
+        async openFromSignal(
+          input,
+        ) {
+          assert.equal(
+            input.caseId,
+            "CASE-VOICE-DEMO",
+          );
+          assert.equal(
+            input.signal.type,
+            "manual",
+          );
+
+          return {
+            aggregate: {
+              id:
+                input.caseId,
+              tenantId:
+                input.tenantId,
+              subjectId:
+                input.signal.subjectId,
+              sourceType:
+                input.signal.type,
+              sourceAdapter:
+                input.signal.sourceAdapter,
+              sourceSignalId:
+                input.signal.id,
+              priority:
+                input.signal.priority,
+              status:
+                "NEW",
+              version: 1,
+              assigneeId:
+                null,
+              handoffTargetAssigneeId:
+                null,
+              createdAt:
+                "2026-09-28T12:00:00Z",
+              acknowledgedAt:
+                null,
+              assignedAt:
+                null,
+              actionStartedAt:
+                null,
+              handoffRequestedAt:
+                null,
+              handoffAcceptedAt:
+                null,
+              completedAt:
+                null,
+              closedAt:
+                null,
+            },
+            event: {
+              type:
+                "case_created",
+              tenantId:
+                input.tenantId,
+              caseId:
+                input.caseId,
+              subjectId:
+                input.signal.subjectId,
+              sourceType:
+                input.signal.type,
+              sourceAdapter:
+                input.signal.sourceAdapter,
+              sourceSignalId:
+                input.signal.id,
+              priority:
+                input.signal.priority,
+              at:
+                "2026-09-28T12:00:00Z",
+            },
+            created:
+              true,
+          };
+        },
       },
     });
 
@@ -90,6 +167,28 @@ test("authenticated voice plan endpoint turns final transcript into incident gui
   assert.equal(
     body.plan.incident.kind,
     "near_miss",
+  );
+  assert.equal(
+    (
+      body as {
+        case: {
+          id: string;
+          created: boolean;
+        };
+      }
+    ).case.id,
+    "CASE-VOICE-DEMO",
+  );
+  assert.equal(
+    (
+      body as {
+        case: {
+          id: string;
+          created: boolean;
+        };
+      }
+    ).case.created,
+    true,
   );
   assert.ok(
     body.plan.guidance

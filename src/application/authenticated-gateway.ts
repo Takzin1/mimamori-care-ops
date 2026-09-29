@@ -16,7 +16,9 @@ import type {
   OperatorContextProjection,
 } from "./capabilities.ts";
 import type {
+  AttentionSignal,
   CaseCommandIntent,
+  CaseOpenResult,
   CaseOperationResult,
 } from "./types.ts";
 import type { CaseService } from "./case-service.ts";
@@ -30,6 +32,12 @@ export interface AuthenticatedRequest {
 export interface AuthenticatedCaseRequest
 extends AuthenticatedRequest {
   caseId: string;
+}
+
+export interface AuthenticatedSignalRequest
+extends AuthenticatedRequest {
+  caseId: string;
+  signal: AttentionSignal;
 }
 
 export interface AuthenticatedCaseCommandRequest
@@ -59,6 +67,38 @@ export class AuthenticatedCareOpsGateway {
     accessToken: string,
   ): Promise<AuthenticatedPrincipal> {
     return this.authenticator.authenticate(accessToken);
+  }
+
+  async openFromSignal(
+    input: AuthenticatedSignalRequest,
+  ): Promise<CaseOpenResult> {
+    if (
+      input.signal.tenantId !==
+        input.tenantId
+    ) {
+      throw new Error(
+        "signal tenant must match authenticated tenant",
+      );
+    }
+
+    const principal =
+      await this.authenticate(
+        input.accessToken,
+      );
+
+    await this.caseService
+      .operatorContext({
+        tenantId:
+          input.tenantId,
+        principalId:
+          principal.principalId,
+      });
+
+    return this.caseService
+      .openFromSignal(
+        input.signal,
+        input.caseId,
+      );
   }
 
   async operatorContext(

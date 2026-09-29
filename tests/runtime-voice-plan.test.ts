@@ -107,8 +107,31 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
         ]);
       }
 
+      if (
+        url.pathname.endsWith(
+          "/rest/v1/rpc/create_care_case",
+        )
+      ) {
+        const body =
+          JSON.parse(
+            String(
+              init.body,
+            ),
+          );
+
+        return json({
+          ok: true,
+          created: true,
+          caseId:
+            body.p_snapshot.id,
+          version: 1,
+          snapshot:
+            body.p_snapshot,
+        });
+      }
+
       throw new Error(
-        "unexpected fetch",
+        `unexpected fetch: ${url.pathname}`,
       );
     };
 
