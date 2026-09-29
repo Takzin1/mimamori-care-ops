@@ -35,6 +35,11 @@ function signedDraft(
         "hmac-sha256-v1",
       signature:
         "a".repeat(43),
+      caseVersion: 1,
+      issuedAt:
+        "2026-09-29T02:29:00Z",
+      expiresAt:
+        "2026-09-29T02:44:00Z",
     },
     ...overrides,
   };
@@ -56,6 +61,7 @@ const voiceIntegrity:
     async signCommunicationDraft(
       _tenantId,
       draft,
+      context,
     ) {
       return {
         ...draft,
@@ -64,6 +70,12 @@ const voiceIntegrity:
             "hmac-sha256-v1",
           signature:
             "a".repeat(43),
+          caseVersion:
+            context.caseVersion,
+          issuedAt:
+            context.now,
+          expiresAt:
+            "2026-09-29T02:44:00Z",
         },
       };
     },
@@ -72,16 +84,93 @@ const voiceIntegrity:
       draft,
     ) {
       const {
-        integrity:
-          _integrity,
+        integrity,
         ...unsigned
       } = draft;
 
-      return unsigned;
+      return {
+        draft:
+          unsigned,
+        caseVersion:
+          integrity.caseVersion,
+        issuedAt:
+          integrity.issuedAt,
+        expiresAt:
+          integrity.expiresAt,
+      };
     },
   };
 
-function responderGateway() {
+function storedCase(
+  version = 1,
+  status:
+    "NEW" |
+    "ACKNOWLEDGED" |
+    "ASSIGNED" |
+    "IN_PROGRESS" |
+    "HANDOFF_PENDING" |
+    "COMPLETED" |
+    "CLOSED" = "NEW",
+) {
+  return {
+    aggregate: {
+      id:
+        "CASE-1",
+      tenantId:
+        "tenant-demo",
+      subjectId:
+        "subject-demo",
+      sourceType:
+        "manual",
+      sourceAdapter:
+        "assemblyai-realtime",
+      sourceSignalId:
+        "signal-demo",
+      priority:
+        "normal",
+      status,
+      version,
+      assigneeId:
+        null,
+      handoffTargetId:
+        null,
+      createdAt:
+        "2026-09-29T02:00:00Z",
+      acknowledgedAt:
+        null,
+      assignedAt:
+        null,
+      firstActionAt:
+        null,
+      completedAt:
+        status === "COMPLETED" ||
+        status === "CLOSED"
+          ? "2026-09-29T02:20:00Z"
+          : null,
+      closedAt:
+        status === "CLOSED"
+          ? "2026-09-29T02:25:00Z"
+          : null,
+      reopenedCount:
+        0,
+      completion:
+        null,
+    },
+    events: [],
+  } as const;
+}
+
+function responderGateway(
+  version = 1,
+  status:
+    "NEW" |
+    "ACKNOWLEDGED" |
+    "ASSIGNED" |
+    "IN_PROGRESS" |
+    "HANDOFF_PENDING" |
+    "COMPLETED" |
+    "CLOSED" = "NEW",
+) {
   return {
     async operatorContext() {
       return {
@@ -95,6 +184,12 @@ function responderGateway() {
         queueVisibility:
           "responder",
       } as const;
+    },
+    async get() {
+      return storedCase(
+        version,
+        status,
+      );
     },
   };
 }
@@ -231,6 +326,11 @@ test("auditor cannot approve communication", async () => {
             queueVisibility:
               "tenant",
           } as const;
+        },
+        async get() {
+          throw new Error(
+            "must not read Case",
+          );
         },
       },
       integrity:
@@ -439,6 +539,114 @@ test("communication approval rejects signed Draft body tampering before enqueue"
     await api.handle(
       requestFor(
         tampered,
+      ),
+    );
+
+  assert.equal(
+    response.status,
+    400,
+  );
+  assert.equal(
+    enqueued,
+    false,
+  );
+});
+
+
+test("communication approval rejects stale Case version before enqueue", async () => {
+  let enqueued = false;
+
+  const api =
+    new VoiceCommunicationHttpApi({
+      gateway:
+        responderGateway(2),
+      integrity:
+        voiceIntegrity,
+      outbox: {
+        async enqueue() {
+          enqueued = true;
+          return {
+            created: true,
+            id: 1,
+          };
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
+      now: () =>
+        "2026-09-29T02:30:00Z",
+    });
+
+  const response =
+    await api.handle(
+      requestFor(
+        signedDraft(),
+      ),
+    );
+
+  assert.equal(
+    response.status,
+    400,
+  );
+  assert.equal(
+    enqueued,
+    false,
+  );
+});
+
+test("communication approval rejects completed Case before enqueue", async () => {
+  let enqueued = false;
+
+  const api =
+    new VoiceCommunicationHttpApi({
+      gateway:
+        responderGateway(
+          1,
+          "COMPLETED",
+        ),
+      integrity:
+        voiceIntegrity,
+      outbox: {
+        async enqueue() {
+          enqueued = true;
+          return {
+            created: true,
+            id: 1,
+          };
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
+      now: () =>
+        "2026-09-29T02:30:00Z",
+    });
+
+  const response =
+    await api.handle(
+      requestFor(
+        signedDraft(),
       ),
     );
 
