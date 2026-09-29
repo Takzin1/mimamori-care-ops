@@ -55,6 +55,8 @@ The authenticated approval route:
 
 binds `approvedBy` to the authenticated Care Ops actor and stamps `approvedAt` on the server. Auditors cannot approve.
 
+The signed Draft also carries the canonical Case version and a short validity window. Approval re-reads the Case and rejects stale-version, completed, closed, expired, or tampered Drafts before Outbox enqueue.
+
 Approved messages are enqueued to the existing transactional Outbox under:
 
 `care_ops.communication`
@@ -69,7 +71,7 @@ The Outbox payload does not contain destination phone numbers or email addresses
 
 Live mode:
 
-1. requests a short-lived Voice session;
+1. requests a short-lived Voice session bound to the tenant, actor, proposed Case ID, and subject ID;
 2. streams microphone audio to AssemblyAI;
 3. renders partial turns;
 4. sends only the final Turn to `/voice/plan`;
