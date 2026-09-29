@@ -13,6 +13,9 @@ import type {
 import {
   OutboxDeliveryKeyConflictError,
 } from "../outbox/errors.ts";
+import type {
+  StoredCase,
+} from "../persistence/index.ts";
 import {
   approveCommunication,
   assertCanUseVoiceOps,
@@ -35,6 +38,12 @@ export interface VoiceCommunicationGateway {
     accessToken: string;
     tenantId: string;
   }): Promise<OperatorContextProjection>;
+
+  get(input: {
+    accessToken: string;
+    tenantId: string;
+    caseId: string;
+  }): Promise<StoredCase | null>;
 }
 
 export interface VoiceCommunicationHttpApiOptions {
@@ -256,13 +265,33 @@ function draftFromBody(
 
   if (
     Object.keys(integrity).length !==
-      2 ||
+      5 ||
     integrity.version !==
       "hmac-sha256-v1" ||
     typeof integrity.signature !==
       "string" ||
     !/^[A-Za-z0-9_-]{32,256}$/.test(
       integrity.signature,
+    ) ||
+    !Number.isSafeInteger(
+      integrity.caseVersion,
+    ) ||
+    Number(
+      integrity.caseVersion,
+    ) < 1 ||
+    typeof integrity.issuedAt !==
+      "string" ||
+    !Number.isFinite(
+      Date.parse(
+        integrity.issuedAt,
+      ),
+    ) ||
+    typeof integrity.expiresAt !==
+      "string" ||
+    !Number.isFinite(
+      Date.parse(
+        integrity.expiresAt,
+      ),
     )
   ) {
     throw new Error(
@@ -285,6 +314,14 @@ function draftFromBody(
         "hmac-sha256-v1",
       signature:
         integrity.signature,
+      caseVersion:
+        Number(
+          integrity.caseVersion,
+        ),
+      issuedAt:
+        integrity.issuedAt as string,
+      expiresAt:
+        integrity.expiresAt as string,
     },
   };
 }
@@ -408,18 +445,48 @@ export class VoiceCommunicationHttpApi {
           ),
         );
 
-      const verifiedDraft =
+      const now =
+        this.#now();
+      const verified =
         await this.#integrity
           .verifyCommunicationDraft(
             tenantId,
             draft,
+            now,
           );
+
+      const currentCase =
+        await this.#gateway
+          .get({
+            accessToken,
+            tenantId,
+            caseId:
+              verified.draft
+                .caseId,
+          });
+
+      if (
+        !currentCase ||
+        currentCase.aggregate
+          .version !==
+          verified.caseVersion ||
+        currentCase.aggregate
+          .status ===
+          "COMPLETED" ||
+        currentCase.aggregate
+          .status ===
+          "CLOSED"
+      ) {
+        throw new Error(
+          "Communication draft is stale for current Case state",
+        );
+      }
 
       const approved =
         approveCommunication(
-          verifiedDraft,
+          verified.draft,
           operator.actorId,
-          this.#now(),
+          now,
         );
 
       const enqueue =
