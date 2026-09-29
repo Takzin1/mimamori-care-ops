@@ -56,11 +56,14 @@ For GitHub Actions, run the manual **Voice Preview Live Gate** workflow with a s
 
 Configure the protected `voice-preview` GitHub Environment with:
 
-Environment/repository variable:
+Environment/repository variables:
 - `CARE_OPS_PREVIEW_ORIGIN` — trusted `https://*.vercel.app` Preview origin
+- `CARE_OPS_SUPABASE_URL` — synthetic Preview project's Supabase origin
+- `CARE_OPS_SUPABASE_PUBLISHABLE_KEY` — publishable key used only for synthetic sign-in
 
 Environment secrets:
-- `CARE_OPS_PREVIEW_ACCESS_TOKEN`
+- `CARE_OPS_PREVIEW_AUTH_EMAIL`
+- `CARE_OPS_PREVIEW_AUTH_PASSWORD`
 - `VERCEL_AUTOMATION_BYPASS_SECRET`
 
-The workflow validates the trusted Vercel origin before sending either secret.
+The workflow validates the trusted Vercel origin, signs in the synthetic Preview user at runtime, and writes the fresh short-lived bearer only to the job's `GITHUB_ENV`. A long-lived `CARE_OPS_PREVIEW_ACCESS_TOKEN` secret is intentionally not used.
