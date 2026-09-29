@@ -13,7 +13,8 @@
     "test:postgres": "node --test tests/postgres-real.integration.test.ts tests/identity-postgres.integration.test.ts",
     "test:demo": "node --check demo/responder-console/app.js && node --check demo/voice-ops/live-controller.js && node --check demo/voice-ops/app.js",
     "preflight:staging": "node scripts/staging-preflight.ts",
-    "config:validate": "node scripts/deployment-config-validate.ts"
+    "config:validate": "node scripts/deployment-config-validate.ts",
+    "voice:smoke": "node scripts/voice-live-smoke.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.2"
