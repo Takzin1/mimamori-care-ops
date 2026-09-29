@@ -132,6 +132,32 @@ function state(
 function explicitFallState(
   text: string,
 ): ObservationState {
+  const uncertain =
+    containsAny(
+      text,
+      [
+        "転倒したか",
+        "転倒したのか",
+        "転んだか",
+        "倒れたか",
+      ],
+    ) &&
+    containsAny(
+      text,
+      [
+        "確認できていません",
+        "確認できない",
+        "確認していません",
+        "不明",
+        "わからない",
+        "分からない",
+      ],
+    );
+
+  if (uncertain) {
+    return "unknown";
+  }
+
   if (
     containsAny(
       text,
