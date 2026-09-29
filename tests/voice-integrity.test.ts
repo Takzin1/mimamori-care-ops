@@ -7,6 +7,12 @@ import {
 
 const secret =
   "voice-integrity-test-secret-0123456789";
+const boundCaseId =
+  "CASE-VOICE-BOUND";
+const boundSubjectId =
+  "subject-voice-bound";
+const draftNow =
+  "2026-09-29T09:03:00Z";
 
 test("Voice session receipt binds tenant, actor, session and timing", async () => {
   const integrity =
@@ -21,6 +27,10 @@ test("Voice session receipt binds tenant, actor, session and timing", async () =
           "tenant-demo",
         actorId:
           "responder-demo",
+        caseId:
+          boundCaseId,
+        subjectId:
+          boundSubjectId,
         session: {
           provider:
             "assemblyai",
@@ -48,6 +58,10 @@ test("Voice session receipt binds tenant, actor, session and timing", async () =
         "tenant-demo",
       actorId:
         "responder-demo",
+      caseId:
+        boundCaseId,
+      subjectId:
+        boundSubjectId,
       transcript: {
         provider:
           "assemblyai",
@@ -73,6 +87,10 @@ test("Voice session receipt binds tenant, actor, session and timing", async () =
             "tenant-other",
           actorId:
             "responder-demo",
+          caseId:
+            boundCaseId,
+          subjectId:
+            boundSubjectId,
           transcript: {
             provider:
               "assemblyai",
@@ -100,6 +118,10 @@ test("Voice session receipt binds tenant, actor, session and timing", async () =
             "tenant-demo",
           actorId:
             "responder-demo",
+          caseId:
+            boundCaseId,
+          subjectId:
+            boundSubjectId,
           transcript: {
             provider:
               "assemblyai",
@@ -142,6 +164,11 @@ test("signed communication Draft rejects body and tenant tampering", async () =>
           requiresHumanApproval:
             true,
         },
+        {
+          caseVersion: 1,
+          now:
+            draftNow,
+        },
       );
 
   const verified =
@@ -149,10 +176,11 @@ test("signed communication Draft rejects body and tenant tampering", async () =>
       .verifyCommunicationDraft(
         "tenant-demo",
         signed,
+        draftNow,
       );
 
   assert.equal(
-    verified.body,
+    verified.draft.body,
     "Synthetic family update",
   );
 
@@ -166,6 +194,7 @@ test("signed communication Draft rejects body and tenant tampering", async () =>
             body:
               "Tampered body",
           },
+          draftNow,
         ),
     /integrity verification failed/,
   );
@@ -176,6 +205,7 @@ test("signed communication Draft rejects body and tenant tampering", async () =>
         .verifyCommunicationDraft(
           "tenant-other",
           signed,
+          draftNow,
         ),
     /integrity verification failed/,
   );
@@ -195,6 +225,10 @@ test("Voice session receipt rejects actor replay, signature tampering and expire
           "tenant-demo",
         actorId:
           "responder-demo",
+        caseId:
+          boundCaseId,
+        subjectId:
+          boundSubjectId,
         session: {
           provider:
             "assemblyai",
@@ -237,6 +271,10 @@ test("Voice session receipt rejects actor replay, signature tampering and expire
             "tenant-demo",
           actorId:
             "responder-other",
+          caseId:
+            boundCaseId,
+          subjectId:
+            boundSubjectId,
           transcript,
           now:
             "2026-09-29T09:03:01Z",
@@ -269,6 +307,10 @@ test("Voice session receipt rejects actor replay, signature tampering and expire
             "tenant-demo",
           actorId:
             "responder-demo",
+          caseId:
+            boundCaseId,
+          subjectId:
+            boundSubjectId,
           transcript,
           now:
             "2026-09-29T09:03:01Z",
@@ -285,6 +327,10 @@ test("Voice session receipt rejects actor replay, signature tampering and expire
             "tenant-demo",
           actorId:
             "responder-demo",
+          caseId:
+            boundCaseId,
+          subjectId:
+            boundSubjectId,
           transcript,
           now:
             "2026-09-29T09:06:01.001Z",
@@ -306,6 +352,10 @@ test("Voice session receipt rejects transcript capture outside the issued sessio
           "tenant-demo",
         actorId:
           "responder-demo",
+        caseId:
+          boundCaseId,
+        subjectId:
+          boundSubjectId,
         session: {
           provider:
             "assemblyai",
@@ -335,6 +385,10 @@ test("Voice session receipt rejects transcript capture outside the issued sessio
             "tenant-demo",
           actorId:
             "responder-demo",
+          caseId:
+            boundCaseId,
+          subjectId:
+            boundSubjectId,
           transcript: {
             provider:
               "assemblyai",
@@ -377,6 +431,11 @@ test("signed communication Draft rejects Case and audience tampering", async () 
           requiresHumanApproval:
             true,
         },
+        {
+          caseVersion: 1,
+          now:
+            draftNow,
+        },
       );
 
   await assert.rejects(
@@ -389,6 +448,7 @@ test("signed communication Draft rejects Case and audience tampering", async () 
             caseId:
               "CASE-2",
           },
+          draftNow,
         ),
     /integrity verification failed/,
   );
@@ -403,7 +463,143 @@ test("signed communication Draft rejects Case and audience tampering", async () 
             audience:
               "supervisor",
           },
+          draftNow,
         ),
     /integrity verification failed/,
   );
 });
+
+
+test("Voice session receipt rejects case and subject replay", async () => {
+  const integrity =
+    new HmacVoiceIntegrity(
+      secret,
+    );
+
+  const receipt =
+    await integrity
+      .issueSessionReceipt({
+        tenantId:
+          "tenant-demo",
+        actorId:
+          "responder-demo",
+        caseId:
+          boundCaseId,
+        subjectId:
+          boundSubjectId,
+        session: {
+          provider:
+            "assemblyai",
+          sessionId:
+            "session-case-bound",
+          websocketUrl:
+            "wss://streaming.assemblyai.test/v3/ws?token=short-lived",
+          issuedAt:
+            "2026-09-29T09:00:00Z",
+          expiresAt:
+            "2026-09-29T09:05:00Z",
+          audio: {
+            encoding:
+              "pcm_s16le",
+            sampleRateHz:
+              16000,
+          },
+        },
+      });
+
+  const transcript = {
+    provider:
+      "assemblyai",
+    transcriptId:
+      "session-case-bound:1",
+    text:
+      "synthetic final turn",
+    language:
+      "ja",
+    capturedAt:
+      "2026-09-29T09:03:00Z",
+  } as const;
+
+  await assert.rejects(
+    () =>
+      integrity
+        .verifySessionReceipt({
+          receipt,
+          tenantId:
+            "tenant-demo",
+          actorId:
+            "responder-demo",
+          caseId:
+            "CASE-OTHER",
+          subjectId:
+            boundSubjectId,
+          transcript,
+          now:
+            "2026-09-29T09:03:01Z",
+        }),
+    /identity mismatch/,
+  );
+
+  await assert.rejects(
+    () =>
+      integrity
+        .verifySessionReceipt({
+          receipt,
+          tenantId:
+            "tenant-demo",
+          actorId:
+            "responder-demo",
+          caseId:
+            boundCaseId,
+          subjectId:
+            "subject-other",
+          transcript,
+          now:
+            "2026-09-29T09:03:01Z",
+        }),
+    /identity mismatch/,
+  );
+});
+
+test("signed communication Draft expires after TTL", async () => {
+  const integrity =
+    new HmacVoiceIntegrity(
+      secret,
+    );
+  const signed =
+    await integrity
+      .signCommunicationDraft(
+        "tenant-demo",
+        {
+          id:
+            "CASE-1:family:1",
+          caseId:
+            "CASE-1",
+          audience:
+            "family",
+          channel:
+            "message",
+          body:
+            "Synthetic family update",
+          requiresHumanApproval:
+            true,
+        },
+        {
+          caseVersion: 1,
+          now:
+            draftNow,
+        },
+      );
+
+  await assert.rejects(
+    () =>
+      integrity
+        .verifyCommunicationDraft(
+          "tenant-demo",
+          signed,
+          "2026-09-29T09:18:00.001Z",
+        ),
+    /timing is invalid/,
+  );
+});
+
