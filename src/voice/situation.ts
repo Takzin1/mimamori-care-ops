@@ -494,12 +494,11 @@ implements SituationUnderstandingProvider {
           response.fever,
           "fever",
         );
-      const summary =
-        safeText(
-          response.summary,
-          "summary",
-          MAX_SUMMARY_LENGTH,
-        );
+      safeText(
+        response.summary,
+        "summary",
+        MAX_SUMMARY_LENGTH,
+      );
       const clarificationQuestions =
         parseClarifications(
           response
@@ -523,7 +522,8 @@ implements SituationUnderstandingProvider {
         );
 
       return {
-        summary,
+        summary:
+          deterministic.summary,
         fall,
         collapse,
         fever,
