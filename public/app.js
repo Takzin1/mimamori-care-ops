@@ -469,7 +469,7 @@ document
           health?.counts ?? {};
 
         proofOutbox.textContent =
-          `${queuedIds.length} queued · pending ${counts.pending ?? "?"} · failed ${counts.failed ?? "?"} · dead-letter ${counts.deadLetter ?? "?"}`;
+          `${queuedIds.length} queued · pending ${counts.pending ?? "?"} · delivered ${counts.delivered ?? "?"} · failed ${counts.failed ?? "?"} · dead-letter ${counts.deadLetter ?? "?"}`;
         proofOutbox.dataset.ready =
           "true";
         result.textContent =

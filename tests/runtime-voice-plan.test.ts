@@ -175,7 +175,7 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
             processing: 0,
             failed: 0,
             deadLetter: 0,
-            delivered: null,
+            delivered: 4,
           },
           oldestActionableAt:
             "2026-09-28T12:00:20Z",
@@ -329,6 +329,7 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
           pending: number;
           failed: number;
           deadLetter: number;
+          delivered: number;
         };
       };
     };
@@ -340,6 +341,7 @@ test("voice-enabled runtime mounts authenticated live plan route", async () => {
       processing: 0,
       failed: 0,
       deadLetter: 0,
+      delivered: 4,
     },
   );
 });

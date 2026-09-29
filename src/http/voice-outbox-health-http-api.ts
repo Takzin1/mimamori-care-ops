@@ -193,6 +193,10 @@ export class VoiceOutboxHealthHttpApi {
         await this.#monitor
           .snapshot(
             tenantId,
+            {
+              includeDelivered:
+                true,
+            },
           );
 
       return json(
@@ -214,6 +218,9 @@ export class VoiceOutboxHealthHttpApi {
               deadLetter:
                 snapshot.counts
                   .deadLetter,
+              delivered:
+                snapshot.counts
+                  .delivered ?? 0,
             },
             oldestActionableAt:
               snapshot

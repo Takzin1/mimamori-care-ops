@@ -88,6 +88,7 @@ The endpoint exposes only aggregate operational state:
 - processing
 - failed
 - dead-letter
+- delivered
 - evaluated timestamp / oldest actionable timestamp / max attempt count
 
 It does not expose message payloads, destination addresses, delivery keys, Case IDs, resident identifiers, or approval text.

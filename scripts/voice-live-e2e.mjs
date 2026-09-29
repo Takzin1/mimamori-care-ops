@@ -136,6 +136,116 @@ if (
   );
 }
 
+function requestHeaders(
+  includeJson = false,
+) {
+  return {
+    accept:
+      "application/json",
+    authorization:
+      `Bearer ${accessToken}`,
+    ...(includeJson
+      ? {
+          "content-type":
+            "application/json",
+        }
+      : {}),
+    ...(protectionBypass
+      ? {
+          "x-vercel-protection-bypass":
+            protectionBypass,
+        }
+      : {}),
+  };
+}
+
+async function jsonGet(
+  path,
+) {
+  const response =
+    await fetch(
+      new URL(
+        path,
+        apiBase,
+      ),
+      {
+        method:
+          "GET",
+        headers:
+          requestHeaders(),
+        cache:
+          "no-store",
+        credentials:
+          "omit",
+        redirect:
+          "error",
+        referrerPolicy:
+          "no-referrer",
+      },
+    );
+
+  const type =
+    response.headers
+      .get("content-type")
+      ?.split(";", 1)[0]
+      ?.trim()
+      .toLowerCase();
+
+  if (
+    type !==
+      "application/json"
+  ) {
+    throw new Error(
+      `Care Ops returned non-JSON HTTP ${response.status}`,
+    );
+  }
+
+  const value =
+    await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `Care Ops HTTP ${response.status}: ${value?.error?.code ?? "unknown"}`,
+    );
+  }
+
+  return value;
+}
+
+function outboxTotal(
+  health,
+) {
+  const counts =
+    health?.outbox?.counts;
+  const values = [
+    counts?.pending,
+    counts?.processing,
+    counts?.failed,
+    counts?.deadLetter,
+    counts?.delivered,
+  ];
+
+  if (
+    values.some(
+      (value) =>
+        !Number.isSafeInteger(
+          value,
+        ) ||
+        value < 0,
+    )
+  ) {
+    throw new Error(
+      "Outbox health response shape is invalid",
+    );
+  }
+
+  return values.reduce(
+    (sum, value) =>
+      sum + value,
+    0,
+  );
+}
+
 async function jsonPost(
   path,
   body,
@@ -150,20 +260,10 @@ async function jsonPost(
       {
         method:
           "POST",
-        headers: {
-          accept:
-            "application/json",
-          authorization:
-            `Bearer ${accessToken}`,
-          "content-type":
-            "application/json",
-          ...(protectionBypass
-            ? {
-                "x-vercel-protection-bypass":
-                  protectionBypass,
-              }
-            : {}),
-        },
+        headers:
+          requestHeaders(
+            true,
+          ),
         body:
           JSON.stringify(
             body,
@@ -209,6 +309,18 @@ async function jsonPost(
 
   return value;
 }
+
+const healthPath =
+  `/api/care-ops/tenants/${encodeURIComponent(tenantId)}/voice/outbox/health`;
+
+const beforeHealth =
+  await jsonGet(
+    healthPath,
+  );
+const beforeOutboxTotal =
+  outboxTotal(
+    beforeHealth,
+  );
 
 const suffix =
   Date.now()
@@ -303,6 +415,25 @@ for (
   });
 }
 
+const afterHealth =
+  await jsonGet(
+    healthPath,
+  );
+const afterOutboxTotal =
+  outboxTotal(
+    afterHealth,
+  );
+
+if (
+  afterOutboxTotal <
+    beforeOutboxTotal +
+      queued.length
+) {
+  throw new Error(
+    "Durable Outbox aggregate did not increase by the approved communication count",
+  );
+}
+
 console.log(
   JSON.stringify(
     {
@@ -336,6 +467,15 @@ console.log(
           : null,
       communications:
         queued,
+      outbox: {
+        beforeTotal:
+          beforeOutboxTotal,
+        afterTotal:
+          afterOutboxTotal,
+        counts:
+          afterHealth.outbox
+            .counts,
+      },
     },
     null,
     2,
