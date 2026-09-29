@@ -38,7 +38,25 @@ export class RuleBasedDemoIncidentExtractor
   }): Promise<VoiceIncidentDraft> {
     const text = input.transcript.text;
 
-    const noFall = containsAny(text, [
+    const uncertainFall =
+      containsAny(text, [
+        "転倒したか",
+        "転倒したのか",
+        "転んだか",
+        "倒れたか",
+      ]) &&
+      containsAny(text, [
+        "確認できていません",
+        "確認できない",
+        "確認していません",
+        "不明",
+        "わからない",
+        "分からない",
+      ]);
+
+    const noFall =
+      !uncertainFall &&
+      containsAny(text, [
       "転倒はしていません",
       "転倒していません",
       "転倒していない",
@@ -56,7 +74,9 @@ export class RuleBasedDemoIncidentExtractor
       "tidak jatuh",
       "hampir jatuh",
     ]);
-    const fell = containsAny(text, [
+    const fell =
+      !uncertainFall &&
+      containsAny(text, [
       "転倒しました",
       "転倒した",
       "転びました",
