@@ -506,7 +506,9 @@ export class VoiceCommunicationHttpApi {
             code:
               "COMMUNICATION_APPROVAL_REJECTED",
             message:
-              "Communication approval rejected",
+              error instanceof Error
+                ? error.message
+                : "Communication approval rejected",
           },
         },
       );

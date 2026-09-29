@@ -376,7 +376,9 @@ export class VoiceSessionHttpApi {
             code:
               "VOICE_SESSION_REJECTED",
             message:
-              "Voice session request rejected",
+              error instanceof Error
+                ? error.message
+                : "Voice session request rejected",
           },
         },
       );

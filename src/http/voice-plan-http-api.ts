@@ -531,7 +531,9 @@ export class VoicePlanHttpApi {
             code:
               "VOICE_PLAN_REJECTED",
             message:
-              "Voice plan request rejected",
+              error instanceof Error
+                ? error.message
+                : "Voice plan request rejected",
           },
         },
       );

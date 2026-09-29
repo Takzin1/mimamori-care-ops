@@ -7,18 +7,17 @@ import {
 import {
   OutboxDeliveryKeyConflictError,
 } from "../src/outbox/errors.ts";
-import {
-  HmacVoiceIntegrity,
-  type CommunicationDraft,
+import type {
+  CommunicationDraft,
+  SignedCommunicationDraft,
+  VoiceIntegrity,
 } from "../src/voice/index.ts";
 
-const integrity =
-  new HmacVoiceIntegrity(
-    "voice-communication-test-secret-0123456789",
-  );
-
-const baseDraft:
-  CommunicationDraft = {
+function signedDraft(
+  overrides:
+    Partial<SignedCommunicationDraft> = {},
+): SignedCommunicationDraft {
+  return {
     id:
       "CASE-1:family:1",
     caseId:
@@ -31,120 +30,142 @@ const baseDraft:
       "Synthetic family update",
     requiresHumanApproval:
       true,
+    integrity: {
+      version:
+        "hmac-sha256-v1",
+      signature:
+        "a".repeat(43),
+    },
+    ...overrides,
   };
-
-async function signed(
-  draft:
-    CommunicationDraft =
-      baseDraft,
-) {
-  return integrity
-    .signCommunicationDraft(
-      "tenant-demo",
-      draft,
-    );
 }
 
-function gateway(
-  role:
-    "responder" |
-    "dispatcher" |
-    "supervisor" |
-    "auditor" =
-      "responder",
-) {
+const voiceIntegrity:
+  VoiceIntegrity = {
+    async issueSessionReceipt() {
+      return "test-receipt";
+    },
+    async verifySessionReceipt(
+      input,
+    ) {
+      assert.equal(
+        input.receipt,
+        "test-receipt",
+      );
+    },
+    async signCommunicationDraft(
+      _tenantId,
+      draft,
+    ) {
+      return {
+        ...draft,
+        integrity: {
+          version:
+            "hmac-sha256-v1",
+          signature:
+            "a".repeat(43),
+        },
+      };
+    },
+    async verifyCommunicationDraft(
+      _tenantId,
+      draft,
+    ) {
+      const {
+        integrity:
+          _integrity,
+        ...unsigned
+      } = draft;
+
+      return unsigned;
+    },
+  };
+
+function responderGateway() {
   return {
     async operatorContext() {
       return {
         tenantId:
           "tenant-demo",
         actorId:
-          role === "auditor"
-            ? "auditor-demo"
-            : "responder-demo",
+          "responder-demo",
         roles: [
-          role,
+          "responder",
         ],
         queueVisibility:
-          role === "auditor"
-            ? "tenant" as const
-            : "responder" as const,
-      };
+          "responder",
+      } as const;
     },
   };
 }
 
-function outbox(
-  enqueue:
-    (input: any) =>
-      Promise<{
-        created: boolean;
-        id: number;
-      }>,
-) {
-  return {
-    enqueue,
-    async claim() {
-      return [];
+function requestFor(
+  draft:
+    SignedCommunicationDraft,
+): Request {
+  return new Request(
+    "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/communications/approve",
+    {
+      method:
+        "POST",
+      headers: {
+        authorization:
+          "Bearer user-token",
+        "content-type":
+          "application/json",
+      },
+      body:
+        JSON.stringify({
+          draft,
+        }),
     },
-    async complete() {
-      return true;
-    },
-    async fail() {
-      return {
-        ok: true,
-        status:
-          "failed" as const,
-      };
-    },
-  };
+  );
 }
 
-test("communication approval binds authenticated actor and enqueues verified Draft without destination PII", async () => {
+test("communication approval binds authenticated actor and enqueues without destination PII", async () => {
   const enqueued:
-    any[] = [];
+    unknown[] = [];
 
   const api =
     new VoiceCommunicationHttpApi({
       gateway:
-        gateway(),
-      integrity,
-      outbox:
-        outbox(
-          async (
+        responderGateway(),
+      integrity:
+        voiceIntegrity,
+      outbox: {
+        async enqueue(
+          input,
+        ) {
+          enqueued.push(
             input,
-          ) => {
-            enqueued.push(
-              input,
-            );
-            return {
-              created: true,
-              id: 22,
-            };
-          },
-        ),
+          );
+          return {
+            created: true,
+            id: 22,
+          };
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
       now: () =>
         "2026-09-29T02:30:00Z",
     });
 
   const response =
     await api.handle(
-      new Request(
-        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/communications/approve",
-        {
-          method: "POST",
-          headers: {
-            authorization:
-              "Bearer user-token",
-            "content-type":
-              "application/json",
-          },
-          body:
-            JSON.stringify({
-              draft:
-                await signed(),
-            }),
-        },
+      requestFor(
+        signedDraft(),
       ),
     );
 
@@ -158,7 +179,13 @@ test("communication approval binds authenticated actor and enqueues verified Dra
   );
 
   const queued =
-    enqueued[0];
+    enqueued[0] as {
+      topic: string;
+      payload: Record<
+        string,
+        unknown
+      >;
+    };
 
   assert.equal(
     queued.topic,
@@ -191,41 +218,51 @@ test("auditor cannot approve communication", async () => {
 
   const api =
     new VoiceCommunicationHttpApi({
-      gateway:
-        gateway(
-          "auditor",
-        ),
-      integrity,
-      outbox:
-        outbox(
-          async () => {
-            enqueued = true;
-            return {
-              created: true,
-              id: 1,
-            };
-          },
-        ),
+      gateway: {
+        async operatorContext() {
+          return {
+            tenantId:
+              "tenant-demo",
+            actorId:
+              "auditor-demo",
+            roles: [
+              "auditor",
+            ],
+            queueVisibility:
+              "tenant",
+          } as const;
+        },
+      },
+      integrity:
+        voiceIntegrity,
+      outbox: {
+        async enqueue() {
+          enqueued = true;
+          return {
+            created: true,
+            id: 1,
+          };
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
     });
 
   const response =
     await api.handle(
-      new Request(
-        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/communications/approve",
-        {
-          method: "POST",
-          headers: {
-            authorization:
-              "Bearer user-token",
-            "content-type":
-              "application/json",
-          },
-          body:
-            JSON.stringify({
-              draft:
-                await signed(),
-            }),
-        },
+      requestFor(
+        signedDraft(),
       ),
     );
 
@@ -241,50 +278,44 @@ test("auditor cannot approve communication", async () => {
 
 test("communication approval rejects draft identity mismatch before enqueue", async () => {
   let enqueued = false;
-  const mismatched:
-    CommunicationDraft = {
-      ...baseDraft,
-      id:
-        "CASE-OTHER:family:1",
-    };
 
   const api =
     new VoiceCommunicationHttpApi({
       gateway:
-        gateway(),
-      integrity,
-      outbox:
-        outbox(
-          async () => {
-            enqueued = true;
-            return {
-              created: true,
-              id: 1,
-            };
-          },
-        ),
+        responderGateway(),
+      integrity:
+        voiceIntegrity,
+      outbox: {
+        async enqueue() {
+          enqueued = true;
+          return {
+            created: true,
+            id: 1,
+          };
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
     });
 
   const response =
     await api.handle(
-      new Request(
-        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/communications/approve",
-        {
-          method: "POST",
-          headers: {
-            authorization:
-              "Bearer user-token",
-            "content-type":
-              "application/json",
-          },
-          body:
-            JSON.stringify({
-              draft:
-                await signed(
-                  mismatched,
-                ),
-            }),
-        },
+      requestFor(
+        signedDraft({
+          id:
+            "CASE-OTHER:family:1",
+        }),
       ),
     );
 
@@ -302,40 +333,38 @@ test("re-approving the same communication draft fails closed without duplicate e
   const api =
     new VoiceCommunicationHttpApi({
       gateway:
-        gateway(),
-      integrity,
-      outbox:
-        outbox(
-          async (
-            input,
-          ) => {
-            throw new OutboxDeliveryKeyConflictError(
-              input.tenantId,
-              input.deliveryKey,
-            );
-          },
-        ),
+        responderGateway(),
+      integrity:
+        voiceIntegrity,
+      outbox: {
+        async enqueue(
+          input,
+        ) {
+          throw new OutboxDeliveryKeyConflictError(
+            input.tenantId,
+            input.deliveryKey,
+          );
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
     });
 
   const response =
     await api.handle(
-      new Request(
-        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/communications/approve",
-        {
-          method:
-            "POST",
-          headers: {
-            authorization:
-              "Bearer user-token",
-            "content-type":
-              "application/json",
-          },
-          body:
-            JSON.stringify({
-              draft:
-                await signed(),
-            }),
-        },
+      requestFor(
+        signedDraft(),
       ),
     );
 
@@ -359,49 +388,57 @@ test("re-approving the same communication draft fails closed without duplicate e
 
 test("communication approval rejects signed Draft body tampering before enqueue", async () => {
   let enqueued = false;
-  const original =
-    await signed();
-  const tampered = {
-    ...original,
-    body:
-      "Tampered body",
-  };
+
+  const tamperRejectingIntegrity:
+    VoiceIntegrity = {
+      ...voiceIntegrity,
+      async verifyCommunicationDraft() {
+        throw new Error(
+          "Communication draft integrity verification failed",
+        );
+      },
+    };
 
   const api =
     new VoiceCommunicationHttpApi({
       gateway:
-        gateway(),
-      integrity,
-      outbox:
-        outbox(
-          async () => {
-            enqueued = true;
-            return {
-              created: true,
-              id: 1,
-            };
-          },
-        ),
+        responderGateway(),
+      integrity:
+        tamperRejectingIntegrity,
+      outbox: {
+        async enqueue() {
+          enqueued = true;
+          return {
+            created: true,
+            id: 1,
+          };
+        },
+        async claim() {
+          return [];
+        },
+        async complete() {
+          return true;
+        },
+        async fail() {
+          return {
+            ok: true,
+            status:
+              "failed",
+          };
+        },
+      },
+    });
+
+  const tampered =
+    signedDraft({
+      body:
+        "Tampered body",
     });
 
   const response =
     await api.handle(
-      new Request(
-        "https://care.example.test/api/care-ops/tenants/tenant-demo/voice/communications/approve",
-        {
-          method: "POST",
-          headers: {
-            authorization:
-              "Bearer user-token",
-            "content-type":
-              "application/json",
-          },
-          body:
-            JSON.stringify({
-              draft:
-                tampered,
-            }),
-        },
+      requestFor(
+        tampered,
       ),
     );
 

@@ -5,45 +5,6 @@ import {
   VoicePlanHttpApi,
 } from "../src/http/index.ts";
 
-const integrity = {
-  async issueSessionReceipt() {
-    return "test-evidence-receipt";
-  },
-  async verifySessionReceipt(
-    input,
-  ) {
-    assert.equal(
-      input.receipt,
-      "test-evidence-receipt",
-    );
-  },
-  async signCommunicationDraft(
-    _tenantId,
-    draft,
-  ) {
-    return {
-      ...draft,
-      integrity: {
-        version:
-          "hmac-sha256-v1",
-        signature:
-          "a".repeat(43),
-      },
-    };
-  },
-  async verifyCommunicationDraft(
-    _tenantId,
-    draft,
-  ) {
-    const {
-      integrity:
-        _integrity,
-      ...unsigned
-    } = draft;
-    return unsigned;
-  },
-};
-
 const voiceIntegrity = {
   async issueSessionReceipt() {
     return "test-receipt";
