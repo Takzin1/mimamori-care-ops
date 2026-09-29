@@ -18,6 +18,8 @@ const CLOCK_SKEW_MS =
   30_000;
 const RECEIPT_GRACE_MS =
   60_000;
+const DRAFT_TTL_MS =
+  15 * 60_000;
 
 export interface SignedCommunicationDraft
 extends CommunicationDraft {
@@ -25,12 +27,24 @@ extends CommunicationDraft {
     version:
       typeof VERSION;
     signature: string;
+    caseVersion: number;
+    issuedAt: string;
+    expiresAt: string;
   };
+}
+
+export interface VerifiedCommunicationDraft {
+  draft: CommunicationDraft;
+  caseVersion: number;
+  issuedAt: string;
+  expiresAt: string;
 }
 
 export interface VoiceSessionReceiptClaims {
   tenantId: string;
   actorId: string;
+  caseId: string;
+  subjectId: string;
   sessionId: string;
   issuedAt: string;
   expiresAt: string;
@@ -40,6 +54,8 @@ export interface VoiceIntegrity {
   issueSessionReceipt(input: {
     tenantId: string;
     actorId: string;
+    caseId: string;
+    subjectId: string;
     session:
       VoiceRealtimeSession;
   }): Promise<string>;
@@ -48,6 +64,8 @@ export interface VoiceIntegrity {
     receipt: string;
     tenantId: string;
     actorId: string;
+    caseId: string;
+    subjectId: string;
     transcript:
       VoiceTranscriptEvidence;
     now: string;
@@ -57,6 +75,10 @@ export interface VoiceIntegrity {
     tenantId: string,
     draft:
       CommunicationDraft,
+    context: {
+      caseVersion: number;
+      now: string;
+    },
   ): Promise<
     SignedCommunicationDraft
   >;
@@ -65,8 +87,9 @@ export interface VoiceIntegrity {
     tenantId: string,
     draft:
       SignedCommunicationDraft,
+    now: string,
   ): Promise<
-    CommunicationDraft
+    VerifiedCommunicationDraft
   >;
 }
 
@@ -242,6 +265,10 @@ function sessionPayload(
       claims.tenantId,
     actorId:
       claims.actorId,
+    caseId:
+      claims.caseId,
+    subjectId:
+      claims.subjectId,
     sessionId:
       claims.sessionId,
     issuedAt:
@@ -255,6 +282,11 @@ function draftPayload(
   tenantId: string,
   draft:
     CommunicationDraft,
+  metadata: {
+    caseVersion: number;
+    issuedAt: string;
+    expiresAt: string;
+  },
 ): string {
   return JSON.stringify({
     version:
@@ -272,7 +304,29 @@ function draftPayload(
       draft.body,
     requiresHumanApproval:
       draft.requiresHumanApproval,
+    caseVersion:
+      metadata.caseVersion,
+    issuedAt:
+      metadata.issuedAt,
+    expiresAt:
+      metadata.expiresAt,
   });
+}
+
+function positiveInteger(
+  value: number,
+  label: string,
+): number {
+  if (
+    !Number.isSafeInteger(value) ||
+    value < 1
+  ) {
+    throw new Error(
+      `Voice integrity ${label} is invalid`,
+    );
+  }
+
+  return value;
 }
 
 export class HmacVoiceIntegrity
@@ -355,6 +409,8 @@ implements VoiceIntegrity {
     input: {
       tenantId: string;
       actorId: string;
+      caseId: string;
+      subjectId: string;
       session:
         VoiceRealtimeSession;
     },
@@ -364,6 +420,10 @@ implements VoiceIntegrity {
         input.tenantId,
       actorId:
         input.actorId,
+      caseId:
+        input.caseId,
+      subjectId:
+        input.subjectId,
       sessionId:
         input.session
           .sessionId,
@@ -397,6 +457,8 @@ implements VoiceIntegrity {
       receipt: string;
       tenantId: string;
       actorId: string;
+      caseId: string;
+      subjectId: string;
       transcript:
         VoiceTranscriptEvidence;
       now: string;
@@ -464,6 +526,8 @@ implements VoiceIntegrity {
           "version",
           "tenantId",
           "actorId",
+          "caseId",
+          "subjectId",
           "sessionId",
           "issuedAt",
           "expiresAt",
@@ -489,6 +553,16 @@ implements VoiceIntegrity {
         record.actorId,
         "actorId",
       );
+    const caseId =
+      stringField(
+        record.caseId,
+        "caseId",
+      );
+    const subjectId =
+      stringField(
+        record.subjectId,
+        "subjectId",
+      );
     const sessionId =
       stringField(
         record.sessionId,
@@ -509,7 +583,11 @@ implements VoiceIntegrity {
       tenantId !==
         input.tenantId ||
       actorId !==
-        input.actorId
+        input.actorId ||
+      caseId !==
+        input.caseId ||
+      subjectId !==
+        input.subjectId
     ) {
       throw new Error(
         "Voice session receipt identity mismatch",
@@ -577,13 +655,42 @@ implements VoiceIntegrity {
     tenantId: string,
     draft:
       CommunicationDraft,
+    context: {
+      caseVersion: number;
+      now: string;
+    },
   ): Promise<
     SignedCommunicationDraft
   > {
+    const caseVersion =
+      positiveInteger(
+        context.caseVersion,
+        "caseVersion",
+      );
+    const issuedAtMs =
+      timestamp(
+        context.now,
+        "draft issuedAt",
+      );
+    const issuedAt =
+      new Date(
+        issuedAtMs,
+      ).toISOString();
+    const expiresAt =
+      new Date(
+        issuedAtMs +
+          DRAFT_TTL_MS,
+      ).toISOString();
+    const metadata = {
+      caseVersion,
+      issuedAt,
+      expiresAt,
+    };
     const payload =
       draftPayload(
         tenantId,
         draft,
+        metadata,
       );
 
     return {
@@ -595,6 +702,7 @@ implements VoiceIntegrity {
           await this.#sign(
             payload,
           ),
+        ...metadata,
       },
     };
   }
@@ -603,9 +711,60 @@ implements VoiceIntegrity {
     tenantId: string,
     draft:
       SignedCommunicationDraft,
+    now: string,
   ): Promise<
-    CommunicationDraft
+    VerifiedCommunicationDraft
   > {
+    const metadata = {
+      caseVersion:
+        positiveInteger(
+          draft.integrity
+            .caseVersion,
+          "caseVersion",
+        ),
+      issuedAt:
+        stringField(
+          draft.integrity
+            .issuedAt,
+          "draft issuedAt",
+        ),
+      expiresAt:
+        stringField(
+          draft.integrity
+            .expiresAt,
+          "draft expiresAt",
+        ),
+    };
+    const issuedAtMs =
+      timestamp(
+        metadata.issuedAt,
+        "draft issuedAt",
+      );
+    const expiresAtMs =
+      timestamp(
+        metadata.expiresAt,
+        "draft expiresAt",
+      );
+    const nowMs =
+      timestamp(
+        now,
+        "draft now",
+      );
+
+    if (
+      expiresAtMs <=
+        issuedAtMs ||
+      nowMs <
+        issuedAtMs -
+          CLOCK_SKEW_MS ||
+      nowMs >
+        expiresAtMs
+    ) {
+      throw new Error(
+        "Communication draft timing is invalid",
+      );
+    }
+
     if (
       draft.integrity
         .version !== VERSION ||
@@ -613,6 +772,7 @@ implements VoiceIntegrity {
         draftPayload(
           tenantId,
           draft,
+          metadata,
         ),
         draft.integrity
           .signature,
@@ -629,6 +789,10 @@ implements VoiceIntegrity {
       ...unsigned
     } = draft;
 
-    return unsigned;
+    return {
+      draft:
+        unsigned,
+      ...metadata,
+    };
   }
 }
