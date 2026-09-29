@@ -41,19 +41,41 @@ export class RuleBasedDemoIncidentExtractor
     const noFall = containsAny(text, [
       "転倒はしていません",
       "転倒していません",
+      "転倒していない",
+      "転倒してない",
+      "転倒はありません",
       "転倒なし",
+      "転倒には至っていません",
+      "転倒には至らず",
+      "転んでいません",
+      "転んでいない",
+      "転んでない",
       "did not fall",
       "didn't fall",
+      "did not actually fall",
+      "tidak jatuh",
       "hampir jatuh",
     ]);
     const fell = containsAny(text, [
       "転倒しました",
+      "転倒した",
       "転びました",
+      "転んだ",
+      "倒れました",
       "fell down",
+      "did fall",
+      "jatuh",
+    ]) && !containsAny(text, [
+      "tidak jatuh",
+      "hampir jatuh",
     ]);
 
     const seated = containsAny(text, [
       "座っています",
+      "座ってます",
+      "座らせています",
+      "椅子に座って",
+      "腰掛けています",
       "着座",
       "sitting",
       "duduk",
@@ -61,17 +83,24 @@ export class RuleBasedDemoIncidentExtractor
 
     const asksForHelp = containsAny(text, [
       "どうすれば",
+      "どうしたら",
+      "どう対応",
+      "対応を教えて",
       "初めて",
       "わからない",
       "分からない",
       "what should i do",
+      "what do i do",
       "apa yang harus",
       "tidak paham",
     ]);
 
     const urgentSignal = containsAny(text, [
       "意識がない",
+      "意識ありません",
+      "呼びかけに反応がない",
       "呼吸していない",
+      "呼吸がない",
       "大量出血",
       "unconscious",
       "not breathing",

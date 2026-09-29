@@ -119,3 +119,111 @@ test("partial AssemblyAI turn is rejected", () => {
     /Only final AssemblyAI turns/,
   );
 });
+
+
+test("natural Japanese STT negation variants remain near-miss instead of false fall", async () => {
+  const extractor =
+    new RuleBasedDemoIncidentExtractor();
+
+  for (
+    const text of [
+      "立ち上がりでふらつきましたが、転倒してないです。今は座ってます。どうしたらいいですか。",
+      "少しよろけました。転倒はありません。椅子に座っています。",
+      "バランスを崩しましたが転んでいません。現在は着座しています。",
+      "転倒には至らず、今は座っています。どう対応すればよいですか。",
+    ]
+  ) {
+    const result =
+      await extractor.extract({
+        subjectId:
+          "subject-demo-variant",
+        transcript: {
+          provider:
+            "assemblyai",
+          transcriptId:
+            "voice-variant",
+          text,
+          language:
+            "ja",
+          capturedAt,
+        },
+      });
+
+    assert.equal(
+      result.kind,
+      "near_miss",
+      text,
+    );
+    assert.equal(
+      result.observations.find(
+        (item) =>
+          item.key ===
+            "fall_occurred",
+      )?.state,
+      "denied",
+      text,
+    );
+  }
+});
+
+test("ambiguous fall wording remains fail-closed as incident", async () => {
+  const extractor =
+    new RuleBasedDemoIncidentExtractor();
+
+  const result =
+    await extractor.extract({
+      subjectId:
+        "subject-demo-ambiguous",
+      transcript: {
+        provider:
+          "assemblyai",
+        transcriptId:
+          "voice-ambiguous",
+        text:
+          "利用者がふらつきました。転倒したかは確認できていません。",
+        language:
+          "ja",
+        capturedAt,
+      },
+    });
+
+  assert.equal(
+    result.kind,
+    "incident",
+  );
+  assert.equal(
+    result.observations.find(
+      (item) =>
+        item.key ===
+          "fall_occurred",
+    )?.state,
+    "unknown",
+  );
+});
+
+test("Indonesian no-fall wording does not collide with generic jatuh token", async () => {
+  const extractor =
+    new RuleBasedDemoIncidentExtractor();
+
+  const result =
+    await extractor.extract({
+      subjectId:
+        "subject-demo-id",
+      transcript: {
+        provider:
+          "assemblyai",
+        transcriptId:
+          "voice-id-no-fall",
+        text:
+          "Pengguna hampir jatuh tetapi tidak jatuh. Sekarang duduk.",
+        language:
+          "id",
+        capturedAt,
+      },
+    });
+
+  assert.equal(
+    result.kind,
+    "near_miss",
+  );
+});
