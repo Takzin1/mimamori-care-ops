@@ -23,3 +23,30 @@ The script requests a short-lived Voice session and validates the returned Assem
 It does **not** print the Care Ops bearer token or the short-lived AssemblyAI token. Output is limited to provider name, websocket host, sample rate, encoding, and expiry.
 
 A successful smoke check verifies the server-side token/session boundary only. The browser Live Demo must still be used to verify microphone capture, realtime transcription, final Turn handling, Case creation, SOP rendering, and human-approved Outbox enqueue.
+
+
+## Protected Vercel Preview
+
+If Vercel Deployment Protection is enabled, set the automation bypass secret only in the shell or GitHub Actions secret store:
+
+```sh
+export VERCEL_AUTOMATION_BYPASS_SECRET=...
+```
+
+Both `voice:probe` and `voice:smoke` send it only as the `x-vercel-protection-bypass` request header to the Care Ops Preview origin. It is never logged and is never sent to AssemblyAI.
+
+## Synthetic backend E2E
+
+After the session smoke succeeds:
+
+```sh
+npm run voice:e2e
+```
+
+The E2E command uses a synthetic transcript to verify the deployed backend path:
+
+`final transcript → Voice plan → persisted Case → SOP guidance → communication drafts → explicit approval → durable Outbox enqueue`
+
+It does not use microphone audio and therefore does not replace the final browser microphone test.
+
+For GitHub Actions, run the manual **Voice Preview Live Gate** workflow with a Preview URL and synthetic tenant. Store the Care Ops bearer as `CARE_OPS_PREVIEW_ACCESS_TOKEN` and the Vercel bypass as `VERCEL_AUTOMATION_BYPASS_SECRET` in GitHub Actions secrets.

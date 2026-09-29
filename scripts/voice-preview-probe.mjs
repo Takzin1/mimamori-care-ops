@@ -47,6 +47,26 @@ if (
   );
 }
 
+const protectionBypass =
+  process.env
+    .VERCEL_AUTOMATION_BYPASS_SECRET
+    ?.trim();
+
+if (
+  protectionBypass &&
+  (
+    protectionBypass.length >
+      8 * 1024 ||
+    /[\r\n]/.test(
+      protectionBypass,
+    )
+  )
+) {
+  throw new Error(
+    "VERCEL_AUTOMATION_BYPASS_SECRET is malformed",
+  );
+}
+
 async function fetchNoStore(
   path,
   accept,
@@ -60,6 +80,12 @@ async function fetchNoStore(
       method: "GET",
       headers: {
         accept,
+        ...(protectionBypass
+          ? {
+              "x-vercel-protection-bypass":
+                protectionBypass,
+            }
+          : {}),
       },
       cache:
         "no-store",

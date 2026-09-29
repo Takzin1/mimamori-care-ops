@@ -88,6 +88,26 @@ const locale =
     "ja-JP"
   ).trim();
 
+const protectionBypass =
+  process.env
+    .VERCEL_AUTOMATION_BYPASS_SECRET
+    ?.trim();
+
+if (
+  protectionBypass &&
+  (
+    protectionBypass.length >
+      8 * 1024 ||
+    /[\r\n]/.test(
+      protectionBypass,
+    )
+  )
+) {
+  throw new Error(
+    "VERCEL_AUTOMATION_BYPASS_SECRET is malformed",
+  );
+}
+
 const endpoint =
   new URL(
     `/api/care-ops/tenants/${encodeURIComponent(tenant)}/voice/session`,
@@ -107,6 +127,12 @@ const response =
           `Bearer ${accessToken}`,
         "content-type":
           "application/json",
+        ...(protectionBypass
+          ? {
+              "x-vercel-protection-bypass":
+                protectionBypass,
+            }
+          : {}),
       },
       body:
         JSON.stringify({

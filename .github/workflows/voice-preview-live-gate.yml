@@ -1,0 +1,60 @@
+name: Voice Preview Live Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      preview_url:
+        description: Vercel Preview origin, e.g. https://example.vercel.app
+        required: true
+        type: string
+      tenant_id:
+        description: Synthetic Care Ops tenant ID
+        required: true
+        default: tenant-demo
+        type: string
+      locale:
+        description: Voice locale
+        required: true
+        default: ja-JP
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  live-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+
+      - name: Install locked toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Preview readiness
+        env:
+          CARE_OPS_API_BASE: ${{ inputs.preview_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npm run voice:probe
+
+      - name: AssemblyAI session boundary
+        env:
+          CARE_OPS_API_BASE: ${{ inputs.preview_url }}
+          CARE_OPS_TENANT_ID: ${{ inputs.tenant_id }}
+          CARE_OPS_VOICE_LOCALE: ${{ inputs.locale }}
+          CARE_OPS_ACCESS_TOKEN: ${{ secrets.CARE_OPS_PREVIEW_ACCESS_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npm run voice:smoke
+
+      - name: Synthetic Care Ops E2E
+        env:
+          CARE_OPS_API_BASE: ${{ inputs.preview_url }}
+          CARE_OPS_TENANT_ID: ${{ inputs.tenant_id }}
+          CARE_OPS_VOICE_LOCALE: ${{ inputs.locale }}
+          CARE_OPS_ACCESS_TOKEN: ${{ secrets.CARE_OPS_PREVIEW_ACCESS_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npm run voice:e2e
