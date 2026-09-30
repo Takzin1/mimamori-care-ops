@@ -18,6 +18,10 @@
     "voice:probe": "node scripts/voice-preview-probe.mjs",
     "voice:e2e": "node scripts/voice-live-e2e.mjs"
   },
+  "dependencies": {
+    "@aws-sdk/client-lambda": "latest",
+    "@vercel/oidc-aws-credentials-provider": "latest"
+  },
   "devDependencies": {
     "typescript": "5.9.2"
   }
