@@ -32,6 +32,26 @@ function configured(
   );
 }
 
+function bedrockRequiredConfiguration(): readonly string[] {
+  const transport =
+    process.env.CARE_OPS_BEDROCK_TRANSPORT?.trim() ||
+    "api_key";
+
+  if (transport === "lambda") {
+    return [
+      "AWS_REGION",
+      "AWS_ROLE_ARN",
+      "CARE_OPS_BEDROCK_LAMBDA_FUNCTION_NAME",
+    ];
+  }
+
+  return [
+    "AWS_REGION",
+    "CARE_OPS_BEDROCK_MODEL_ID",
+    "AWS_BEARER_TOKEN_BEDROCK",
+  ];
+}
+
 function missingConfiguration():
   readonly string[] {
   const missing: string[] = REQUIRED.filter(
@@ -39,7 +59,7 @@ function missingConfiguration():
   );
 
   if (process.env.CARE_OPS_SITUATION_PROVIDER === "bedrock") {
-    for (const name of ["AWS_REGION", "CARE_OPS_BEDROCK_MODEL_ID", "AWS_BEARER_TOKEN_BEDROCK"]) {
+    for (const name of bedrockRequiredConfiguration()) {
       if (!configured(name)) missing.push(name);
     }
   }
@@ -70,6 +90,8 @@ export function previewHealth():
   const configuredForPreview =
     preview &&
     missing.length === 0;
+  const bedrockRequired =
+    bedrockRequiredConfiguration();
 
   return new Response(
     JSON.stringify({
@@ -87,8 +109,15 @@ export function previewHealth():
         "configuration-only",
       missing,
       situationUnderstanding: preview ? {
-        provider: process.env.CARE_OPS_SITUATION_PROVIDER === "bedrock" ? "bedrock" : "rule_based",
-        bedrockConfigurationPresent: ["AWS_REGION", "CARE_OPS_BEDROCK_MODEL_ID", "AWS_BEARER_TOKEN_BEDROCK"].every(configured),
+        provider:
+          process.env.CARE_OPS_SITUATION_PROVIDER === "bedrock"
+            ? "bedrock"
+            : "rule_based",
+        transport:
+          process.env.CARE_OPS_BEDROCK_TRANSPORT?.trim() ||
+          "api_key",
+        bedrockConfigurationPresent:
+          bedrockRequired.every(configured),
       } : null,
       commit:
         process.env
