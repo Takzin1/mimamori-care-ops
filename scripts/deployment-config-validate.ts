@@ -14,7 +14,7 @@ function usage(): string {
     "  CARE_OPS_ENVIRONMENT",
     "  SUPABASE_URL",
     "  SUPABASE_PUBLISHABLE_KEY",
-    "  SUPABASE_SERVICE_ROLE_KEY",
+    "  SUPABASE_SECRET_KEY (preferred) or SUPABASE_SERVICE_ROLE_KEY (legacy fallback)",
     "  CARE_OPS_CONSOLE_ORIGINS",
     "  CARE_OPS_SLA_POLICIES_JSON",
   ].join("\n");

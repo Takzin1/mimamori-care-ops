@@ -3,6 +3,11 @@ import {
   outboundTimeoutMs,
 } from "../outbound.ts";
 import {
+  createSupabaseServerCredential,
+  supabaseServerHeaders,
+  type SupabaseServerCredential,
+} from "../supabase/server-credential.ts";
+import {
   CaseStoreCorruptionError,
   CaseStoreTransportError,
 } from "../persistence/errors.ts";
@@ -40,7 +45,9 @@ export interface OutboxHealthMonitor {
 
 export interface PostgrestOutboxMonitorOptions {
   baseUrl: string;
-  serviceRoleKey: string;
+  serverCredential?: SupabaseServerCredential;
+  secretKey?: string;
+  serviceRoleKey?: string;
   fetchImpl?: FetchLike;
   requestTimeoutMs?: number;
 }
@@ -188,7 +195,8 @@ function parseSnapshot(
 export class PostgrestOutboxMonitor
 implements OutboxHealthMonitor {
   readonly #baseUrl: string;
-  readonly #serviceRoleKey: string;
+  readonly #serverCredential:
+    SupabaseServerCredential;
   readonly #fetchImpl: FetchLike;
   readonly #requestTimeoutMs: number;
 
@@ -204,11 +212,13 @@ implements OutboxHealthMonitor {
       baseUrl.endsWith("/")
         ? baseUrl.slice(0, -1)
         : baseUrl;
-    this.#serviceRoleKey =
-      requireText(
-        options.serviceRoleKey,
-        "service role key",
-      );
+    this.#serverCredential =
+      options.serverCredential ??
+      createSupabaseServerCredential({
+        secretKey: options.secretKey,
+        serviceRoleKey:
+          options.serviceRoleKey,
+      });
     this.#fetchImpl =
       options.fetchImpl ?? fetch;
     this.#requestTimeoutMs =
@@ -229,16 +239,17 @@ implements OutboxHealthMonitor {
         "tenantId",
       );
 
-    const headers = new Headers({
-      apikey: this.#serviceRoleKey,
-      authorization:
-        `Bearer ${this.#serviceRoleKey}`,
-      accept: "application/json",
-      "content-type":
-        "application/json",
-      "accept-profile": "public",
-      "content-profile": "public",
-    });
+    const headers =
+      supabaseServerHeaders(
+        this.#serverCredential,
+        {
+          accept: "application/json",
+          "content-type":
+            "application/json",
+          "accept-profile": "public",
+          "content-profile": "public",
+        },
+      );
 
     let response: Response;
 

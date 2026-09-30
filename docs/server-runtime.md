@@ -8,7 +8,8 @@ A deployment still needs to compose its trusted server dependencies. The referen
 createSupabaseCareOpsRuntime({
   supabaseUrl,
   publishableKey,
-  serviceRoleKey,
+  secretKey, // preferred sb_secret_... server credential
+  // serviceRoleKey remains a legacy fallback
   slaPolicies,
 })
 ```
@@ -54,9 +55,11 @@ The publishable key identifies the Supabase Auth project for user verification.
 
 It is not treated as a Care Ops authorization role source.
 
-### Service-role key
+### Server credential
 
-The service-role key is used only by trusted server-side PostgREST adapters.
+The preferred server credential is a modern `sb_secret_...` key. It is used only by trusted server-side PostgREST adapters and is sent in the `apikey` header only.
+
+Legacy `service_role` JWT credentials remain a compatibility fallback. Only that legacy path uses `Authorization: Bearer <service_role>`.
 
 It must never be sent to:
 

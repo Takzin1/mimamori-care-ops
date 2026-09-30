@@ -9,6 +9,11 @@ import {
   createOperationalSupabaseCareOpsRuntime,
   type OperationalSupabaseCareOpsRuntime,
 } from "../runtime/index.ts";
+import type {
+  VoiceIntegrity,
+  VoiceOpsService,
+  VoiceRealtimeSessionIssuer,
+} from "../voice/index.ts";
 import {
   parseCareOpsDeploymentEnvironment,
   type DeploymentEnvironmentInput,
@@ -22,6 +27,9 @@ type FetchLike = (
 export interface CareOpsDeploymentOptions {
   env: DeploymentEnvironmentInput;
   admission: CareOpsRequestAdmission;
+  voiceSessionIssuer?: VoiceRealtimeSessionIssuer;
+  voiceOpsService?: VoiceOpsService;
+  voiceIntegrity?: VoiceIntegrity;
   logger?: CareOpsStructuredLogger;
   metrics?: CareOpsMetricsSink;
   readinessChecks?: readonly CareOpsReadinessCheck[];
@@ -45,10 +53,18 @@ export function createCareOpsDeployment(
         config.supabaseUrl,
       publishableKey:
         config.publishableKey,
+      secretKey:
+        config.secretKey,
       serviceRoleKey:
         config.serviceRoleKey,
       slaPolicies:
         config.slaPolicies,
+      voiceSessionIssuer:
+        options.voiceSessionIssuer,
+      voiceOpsService:
+        options.voiceOpsService,
+      voiceIntegrity:
+        options.voiceIntegrity,
       outboundTimeoutMs:
         config.outboundTimeoutMs,
       maxCommandBodyBytes:

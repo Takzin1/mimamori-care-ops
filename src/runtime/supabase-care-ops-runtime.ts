@@ -13,12 +13,27 @@ import {
 import {
   CareOpsHttpApi,
 } from "../http/care-ops-http-api.ts";
+import {
+  VoicePlanHttpApi,
+} from "../http/voice-plan-http-api.ts";
+import {
+  VoiceCommunicationHttpApi,
+} from "../http/voice-communication-http-api.ts";
+import {
+  VoiceOutboxHealthHttpApi,
+} from "../http/voice-outbox-health-http-api.ts";
+import {
+  VoiceSessionHttpApi,
+} from "../http/voice-session-http-api.ts";
 import type {
   RequestIdFactory,
 } from "../http/types.ts";
 import {
   SupabaseAuthAuthenticator,
 } from "../identity/supabase-authenticator.ts";
+import {
+  createSupabaseServerCredential,
+} from "../supabase/server-credential.ts";
 import {
   InMemoryTenantSlaPolicyDirectory,
 } from "../operations/policy-directory.ts";
@@ -28,6 +43,17 @@ import type {
 import {
   PostgrestCaseRepository,
 } from "../persistence/postgrest-case-repository.ts";
+import {
+  PostgrestOutboxStore,
+} from "../outbox/postgrest-outbox-store.ts";
+import {
+  PostgrestOutboxMonitor,
+} from "../outbox/monitor.ts";
+import {
+  VoiceOpsService,
+  type VoiceIntegrity,
+  type VoiceRealtimeSessionIssuer,
+} from "../voice/index.ts";
 
 type FetchLike = (
   input: string | URL,
@@ -39,8 +65,12 @@ export type RuntimeClock = () => string;
 export interface SupabaseCareOpsRuntimeOptions {
   supabaseUrl: string;
   publishableKey: string;
-  serviceRoleKey: string;
+  secretKey?: string;
+  serviceRoleKey?: string;
   slaPolicies: Readonly<Record<string, CaseSlaPolicy>>;
+  voiceSessionIssuer?: VoiceRealtimeSessionIssuer;
+  voiceOpsService?: VoiceOpsService;
+  voiceIntegrity?: VoiceIntegrity;
   fetchImpl?: FetchLike;
   casePageSize?: number;
   outboundTimeoutMs?: number;
@@ -69,19 +99,24 @@ function assertRuntimeConfig(
     options.publishableKey,
     "Supabase publishable key",
   );
-  const serviceRoleKey = requiredText(
-    options.serviceRoleKey,
-    "Supabase service-role key",
-  );
+  const serverCredential =
+    createSupabaseServerCredential({
+      secretKey: options.secretKey,
+      serviceRoleKey:
+        options.serviceRoleKey,
+    });
 
   requiredText(
     options.supabaseUrl,
     "Supabase URL",
   );
 
-  if (publishableKey === serviceRoleKey) {
+  if (
+    publishableKey ===
+    serverCredential.apiKey
+  ) {
     throw new Error(
-      "Supabase publishable and service-role keys must be different",
+      "Supabase publishable and server credentials must be different",
     );
   }
 
@@ -94,8 +129,58 @@ function assertRuntimeConfig(
   }
 }
 
+function voiceRouteKind(
+  request: Request,
+): "session" | "plan" | "communication" | "outbox-health" | null {
+  const pathname =
+    new URL(request.url)
+      .pathname;
+
+  if (
+    /^\/api\/care-ops\/tenants\/[^/]+\/voice\/session$/.test(
+      pathname,
+    )
+  ) {
+    return "session";
+  }
+
+  if (
+    /^\/api\/care-ops\/tenants\/[^/]+\/voice\/plan$/.test(
+      pathname,
+    )
+  ) {
+    return "plan";
+  }
+
+  if (
+    /^\/api\/care-ops\/tenants\/[^/]+\/voice\/communications\/approve$/.test(
+      pathname,
+    )
+  ) {
+    return "communication";
+  }
+
+  if (
+    /^\/api\/care-ops\/tenants\/[^/]+\/voice\/outbox\/health$/.test(
+      pathname,
+    )
+  ) {
+    return "outbox-health";
+  }
+
+  return null;
+}
+
 export class SupabaseCareOpsRuntime {
   readonly #http: CareOpsHttpApi;
+  readonly #voiceSessionHttp:
+    VoiceSessionHttpApi | null;
+  readonly #voicePlanHttp:
+    VoicePlanHttpApi | null;
+  readonly #voiceCommunicationHttp:
+    VoiceCommunicationHttpApi | null;
+  readonly #voiceOutboxHealthHttp:
+    VoiceOutboxHealthHttpApi | null;
 
   constructor(
     options: SupabaseCareOpsRuntimeOptions,
@@ -105,6 +190,12 @@ export class SupabaseCareOpsRuntime {
     const now =
       options.clock ??
       (() => new Date().toISOString());
+    const serverCredential =
+      createSupabaseServerCredential({
+        secretKey: options.secretKey,
+        serviceRoleKey:
+          options.serviceRoleKey,
+      });
 
     const authenticator =
       new SupabaseAuthAuthenticator({
@@ -119,8 +210,7 @@ export class SupabaseCareOpsRuntime {
     const memberships =
       new PostgrestTenantMembershipDirectory({
         baseUrl: options.supabaseUrl,
-        serviceRoleKey:
-          options.serviceRoleKey,
+        serverCredential,
         fetchImpl: options.fetchImpl,
         requestTimeoutMs:
           options.outboundTimeoutMs,
@@ -129,8 +219,7 @@ export class SupabaseCareOpsRuntime {
     const repository =
       new PostgrestCaseRepository({
         baseUrl: options.supabaseUrl,
-        serviceRoleKey:
-          options.serviceRoleKey,
+        serverCredential,
         fetchImpl: options.fetchImpl,
         pageSize: options.casePageSize,
         requestTimeoutMs:
@@ -170,12 +259,128 @@ export class SupabaseCareOpsRuntime {
       requestIdFactory:
         options.requestIdFactory,
     });
+
+    const voiceEnabled =
+      Boolean(
+        options.voiceSessionIssuer ||
+        options.voiceOpsService,
+      );
+
+    if (
+      voiceEnabled &&
+      !options.voiceIntegrity
+    ) {
+      throw new Error(
+        "Voice integrity is required when Voice Ops is enabled",
+      );
+    }
+
+    this.#voiceSessionHttp =
+      options.voiceSessionIssuer
+        ? new VoiceSessionHttpApi({
+            gateway,
+            issuer:
+              options.voiceSessionIssuer,
+            integrity:
+              options.voiceIntegrity!,
+            now,
+          })
+        : null;
+
+    this.#voicePlanHttp =
+      voiceEnabled
+        ? new VoicePlanHttpApi({
+            gateway,
+            service:
+              options.voiceOpsService,
+            integrity:
+              options.voiceIntegrity!,
+            now,
+            maxBodyBytes:
+              options.maxCommandBodyBytes,
+          })
+        : null;
+
+    this.#voiceCommunicationHttp =
+      voiceEnabled
+        ? new VoiceCommunicationHttpApi({
+            gateway,
+            outbox:
+              new PostgrestOutboxStore({
+                baseUrl:
+                  options.supabaseUrl,
+                serverCredential,
+                fetchImpl:
+                  options.fetchImpl,
+                requestTimeoutMs:
+                  options.outboundTimeoutMs,
+              }),
+            integrity:
+              options.voiceIntegrity!,
+            now,
+          })
+        : null;
+
+    this.#voiceOutboxHealthHttp =
+      voiceEnabled
+        ? new VoiceOutboxHealthHttpApi({
+            gateway,
+            monitor:
+              new PostgrestOutboxMonitor({
+                baseUrl:
+                  options.supabaseUrl,
+                serverCredential,
+                fetchImpl:
+                  options.fetchImpl,
+                requestTimeoutMs:
+                  options.outboundTimeoutMs,
+              }),
+          })
+        : null;
   }
 
   handle(
     request: Request,
   ): Promise<Response> {
-    return this.#http.handle(request);
+    const voiceRoute =
+      voiceRouteKind(
+        request,
+      );
+
+    if (
+      voiceRoute === "session" &&
+      this.#voiceSessionHttp
+    ) {
+      return this.#voiceSessionHttp
+        .handle(request);
+    }
+
+    if (
+      voiceRoute === "plan" &&
+      this.#voicePlanHttp
+    ) {
+      return this.#voicePlanHttp
+        .handle(request);
+    }
+
+    if (
+      voiceRoute === "communication" &&
+      this.#voiceCommunicationHttp
+    ) {
+      return this.#voiceCommunicationHttp
+        .handle(request);
+    }
+
+    if (
+      voiceRoute === "outbox-health" &&
+      this.#voiceOutboxHealthHttp
+    ) {
+      return this.#voiceOutboxHealthHttp
+        .handle(request);
+    }
+
+    return this.#http
+      .handle(request);
   }
 }
 

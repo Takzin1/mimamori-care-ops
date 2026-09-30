@@ -1,3 +1,12 @@
+export interface SourceTranscriptEvidence {
+  provider: "assemblyai";
+  transcriptId: string;
+  text: string;
+  language: string;
+  capturedAt: string;
+  provenance: "client_relayed_session_bound";
+}
+
 export const CASE_STATUSES = [
   "NEW",
   "ACKNOWLEDGED",
@@ -109,6 +118,7 @@ export type CaseEvent =
         sourceType: SignalType;
         sourceAdapter: string;
         sourceSignalId: string;
+        sourceEvidence?: SourceTranscriptEvidence;
         priority: CasePriority;
       };
     })
@@ -200,6 +210,7 @@ export type CaseCommand =
   | { type: "reopen"; actorId: string; reason: string };
 
 export interface NewCaseInput {
+  sourceEvidence?: SourceTranscriptEvidence;
   id: string;
   tenantId: string;
   subjectId: string;

@@ -15,4 +15,5 @@ export * from "./session/index.ts";
 export * from "./console/index.ts";
 export * from "./console-web/index.ts";
 export * from "./ops/index.ts";
+export * from "./voice/index.ts";
 export * from "./outbound.ts";

@@ -3,6 +3,11 @@ import {
   outboundTimeoutMs,
 } from "../outbound.ts";
 import {
+  createSupabaseServerCredential,
+  supabaseServerHeaders,
+  type SupabaseServerCredential,
+} from "../supabase/server-credential.ts";
+import {
   CaseStoreCorruptionError,
   CaseStoreTransportError,
 } from "../persistence/errors.ts";
@@ -26,7 +31,9 @@ type FetchLike = (
 
 export interface PostgrestOutboxStoreOptions {
   baseUrl: string;
-  serviceRoleKey: string;
+  serverCredential?: SupabaseServerCredential;
+  secretKey?: string;
+  serviceRoleKey?: string;
   fetchImpl?: FetchLike;
   requestTimeoutMs?: number;
 }
@@ -137,7 +144,8 @@ function asMessage(value: unknown): OutboxMessage {
 
 export class PostgrestOutboxStore implements OutboxStore {
   private readonly baseUrl: string;
-  private readonly serviceRoleKey: string;
+  private readonly serverCredential:
+    SupabaseServerCredential;
   private readonly fetchImpl: FetchLike;
   private readonly requestTimeoutMs: number;
 
@@ -149,10 +157,13 @@ export class PostgrestOutboxStore implements OutboxStore {
     this.baseUrl = baseUrl.endsWith("/")
       ? baseUrl.slice(0, -1)
       : baseUrl;
-    this.serviceRoleKey = requireText(
-      options.serviceRoleKey,
-      "service role key",
-    );
+    this.serverCredential =
+      options.serverCredential ??
+      createSupabaseServerCredential({
+        secretKey: options.secretKey,
+        serviceRoleKey:
+          options.serviceRoleKey,
+      });
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.requestTimeoutMs = outboundTimeoutMs(
       options.requestTimeoutMs,
@@ -169,14 +180,17 @@ export class PostgrestOutboxStore implements OutboxStore {
     name: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    const headers = new Headers({
-      apikey: this.serviceRoleKey,
-      authorization: `Bearer ${this.serviceRoleKey}`,
-      accept: "application/json",
-      "content-type": "application/json",
-      "accept-profile": "public",
-      "content-profile": "public",
-    });
+    const headers =
+      supabaseServerHeaders(
+        this.serverCredential,
+        {
+          accept: "application/json",
+          "content-type":
+            "application/json",
+          "accept-profile": "public",
+          "content-profile": "public",
+        },
+      );
 
     let response: Response;
     try {
