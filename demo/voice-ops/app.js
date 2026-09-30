@@ -206,6 +206,7 @@ function renderDrafts(
 function renderPlan(
   plan,
   caseProjection,
+  timings,
 ) {
   livePlan =
     plan;
@@ -215,6 +216,10 @@ function renderPlan(
       `${caseProjection.id} · ${caseProjection.status} · v${caseProjection.version}`;
     proofCase.dataset.ready =
       "true";
+    if (timings) {
+      const processing = plan.incident.situation?.processing;
+      proofCase.textContent += ` · ${processing?.provider ?? "unknown"}${processing?.fallbackReason ? " (" + processing.fallbackReason + ")" : ""} · understanding ${Math.round(timings.situationMs ?? 0)} ms · server ${Math.round(timings.planTotalMs ?? 0)} ms · final→plan ${Math.round(timings.finalToPlanMs ?? 0)} ms`;
+    }
   }
 
   text(

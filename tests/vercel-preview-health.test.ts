@@ -107,6 +107,7 @@ test("Vercel Preview health reports configured only when all server configuratio
         scope:
           "configuration-only",
         missing: [],
+        situationUnderstanding: { provider: "rule_based", bedrockConfigurationPresent: false },
         commit:
           "1234567890ab",
       },

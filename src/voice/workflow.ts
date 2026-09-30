@@ -50,6 +50,7 @@ export async function buildVoiceOpsPlan(input: {
       subjectId: input.subjectId,
       type: "manual",
       priority: incident.recommendedPriority,
+      sourceEvidence: { ...input.transcript, provenance: "client_relayed_session_bound" },
     },
     incident,
     guidance,

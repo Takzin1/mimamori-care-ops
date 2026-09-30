@@ -118,6 +118,7 @@ export class CaseService {
       sourceAdapter: signal.sourceAdapter,
       sourceSignalId: signal.id,
       priority: signal.priority,
+      ...(signal.sourceEvidence ? { sourceEvidence: signal.sourceEvidence } : {}),
       createdAt: this.now(),
     });
 

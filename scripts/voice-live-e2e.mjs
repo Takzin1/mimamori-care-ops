@@ -406,6 +406,12 @@ if (
   );
 }
 
+if (process.env.CARE_OPS_REQUIRE_BEDROCK === "1" &&
+    (planResult.plan.incident?.situation?.processing?.provider !== "bedrock" ||
+     planResult.plan.incident.situation.processing.fallbackReason)) {
+  throw new Error("Bedrock live gate failed: provider was not Bedrock success");
+}
+
 const queued = [];
 
 for (
@@ -487,6 +493,8 @@ console.log(
           planResult.plan
             .incident?.urgency,
       },
+      situationProcessing: planResult.plan.incident?.situation?.processing ?? null,
+      timings: planResult.timings ?? null,
       guidanceActions:
         Array.isArray(
           planResult.plan

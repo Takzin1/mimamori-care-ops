@@ -34,7 +34,8 @@ export function normalizeAssemblyAiTurn(
     turn.transcriptId,
     "transcript id",
   );
-  const text = requireText(turn.text, "transcript text");
+  requireText(turn.text, "transcript text");
+  const text = turn.text;
   const capturedAt = requireText(
     turn.capturedAt,
     "captured at",

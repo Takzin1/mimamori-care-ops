@@ -149,6 +149,7 @@ test("authenticated voice plan endpoint turns final transcript into incident gui
                 null,
             },
             event: {
+              data: { sourceEvidence: input.signal.sourceEvidence },
               type:
                 "case_created",
               tenantId:
@@ -415,6 +416,7 @@ test("signal replay rebinds communication drafts to canonical stored Case ID", a
                 null,
             },
             event: {
+              data: { sourceEvidence: input.signal.sourceEvidence },
               type:
                 "case_created",
               tenantId:

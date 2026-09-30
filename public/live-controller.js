@@ -305,13 +305,13 @@ function finalEvidence(
   const text =
     typeof turn.transcript ===
       "string"
-      ? turn.transcript.trim()
+      ? turn.transcript
       : "";
 
   if (
     turn.type !== "Turn" ||
     turn.end_of_turn !== true ||
-    !text
+    !text.trim()
   ) {
     return null;
   }
@@ -451,6 +451,7 @@ export function createLiveVoiceController(
       );
     }
 
+    const planStarted = performance.now();
     const value =
       await jsonRequest(
         `${config.apiBase}/api/care-ops/tenants/${encodeURIComponent(config.tenantId)}/voice/plan`,
@@ -472,6 +473,7 @@ export function createLiveVoiceController(
     handlers.onPlan?.(
       value.plan,
       value.case,
+      { ...value.timings, finalToPlanMs: performance.now() - planStarted },
     );
   }
 

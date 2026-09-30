@@ -4,9 +4,11 @@ import type {
   CaseEvent,
   CasePriority,
   SignalType,
+  SourceTranscriptEvidence,
 } from "../core/types.ts";
 
 export interface AttentionSignal {
+  sourceEvidence?: SourceTranscriptEvidence;
   id: string;
   tenantId: string;
   sourceAdapter: string;

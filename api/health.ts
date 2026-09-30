@@ -34,9 +34,15 @@ function configured(
 
 function missingConfiguration():
   readonly string[] {
-  const missing = REQUIRED.filter(
+  const missing: string[] = REQUIRED.filter(
     (name) => !configured(name),
   );
+
+  if (process.env.CARE_OPS_SITUATION_PROVIDER === "bedrock") {
+    for (const name of ["AWS_REGION", "CARE_OPS_BEDROCK_MODEL_ID", "AWS_BEARER_TOKEN_BEDROCK"]) {
+      if (!configured(name)) missing.push(name);
+    }
+  }
 
   if (
     !SERVER_CREDENTIALS.some(
@@ -80,6 +86,10 @@ export function previewHealth():
       scope:
         "configuration-only",
       missing,
+      situationUnderstanding: preview ? {
+        provider: process.env.CARE_OPS_SITUATION_PROVIDER === "bedrock" ? "bedrock" : "rule_based",
+        bedrockConfigurationPresent: ["AWS_REGION", "CARE_OPS_BEDROCK_MODEL_ID", "AWS_BEARER_TOKEN_BEDROCK"].every(configured),
+      } : null,
       commit:
         process.env
           .VERCEL_GIT_COMMIT_SHA

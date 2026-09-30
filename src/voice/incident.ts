@@ -169,8 +169,8 @@ implements IncidentExtractor {
         ),
         observation(
           "consciousness",
-          "意識状態",
-          "unknown",
+          "意識の存在（申告）",
+          situation.consciousness,
         ),
         observation(
           "pain",
@@ -180,7 +180,7 @@ implements IncidentExtractor {
         observation(
           "injury",
           "外傷",
-          "unknown",
+          situation.injury,
         ),
         observation(
           "dizziness_continues",
@@ -188,6 +188,11 @@ implements IncidentExtractor {
           "unknown",
         ),
       ];
+
+    observations.push(
+      observation("breathing", "呼吸の存在（申告）", situation.breathing),
+      observation("uncertainty", "申告の不確実性", situation.uncertainty),
+    );
 
     const currentState =
       seated
@@ -210,7 +215,8 @@ implements IncidentExtractor {
         asksForHelp,
       observations,
       evidence:
-        input.transcript,
+        { ...input.transcript },
+      situation,
     };
   }
 }

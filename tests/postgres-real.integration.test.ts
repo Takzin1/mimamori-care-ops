@@ -62,6 +62,7 @@ test(
     );
 
     const created = createCase({
+      sourceEvidence: { provider: "assemblyai", transcriptId: "signal-db-001", text: " 高熱を出して倒れています。\n", language: "ja", capturedAt: "2026-09-25T06:00:00.000Z", provenance: "client_relayed_session_bound" },
       id: "case-db-001",
       tenantId: "provider-db",
       sourceAdapter: "integration-test",
@@ -80,6 +81,9 @@ test(
         ")::text;",
       ),
     );
+
+    const storedEvidence = JSON.parse(sql("select event#>'{data,sourceEvidence}' from public.care_case_events where tenant_id='provider-db' and case_id='case-db-001' and sequence=1;"));
+    assert.deepEqual(storedEvidence, created.event.data.sourceEvidence);
 
     assert.equal(createResult.ok, true);
     assert.equal(createResult.created, true);

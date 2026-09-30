@@ -1,3 +1,4 @@
+import type { CriticalFacts, CriticalFactEvidence } from "./critical-facts.ts";
 import type {
   CasePriority,
 } from "../core/types.ts";
@@ -24,7 +25,9 @@ export interface VoiceTranscriptEvidence {
   capturedAt: string;
 }
 
-export interface SituationUnderstanding {
+export interface SituationUnderstanding extends CriticalFacts {
+  factEvidence: CriticalFactEvidence;
+  processing?: { provider: "rule_based" | "bedrock" | "guarded_api"; durationMs: number; fallbackReason?: "timeout" | "provider_error" | "invalid_response"; guardedFacts?: number };
   summary: string;
   fall: ObservationState;
   collapse: ObservationState;
@@ -42,6 +45,8 @@ export interface SituationUnderstandingProvider {
 
 export interface IncidentObservation {
   key:
+    | "breathing"
+    | "uncertainty"
     | "consciousness"
     | "pain"
     | "injury"
@@ -65,6 +70,7 @@ export interface VoiceIncidentDraft {
   needsGuidance: boolean;
   observations: IncidentObservation[];
   evidence: VoiceTranscriptEvidence;
+  situation?: SituationUnderstanding;
 }
 
 export interface NextAction {

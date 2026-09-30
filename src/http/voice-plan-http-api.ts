@@ -180,7 +180,7 @@ function transcript(
     transcriptId:
       record.transcriptId.trim(),
     text:
-      record.text.trim(),
+      record.text,
     language:
       record.language.trim() ||
       "und",
@@ -279,6 +279,7 @@ export class VoicePlanHttpApi {
   async handle(
     request: Request,
   ): Promise<Response> {
+    const started = performance.now();
     try {
       const tenantId =
         tenantFromPath(
@@ -449,6 +450,14 @@ export class VoicePlanHttpApi {
               plan.signal,
           });
 
+      const persistedEvidence = opened.event.data.sourceEvidence;
+      if (!persistedEvidence || persistedEvidence.text !== evidence.text ||
+          persistedEvidence.transcriptId !== evidence.transcriptId ||
+          persistedEvidence.language !== evidence.language ||
+          persistedEvidence.capturedAt !== evidence.capturedAt) {
+        throw new Error("Voice evidence persistence mismatch");
+      }
+
       const canonicalDrafts =
         createCommunicationDrafts({
           caseId:
@@ -487,6 +496,7 @@ export class VoicePlanHttpApi {
         {
           plan:
             canonicalPlan,
+          timings: { planTotalMs: performance.now() - started, situationMs: plan.incident.situation?.processing?.durationMs ?? null },
           evidenceProvenance:
             "client_relayed_session_bound",
           case: {

@@ -157,6 +157,7 @@ export function createCase(input: NewCaseInput): {
       sourceAdapter,
       sourceSignalId,
       priority: input.priority,
+      ...(input.sourceEvidence ? { sourceEvidence: { ...input.sourceEvidence } } : {}),
     },
   };
 

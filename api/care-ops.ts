@@ -1,3 +1,4 @@
+import { VoiceOpsService, situationProviderFromEnvironment } from "../src/voice/index.ts";
 import {
   createAssemblyAiVoiceCareOpsDeployment,
 } from "../src/deployment/index.ts";
@@ -94,6 +95,7 @@ function previewRuntime(
   const runtime =
     createAssemblyAiVoiceCareOpsDeployment({
       env,
+      voiceOpsService: new VoiceOpsService({ situationProvider: situationProviderFromEnvironment(process.env) }),
       assemblyAiApiKey:
         requiredEnv(
           "ASSEMBLYAI_API_KEY",

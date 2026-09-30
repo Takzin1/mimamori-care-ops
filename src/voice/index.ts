@@ -17,3 +17,6 @@ export * from "./service.ts";
 export * from "./realtime-session.ts";
 export * from "./realtime-transport.ts";
 export * from "./browser-audio.ts";
+
+export * from "./critical-facts.ts";
+export * from "./bedrock-situation.ts";
