@@ -80,6 +80,8 @@ export class InMemorySignalStore implements SignalStore {
       .filter((record) => record.tenantId === tenantId)
       .filter((record) => !filter.disposition || record.disposition === filter.disposition)
       .filter((record) => !filter.caseId || record.caseId === filter.caseId)
+      .filter((record) => !filter.receivedFrom || Date.parse(record.receivedAt) >= Date.parse(filter.receivedFrom))
+      .filter((record) => !filter.receivedTo || Date.parse(record.receivedAt) < Date.parse(filter.receivedTo))
       .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
       .map(clone);
   }

@@ -59,7 +59,7 @@ import {
   type AiSourceText,
 } from "./ai-assist.ts";
 import { computeCareOpsAnalytics, type CareOpsAnalytics } from "./analytics.ts";
-import { PROVISIONAL_SLA_POLICY } from "./defaults.ts";
+import { PROVISIONAL_SLA_POLICY, defaultFacilitySettings } from "./defaults.ts";
 import {
   CareOpsConflictError,
   CareOpsNotFoundError,
@@ -513,6 +513,39 @@ export class CareOpsPlatformService {
     return next;
   }
 
+  /**
+   * Operator provisioning (server-side tooling only, never exposed over
+   * HTTP). Creates a facility with PROVISIONAL, unapproved thresholds.
+   * Idempotent: an existing facility is left untouched.
+   */
+  async provisionFacility(input: { tenantId: string; facilityId: string; displayName: string; operator: string }): Promise<{ created: boolean; settings: FacilitySettings }> {
+    const facilityId = requireText(input.facilityId, "facilityId", 128);
+    if (!/^[A-Za-z0-9._:-]{1,128}$/.test(facilityId)) throw new CareOpsRuleError("INVALID_INPUT", "facilityId has invalid format");
+    const existing = await this.#settings.get(input.tenantId, facilityId);
+    if (existing) return { created: false, settings: existing };
+    const settings = defaultFacilitySettings({
+      tenantId: input.tenantId,
+      facilityId,
+      displayName: requireText(input.displayName, "displayName", 100),
+      now: this.#now(),
+    });
+    if (!(await this.#settings.save(settings, 0))) {
+      return { created: false, settings: (await this.#settings.get(input.tenantId, facilityId))! };
+    }
+    await this.#recordAudit({
+      tenantId: input.tenantId,
+      facilityId,
+      actorId: `provisioning:${requireText(input.operator, "operator", 64)}`,
+      action: "settings.facility_provisioned",
+      targetType: "settings",
+      targetId: facilityId,
+      before: null,
+      after: settings,
+      reason: "operator provisioning",
+    });
+    return { created: true, settings };
+  }
+
   /* ----------------------------- signals ---------------------------- */
 
   /**
@@ -937,9 +970,10 @@ export class CareOpsPlatformService {
     const membership = await this.#memberWith(ctx, "view_analytics", "analytics_forbidden");
     this.#assertFacilityFilter(membership, input.facilityId);
     const { resolve } = await this.#policyResolver(ctx.tenantId);
-    const signals = (await this.#signals.list(ctx.tenantId)).filter((signal) =>
-      membershipCoversFacility(membership, signal.facilityId),
-    );
+    const signals = (await this.#signals.list(ctx.tenantId, {
+      receivedFrom: new Date(Date.parse(input.from)).toISOString(),
+      receivedTo: new Date(Date.parse(input.to)).toISOString(),
+    })).filter((signal) => membershipCoversFacility(membership, signal.facilityId));
     try {
       return computeCareOpsAnalytics({
         cases: await this.#analyticsCases(membership, input),

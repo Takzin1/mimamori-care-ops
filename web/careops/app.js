@@ -1,4 +1,4 @@
-import { ApiError, createApi, fetchLocalStaff } from "./api.js";
+import { ApiError, createApi, fetchAppConfig, fetchLocalStaff, supabasePasswordLogin } from "./api.js";
 import {
   announce, clear, confirmDialog, field, formDialog, formatDateTime, formatMinutes, h, minutesSince, select,
 } from "./dom.js";
@@ -22,8 +22,8 @@ function logout(message) {
   if (message) announce(message, "error");
 }
 
-async function login(tenantId, principalId) {
-  const api = createApi({ tenantId, token: `local.${principalId}`, onUnauthorized: () => logout("認証が切れました。再度ログインしてください。") });
+async function login(tenantId, token) {
+  const api = createApi({ tenantId, token, onUnauthorized: () => logout("認証が切れました。再度ログインしてください。") });
   const me = await api.me();
   const staff = await api.staff();
   state.session = { api, me, staff };
@@ -128,6 +128,8 @@ async function guarded(action, successMessage) {
 /* ------------------------------------------------------------------ */
 
 async function loginView() {
+  const config = await fetchAppConfig();
+  if (config.mode === "supabase") return supabaseLoginView(config);
   const data = await fetchLocalStaff();
   return h("section", { class: "login" },
     pageHeader("職員を選択してログイン"),
@@ -139,11 +141,41 @@ async function loginView() {
             class: "btn btn-block btn-secondary",
             type: "button",
             dataset: { principal: member.principalId },
-            on: { click: () => guarded(() => login(data.tenantId, member.principalId)) },
+            on: { click: () => guarded(() => login(data.tenantId, `local.${member.principalId}`)) },
           }, member.label),
         ),
       ),
     ),
+  );
+}
+
+function supabaseLoginView(config) {
+  const form = h("form", { class: "panel", "aria-labelledby": "login-title" },
+    h("h2", { id: "login-title" }, "職員ログイン"),
+    field("メールアドレス", h("input", { type: "email", name: "email", required: true, autocomplete: "username" })),
+    field("パスワード", h("input", { type: "password", name: "password", required: true, autocomplete: "current-password" })),
+    h("button", { type: "submit", class: "btn btn-primary btn-block" }, "ログイン"),
+  );
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = form.querySelector("button[type=submit]");
+    submit.disabled = true;
+    try {
+      const values = Object.fromEntries(new FormData(form).entries());
+      const session = await supabasePasswordLogin(config, String(values.email), String(values.password));
+      await login(config.tenantId, session.accessToken);
+    } catch {
+      // Same message for unknown user / wrong password / no membership.
+      announce("ログインできませんでした。メールアドレス・パスワード・所属を確認してください。", "error");
+      state.session = null;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  return h("section", { class: "login" },
+    pageHeader("見守りくん CareOps"),
+    h("p", { class: "callout callout-info" }, "ステージング環境です。合成データのみを使用してください。"),
+    form,
   );
 }
 
@@ -921,6 +953,12 @@ function nav(path) {
 }
 
 let renderToken = 0;
+let envLabel = "検証環境 ・ 合成データのみ";
+fetchAppConfig().then((config) => {
+  envLabel = config.mode === "supabase" ? "ステージング環境 ・ 合成データのみ" : "ローカル検証環境 ・ 合成データのみ";
+  const banner = document.querySelector(".env-banner");
+  if (banner) banner.textContent = envLabel;
+}).catch(() => {});
 
 async function render() {
   const token = ++renderToken;
@@ -935,7 +973,7 @@ async function render() {
       h("button", { type: "button", class: "btn btn-small btn-secondary", on: { click: () => logout() } }, "ログアウト"),
     ) : null,
   );
-  const banner = h("div", { class: "env-banner", role: "note" }, "ローカル検証環境 ・ 合成データのみ");
+  const banner = h("div", { class: "env-banner", role: "note" }, envLabel);
   clear(root).append(banner, header, ...(state.session ? [nav(path)] : []), main);
 
   try {

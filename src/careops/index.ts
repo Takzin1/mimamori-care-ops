@@ -9,3 +9,5 @@ export * from "./platform-service.ts";
 export * from "./http-parsers.ts";
 export * from "./http.ts";
 export * from "./local.ts";
+export * from "./postgrest-stores.ts";
+export * from "./deployment.ts";

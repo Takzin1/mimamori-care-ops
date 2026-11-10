@@ -50,6 +50,9 @@ export interface SignalRecord {
 export interface SignalListFilter {
   disposition?: SignalDisposition;
   caseId?: string;
+  /** Canonical ISO instants; receivedAt in [receivedFrom, receivedTo). */
+  receivedFrom?: string;
+  receivedTo?: string;
 }
 
 export interface SignalStore {

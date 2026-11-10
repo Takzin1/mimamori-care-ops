@@ -69,6 +69,30 @@ export function createApi({ tenantId, token, onUnauthorized }) {
   };
 }
 
+export async function fetchAppConfig() {
+  const response = await fetch("/careops-config.json", { cache: "no-store", credentials: "omit" });
+  if (!response.ok) throw new Error("設定を取得できません");
+  return response.json();
+}
+
+/**
+ * Supabase Auth password grant (staging). The access token is returned to
+ * the caller and kept in memory only; nothing is written to storage.
+ */
+export async function supabasePasswordLogin(config, email, password) {
+  const response = await fetch(`${config.supabaseUrl}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { apikey: config.publishableKey, "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+    credentials: "omit",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new ApiError(response.status, "LOGIN_FAILED", "Login failed");
+  const data = await response.json();
+  if (typeof data?.access_token !== "string") throw new ApiError(500, "LOGIN_FAILED", "Login failed");
+  return { accessToken: data.access_token, expiresIn: Number(data.expires_in) || 3600 };
+}
+
 export async function fetchLocalStaff() {
   const response = await fetch("/local/staff", { cache: "no-store", credentials: "omit" });
   if (!response.ok) throw new Error("ローカル職員一覧を取得できません");

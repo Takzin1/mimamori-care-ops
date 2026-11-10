@@ -474,9 +474,16 @@ export class SqliteSignalStore implements SignalStore {
   async list(tenantId: string, filter: SignalListFilter = {}) {
     return this.#store.db
       .prepare(
-        "select record from care_signals where tenant_id = ? and (? is null or disposition = ?) and (? is null or case_id = ?) order by received_at desc",
+        "select record from care_signals where tenant_id = ? and (? is null or disposition = ?) and (? is null or case_id = ?) " +
+        "and (? is null or received_at >= ?) and (? is null or received_at < ?) order by received_at desc, id asc",
       )
-      .all(tenantId, filter.disposition ?? null, filter.disposition ?? null, filter.caseId ?? null, filter.caseId ?? null)
+      .all(
+        tenantId,
+        filter.disposition ?? null, filter.disposition ?? null,
+        filter.caseId ?? null, filter.caseId ?? null,
+        filter.receivedFrom ?? null, filter.receivedFrom ?? null,
+        filter.receivedTo ?? null, filter.receivedTo ?? null,
+      )
       .map((row) => parse<SignalRecord>(row.record));
   }
 }

@@ -1,6 +1,6 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { mkdir, readFile } from "node:fs/promises";
-import { dirname, extname, join, normalize, resolve, sep } from "node:path";
+import { createServer } from "node:http";
+import { mkdir } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -9,6 +9,16 @@ import {
   type AiDraftProvider,
 } from "../src/careops/ai-assist.ts";
 import { createLocalCareOpsApp, type LocalCareOpsApp } from "../src/careops/local.ts";
+import {
+  BodyTooLargeError,
+  ROOT,
+  jsonError,
+  securityHeaders,
+  send,
+  serveStatic,
+  toWebRequest,
+  writeWebResponse,
+} from "./http-shell.ts";
 import { createSqliteStores } from "./sqlite-stores.ts";
 
 /**
@@ -17,27 +27,7 @@ import { createSqliteStores } from "./sqlite-stores.ts";
  * development tokens are not real credentials.
  */
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const WEB_ROOT = join(ROOT, "web", "careops");
-const MAX_BODY_BYTES = 64 * 1024;
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1"]);
-
-const CONTENT_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".json": "application/json; charset=utf-8",
-};
-
-const SECURITY_HEADERS: Record<string, string> = {
-  "content-security-policy":
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
-  "x-content-type-options": "nosniff",
-  "referrer-policy": "no-referrer",
-  "x-frame-options": "DENY",
-  "cache-control": "no-store",
-};
 
 export interface LocalServerOptions {
   host?: string;
@@ -53,48 +43,6 @@ export interface RunningLocalServer {
   close(): Promise<void>;
 }
 
-async function readBody(request: IncomingMessage): Promise<Uint8Array<ArrayBuffer> | null> {
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for await (const chunk of request) {
-    total += chunk.byteLength;
-    if (total > MAX_BODY_BYTES) {
-      request.destroy();
-      throw new Error("body too large");
-    }
-    chunks.push(chunk);
-  }
-  if (total === 0) return null;
-  const body = new Uint8Array(new ArrayBuffer(total));
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return body;
-}
-
-function send(response: ServerResponse, status: number, body: string | Uint8Array, headers: Record<string, string>): void {
-  response.statusCode = status;
-  for (const [key, value] of Object.entries({ ...SECURITY_HEADERS, ...headers })) response.setHeader(key, value);
-  response.end(body);
-}
-
-async function serveStatic(pathname: string, response: ServerResponse): Promise<void> {
-  const relative = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
-  const target = normalize(join(WEB_ROOT, relative));
-  if (!target.startsWith(WEB_ROOT + sep) || !(extname(target) in CONTENT_TYPES)) {
-    send(response, 404, "Not found", { "content-type": "text/plain; charset=utf-8" });
-    return;
-  }
-  try {
-    const file = await readFile(target);
-    send(response, 200, file, { "content-type": CONTENT_TYPES[extname(target)]! });
-  } catch {
-    send(response, 404, "Not found", { "content-type": "text/plain; charset=utf-8" });
-  }
-}
-
 export async function startCareOpsLocalServer(options: LocalServerOptions = {}): Promise<RunningLocalServer> {
   const host = options.host ?? "127.0.0.1";
   if (!LOOPBACK.has(host)) {
@@ -106,43 +54,37 @@ export async function startCareOpsLocalServer(options: LocalServerOptions = {}):
   const { database, stores } = createSqliteStores(databasePath);
   const ai: AiDraftProvider = options.ai === "disabled" ? new DisabledAiDraftProvider() : new RuleBasedDraftProvider();
   const app = await createLocalCareOpsApp({ stores, ai });
+  const headers = securityHeaders();
+  const json = { "content-type": "application/json; charset=utf-8" };
 
   const server = createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? "/", `http://${host}`);
       try {
+        if (url.pathname === "/careops-config.json" && request.method === "GET") {
+          send(response, 200, JSON.stringify({ mode: "local", tenantId: app.tenantId }), json, headers);
+          return;
+        }
         if (url.pathname === "/local/staff" && request.method === "GET") {
           send(response, 200, JSON.stringify({
             tenantId: app.tenantId,
             mode: "local-synthetic",
             staff: app.staff.map(({ principalId, label, roles, facilityIds }) => ({ principalId, label, roles, facilityIds: facilityIds ?? null })),
-          }), { "content-type": "application/json; charset=utf-8" });
+          }), json, headers);
           return;
         }
         if (url.pathname.startsWith("/api/")) {
-          const body = request.method === "GET" || request.method === "HEAD" ? null : await readBody(request);
-          const headers = new Headers();
-          for (const [key, value] of Object.entries(request.headers)) {
-            if (typeof value === "string") headers.set(key, value);
-          }
-          const apiResponse = await app.api.handle(new Request(url, {
-            method: request.method ?? "GET",
-            headers,
-            ...(body ? { body } : {}),
-          }));
-          const responseHeaders: Record<string, string> = {};
-          apiResponse.headers.forEach((value, key) => { responseHeaders[key] = value; });
-          send(response, apiResponse.status, new Uint8Array(await apiResponse.arrayBuffer()), responseHeaders);
+          await writeWebResponse(response, await app.api.handle(await toWebRequest(request, url)), headers);
           return;
         }
         if (request.method !== "GET") {
-          send(response, 405, "Method not allowed", { "content-type": "text/plain; charset=utf-8" });
+          send(response, 405, "Method not allowed", { "content-type": "text/plain; charset=utf-8" }, headers);
           return;
         }
-        await serveStatic(url.pathname, response);
-      } catch {
+        await serveStatic(url.pathname, response, headers);
+      } catch (error) {
         // No request details are logged: they may contain care data.
-        if (!response.headersSent) send(response, 500, JSON.stringify({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } }), { "content-type": "application/json; charset=utf-8" });
+        jsonError(response, error instanceof BodyTooLargeError ? 413 : 500, error instanceof BodyTooLargeError ? "BODY_TOO_LARGE" : "INTERNAL_ERROR", headers);
       }
     })();
   });
