@@ -182,16 +182,18 @@ jobs:
             -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1" 2>/dev/null
           echo "NODE_EXTRA_CA_CERTS=$STACK_DIR/cert.pem" >> "$GITHUB_ENV"
 
-      - name: Apply schema (twice, to prove re-apply safety)
+      - name: Apply schema, then forward migration and contracts again (re-apply safety)
         run: |
-          for round in 1 2; do
-            psql "$DATABASE_URL" -X -q -v ON_ERROR_STOP=1 \
-              -f tests/postgres/bootstrap.sql \
-              -f db/migrations/20261110_0001_careops_case_lifecycle.sql \
-              -f db/case_store.sql \
-              -f db/identity_store.sql \
-              -f db/careops_platform.sql
-          done
+          psql "$DATABASE_URL" -X -q -v ON_ERROR_STOP=1 \
+            -f tests/postgres/bootstrap.sql \
+            -f db/case_store.sql \
+            -f db/identity_store.sql \
+            -f db/careops_platform.sql
+          psql "$DATABASE_URL" -X -q -v ON_ERROR_STOP=1 \
+            -f db/migrations/20261110_0001_careops_case_lifecycle.sql \
+            -f db/case_store.sql \
+            -f db/identity_store.sql \
+            -f db/careops_platform.sql
           psql "$DATABASE_URL" -X -q -v ON_ERROR_STOP=1 \
             -v authenticator_password="$STACK_DB_PASSWORD" \
             -f db/staging-stack/postgrest-roles.sql
