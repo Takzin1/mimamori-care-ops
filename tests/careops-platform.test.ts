@@ -524,3 +524,17 @@ test("signals can be dismissed with a reason by intake roles only", async () => 
   assert.equal(dismissed.disposition, "dismissed");
   await assert.rejects(platform.createCaseFromSignal(ctx("p-disp"), signal.signal.id, { priority: "low" }), CareOpsConflictError);
 });
+
+test("escalation re-evaluation is idempotent for critical and SLA notifications", async () => {
+  const env = setup();
+  const { platform, ctx, clock } = env;
+  await openCase(env, { priority: "critical" });
+  clock.advance(10);
+  const first = await platform.runEscalations(ctx("p-sup"));
+  assert.ok(first.suppressedDuplicates >= 1, "creation-time critical notification is not duplicated");
+  const second = await platform.runEscalations(ctx("p-sup"));
+  assert.equal(second.enqueued, 0);
+  const inbox = await platform.notifications(ctx("p-sup"));
+  assert.equal(inbox.filter((item) => item.kind === "critical_unacknowledged").length, 1);
+  assert.ok(inbox.some((item) => item.kind === "sla_breach"), "acknowledge target (5 min, provisional) breached");
+});

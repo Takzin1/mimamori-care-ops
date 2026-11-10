@@ -203,6 +203,11 @@ const SIGNAL_DEFAULT_PRIORITY: Record<SignalType, CasePriority> = {
 
 const NOTE_TEXT_MAX = 4000;
 
+/** Same text at creation and in periodic runs (same delivery key). */
+function criticalMessage(caseId: string): string {
+  return `重大(critical)のCase ${caseId} が未確認です。職員による確認が必要です。`;
+}
+
 function requireText(value: string | undefined, label: string, max: number): string {
   const normalized = typeof value === "string" ? value.trim() : "";
   if (!normalized) throw new CareOpsRuleError("INVALID_INPUT", `${label} is required`);
@@ -901,7 +906,7 @@ export class CareOpsPlatformService {
             kind: "critical_unacknowledged",
             deliveryKey: `critical:${aggregate.id}`,
             recipientRoles: critical.notifyRoles,
-            message: `重大(critical)のCase ${aggregate.id} が未確認です。職員による確認が必要です。`,
+            message: criticalMessage(aggregate.id),
             stage: "critical_unacknowledged",
           });
           created ? (enqueued += 1) : (suppressed += 1);
@@ -918,7 +923,9 @@ export class CareOpsPlatformService {
           // One notification per breach episode of a stage.
           deliveryKey: `sla:${aggregate.id}:${checkpoint.stage}:${checkpoint.startedAt}`,
           recipientRoles: matched.notifyRoles,
-          message: `Case ${aggregate.id} が内部対応期限（${checkpoint.stage}）を${Math.floor(checkpoint.overdueMs / 60_000)}分超過しています。`,
+          // Stable per breach episode so that re-evaluation yields an
+          // identical payload for the same delivery key.
+          message: `Case ${aggregate.id} が内部対応期限（${checkpoint.stage}、期限 ${checkpoint.dueAt}）を超過しました。`,
           stage: checkpoint.stage,
         });
         created ? (enqueued += 1) : (suppressed += 1);
@@ -941,7 +948,7 @@ export class CareOpsPlatformService {
       kind: "critical_unacknowledged",
       deliveryKey: `critical:${aggregate.id}`,
       recipientRoles: rule.notifyRoles,
-      message: `重大(critical)のCase ${aggregate.id} が発生しました。職員による確認が必要です。`,
+      message: criticalMessage(aggregate.id),
       stage: "critical_unacknowledged",
     });
     await this.#deliverPending(aggregate.tenantId);
@@ -966,20 +973,15 @@ export class CareOpsPlatformService {
       priority: aggregate.priority,
       ...(input.stage ? { stage: input.stage } : {}),
     };
-    try {
-      const result = await this.#outbox.enqueue({
-        tenantId: aggregate.tenantId,
-        topic: STAFF_NOTIFICATION_TOPIC,
-        deliveryKey: input.deliveryKey,
-        payload,
-        maxAttempts: 5,
-      });
-      return result.created;
-    } catch {
-      // Same delivery key with a different payload (message text changed
-      // with overdue minutes) is still the same notification: suppress.
-      return false;
-    }
+    // Storage failures propagate: they must not be reported as suppressed.
+    const result = await this.#outbox.enqueue({
+      tenantId: aggregate.tenantId,
+      topic: STAFF_NOTIFICATION_TOPIC,
+      deliveryKey: input.deliveryKey,
+      payload,
+      maxAttempts: 5,
+    });
+    return result.created;
   }
 
   async #deliverNotification(tenantId: string, outboxId: number, payload: unknown): Promise<void> {
