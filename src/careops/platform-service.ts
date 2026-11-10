@@ -140,6 +140,12 @@ export interface SignalIntakeResult {
 }
 
 export interface ManualCaseInput {
+  /**
+   * Client-generated idempotency key. Re-submitting the same key (double
+   * tap, retry after a network error) returns the original Case instead of
+   * creating a duplicate.
+   */
+  clientRequestId?: string;
   facilityId: string;
   subjectId: string;
   sourceType: SignalType;
@@ -685,7 +691,7 @@ export class CareOpsPlatformService {
     record: SignalRecord,
     actorId: string | null,
     input: CaseFromSignalInput,
-  ): Promise<{ aggregate: CaseAggregate; signal: SignalRecord }> {
+  ): Promise<{ aggregate: CaseAggregate; signal: SignalRecord; replayed: boolean }> {
     const humanRationale = optionalText(input.priorityRationale, 1000);
     const created = createCase({
       id: `case-${this.#newId()}`,
@@ -735,7 +741,7 @@ export class CareOpsPlatformService {
     if (stored.created && stored.aggregate.priority === "critical") {
       await this.#enqueueCritical(stored.aggregate);
     }
-    return { aggregate: stored.aggregate, signal: updated };
+    return { aggregate: stored.aggregate, signal: updated, replayed: false };
   }
 
   async listSignals(ctx: PlatformContext, disposition?: SignalDisposition): Promise<SignalRecord[]> {
@@ -804,7 +810,9 @@ export class CareOpsPlatformService {
       tenantId: ctx.tenantId,
       facilityId: settings.facilityId,
       sourceAdapter: "staff-entry",
-      sourceSignalId: `manual-${this.#newId()}`,
+      sourceSignalId: input.clientRequestId
+        ? `manual-${membership.actorId}-${input.clientRequestId}`
+        : `manual-${this.#newId()}`,
       sourceType: input.sourceType,
       subjectId: requireText(input.subjectId, "subjectId", 128),
       receivedAt: this.#now(),
@@ -818,7 +826,18 @@ export class CareOpsPlatformService {
       replayCount: 0,
       receivedBy: membership.actorId,
     };
-    await this.#signals.insert(record);
+    const inserted = await this.#signals.insert(record);
+    if (!inserted.created) {
+      // Idempotent replay of the same client request.
+      const existing = inserted.record;
+      if (existing.subjectId !== record.subjectId || existing.facilityId !== record.facilityId || existing.sourceType !== record.sourceType) {
+        throw new CareOpsConflictError("clientRequestId was reused for a different request");
+      }
+      if (!existing.caseId) throw new CareOpsConflictError("The original request is still being processed; retry shortly");
+      const stored = await this.caseService.get({ tenantId: ctx.tenantId, caseId: existing.caseId, principalId: ctx.principalId });
+      if (!stored) throw new CaseNotFoundError(ctx.tenantId, existing.caseId);
+      return { aggregate: stored.aggregate, signal: existing, replayed: true };
+    }
     return this.#openCaseFromSignal(record, membership.actorId, {
       priority: input.priority,
       ...(input.category ? { category: input.category } : {}),

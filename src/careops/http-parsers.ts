@@ -177,11 +177,13 @@ export function parseLimit(params: URLSearchParams): number | undefined {
 
 export function parseManualCase(body: unknown): ManualCaseInput {
   const value = record(body, "request");
-  exactKeys(value, ["facilityId", "subjectId", "sourceType", "priority", "category", "priorityRationale", "rawText"], "request");
+  exactKeys(value, ["clientRequestId", "facilityId", "subjectId", "sourceType", "priority", "category", "priorityRationale", "rawText"], "request");
+  const clientRequestId = value.clientRequestId === undefined ? undefined : safeId(value.clientRequestId, "clientRequestId");
   const category = optText(value.category, "category", 64);
   const priorityRationale = optText(value.priorityRationale, "priorityRationale", 1000);
   const rawText = optText(value.rawText, "rawText", 4000);
   return {
+    ...(clientRequestId ? { clientRequestId } : {}),
     facilityId: safeId(value.facilityId, "facilityId"),
     subjectId: safeId(value.subjectId, "subjectId"),
     sourceType: oneOf<SignalType>(value.sourceType, SIGNAL_TYPES, "sourceType"),

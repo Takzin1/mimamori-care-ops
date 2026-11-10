@@ -89,7 +89,9 @@ export function formDialog({ title, description, fields, confirmLabel = "確定�
     };
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (!form.reportValidity()) return;
+      if (settled || !form.reportValidity()) return;
+      // Prevent double submission from repeated taps.
+      for (const button of form.querySelectorAll("button")) button.disabled = true;
       const values = {};
       for (const element of form.elements) {
         if (!element.name) continue;

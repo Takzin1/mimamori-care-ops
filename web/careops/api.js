@@ -13,7 +13,26 @@ export function createApi({ tenantId, token, onUnauthorized }) {
   const base = `/api/care-ops/tenants/${encodeURIComponent(tenantId)}`;
 
   async function request(method, path, body) {
-    const response = await fetch(`${base}${path}`, {
+    let response;
+    try {
+      response = await send(method, path, body);
+    } catch (error) {
+      // One automatic retry for idempotent reads after a network failure.
+      if (method !== "GET") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      response = await send(method, path, body);
+    }
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!response.ok) {
+      if (response.status === 401) onUnauthorized?.();
+      throw new ApiError(response.status, data?.error?.code ?? "ERROR", data?.error?.message ?? "Request failed");
+    }
+    return data;
+  }
+
+  function send(method, path, body) {
+    return fetch(`${base}${path}`, {
       method,
       headers: {
         authorization: `Bearer ${token}`,
@@ -23,13 +42,6 @@ export function createApi({ tenantId, token, onUnauthorized }) {
       credentials: "omit",
       cache: "no-store",
     });
-    const text = await response.text();
-    const data = text ? JSON.parse(text) : null;
-    if (!response.ok) {
-      if (response.status === 401) onUnauthorized?.();
-      throw new ApiError(response.status, data?.error?.code ?? "ERROR", data?.error?.message ?? "Request failed");
-    }
-    return data;
   }
 
   const query = (params) => {

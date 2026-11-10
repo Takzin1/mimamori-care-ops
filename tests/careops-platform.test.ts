@@ -538,3 +538,23 @@ test("escalation re-evaluation is idempotent for critical and SLA notifications"
   assert.equal(inbox.filter((item) => item.kind === "critical_unacknowledged").length, 1);
   assert.ok(inbox.some((item) => item.kind === "sla_breach"), "acknowledge target (5 min, provisional) breached");
 });
+
+test("double submit with the same clientRequestId never creates a duplicate Case", async () => {
+  const env = setup();
+  const { platform, ctx } = env;
+  const input = { clientRequestId: "req-001", facilityId: "fac-a", subjectId: "resident-ref-0700", sourceType: "manual" as const, priority: "normal" as const, rawText: "同じ送信" };
+  const [first, second] = await Promise.all([
+    platform.createCase(ctx("p-disp"), input).catch((error: unknown) => error),
+    platform.createCase(ctx("p-disp"), input).catch((error: unknown) => error),
+  ]);
+  const third = await platform.createCase(ctx("p-disp"), input);
+  const created = [first, second].filter((item) => !(item instanceof Error)) as Array<{ aggregate: { id: string }; replayed: boolean }>;
+  assert.ok(created.length >= 1);
+  for (const item of created) assert.equal(item.aggregate.id, third.aggregate.id);
+  assert.equal(third.replayed, true);
+  assert.equal((await platform.listCases(ctx("p-disp"), {})).total, 1);
+  await assert.rejects(platform.createCase(ctx("p-disp"), { ...input, subjectId: "resident-ref-0701" }), CareOpsConflictError);
+  // the same key from another staff member is a different request
+  const other = await platform.createCase(ctx("p-sup"), input);
+  assert.notEqual(other.aggregate.id, third.aggregate.id);
+});

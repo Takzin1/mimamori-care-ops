@@ -379,3 +379,27 @@ fieldset { border: 1px solid var(--border); border-radius: var(--radius); }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+.attention-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.strip-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  text-decoration: none;
+  border: 2px solid var(--border);
+  color: var(--muted);
+}
+.strip-alert { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+.strip-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+.strip-time { color: var(--muted); font-size: 0.8rem; margin-left: auto; }

@@ -106,8 +106,10 @@ test("mobile UI: completion criteria 1-10 through the real server and SQLite", {
       assert.ok(timeline.includes(label), `timeline contains ${label}`);
     }
 
-    // 8. management can see unfinished work on the dashboard
+    // 8. management can see unfinished work on the dashboard and the attention strip
     await loginAs(/さくら館 管理者/);
+    await page.locator('[data-strip="未確認"]').waitFor();
+    assert.match(await page.locator('[data-strip="引継ぎ未受領"]').innerText(), /引継ぎ未受領 0/);
     assert.equal(await page.locator('[data-tile="解決済み"] .tile-count').innerText(), "1");
     await page.locator('[data-tile="未確認"] .tile-count').waitFor();
 

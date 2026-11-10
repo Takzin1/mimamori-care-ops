@@ -117,7 +117,7 @@ async function guarded(action, successMessage) {
       announce(message, "error");
       if (error.status === 409) setTimeout(render, 300);
     } else {
-      announce("通信に失敗しました。接続を確認してもう一度お試しください。", "error");
+      announce("通信に失敗しました。接続を確認して、もう一度操作してください（同じ操作を繰り返しても重複登録はされません）。", "error");
     }
     return undefined;
   }
@@ -242,12 +242,19 @@ async function inboxView() {
     field("原文", h("textarea", { name: "rawText", rows: "4", maxlength: "4000", required: true })),
     h("button", { type: "submit", class: "btn btn-primary btn-block" }, "通知を記録"),
   );
+  // Generated once per form render so a retried submission is recognised
+  // as the same notification (idempotent on the server).
+  const generatedSignalId = crypto.randomUUID();
   intake.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const submit = intake.querySelector("button[type=submit]");
+    if (submit.disabled) return;
+    submit.disabled = true;
     const form = new FormData(intake);
     const body = Object.fromEntries(form.entries());
-    if (!body.sourceSignalId) body.sourceSignalId = `${body.sourceAdapter}-${crypto.randomUUID()}`;
+    if (!body.sourceSignalId) body.sourceSignalId = `${body.sourceAdapter}-${generatedSignalId}`;
     const result = await guarded(() => api.ingestSignal(body));
+    submit.disabled = false;
     if (!result) return;
     const message = {
       pending: "通知を記録しました。Case化するか判断してください。",
@@ -389,6 +396,8 @@ async function casesView() {
 
 async function manualCaseDialog() {
   const { api, me } = state.session;
+  // One key per dialog: retries/double taps return the same Case.
+  const clientRequestId = `ui-${crypto.randomUUID()}`;
   const facilityId = state.facilityId || me.facilities[0]?.facilityId;
   const facility = me.facilities.find((item) => item.facilityId === facilityId);
   const values = await formDialog({
@@ -407,7 +416,7 @@ async function manualCaseDialog() {
   });
   if (!values) return;
   for (const key of Object.keys(values)) if (values[key] === "") delete values[key];
-  const result = await guarded(() => api.createCase(values), "Caseを作成しました。");
+  const result = await guarded(() => api.createCase({ ...values, clientRequestId }), "Caseを作成しました。");
   if (result) location.hash = `#/cases/${encodeURIComponent(result.aggregate.id)}`;
 }
 
@@ -960,8 +969,9 @@ fetchAppConfig().then((config) => {
   if (banner) banner.textContent = envLabel;
 }).catch(() => {});
 
-async function render() {
+async function render({ quiet = false } = {}) {
   const token = ++renderToken;
+  const scrollY = window.scrollY;
   const hash = location.hash || "#/";
   const path = hash.slice(1).split("?")[0];
   const main = h("main", { id: "main" }, h("p", { class: "loading", role: "status" }, "読み込み中…"));
@@ -974,7 +984,9 @@ async function render() {
     ) : null,
   );
   const banner = h("div", { class: "env-banner", role: "note" }, envLabel);
-  clear(root).append(banner, header, ...(state.session ? [nav(path)] : []), main);
+  const strip = state.session ? h("div", { class: "attention-strip", "aria-live": "polite", id: "attention-strip" }) : null;
+  clear(root).append(banner, header, ...(strip ? [strip] : []), ...(state.session ? [nav(path)] : []), main);
+  if (strip) void fillAttentionStrip(strip);
 
   try {
     let view;
@@ -990,16 +1002,53 @@ async function render() {
     else view = h("section", {}, pageHeader("ページが見つかりません"), h("a", { href: "#/dashboard" }, "ホームへ"));
     if (token !== renderToken) return;
     clear(main).append(view);
-    document.getElementById("page-title")?.focus({ preventScroll: false });
+    if (quiet) window.scrollTo(0, scrollY);
+    else document.getElementById("page-title")?.focus({ preventScroll: false });
     document.title = `${document.getElementById("page-title")?.textContent ?? ""} | 見守りくん CareOps`;
   } catch (error) {
     if (token !== renderToken) return;
     const message = error instanceof ApiError
       ? ({ 403: "このページを表示する権限がありません。", 404: "対象が見つかりません。" }[error.status] ?? `読み込みに失敗しました（${error.code}）`)
       : "読み込みに失敗しました。";
-    clear(main).append(h("section", {}, pageHeader("表示できません"), h("p", { class: "callout callout-danger", role: "alert" }, message), h("a", { href: "#/dashboard", class: "btn btn-secondary" }, "ホームへ戻る")));
+    clear(main).append(h("section", {}, pageHeader("表示できません"), h("p", { class: "callout callout-danger", role: "alert" }, message),
+      h("div", { class: "actions" },
+        h("button", { type: "button", class: "btn btn-primary", on: { click: () => render() } }, "再試行"),
+        h("a", { href: "#/dashboard", class: "btn btn-secondary" }, "ホームへ戻る"),
+      )));
   }
 }
 
-window.addEventListener("hashchange", render);
+async function fillAttentionStrip(strip) {
+  try {
+    const dashboard = await state.session.api.dashboard(state.facilityId || undefined);
+    const c = dashboard.counts;
+    const item = (label, count, href, tone) =>
+      h("a", { href, class: `strip-item ${count > 0 ? `strip-${tone}` : "strip-zero"}`, dataset: { strip: label } }, `${label} ${count}`);
+    clear(strip).append(
+      item("未確認", c.unacknowledged, "#/cases?status=NEW", "alert"),
+      item("引継ぎ未受領", c.handoffPending, "#/handoffs", "warn"),
+      item("期限超過", c.overdue, "#/cases?breached=true&open=true", "alert"),
+      c.needsHumanReview > 0 ? item("重大・要確認", c.needsHumanReview, "#/cases?priority=critical&status=NEW", "alert") : null,
+      h("span", { class: "strip-time" }, `最終更新 ${new Date().toLocaleTimeString("ja-JP")}`),
+      h("button", { type: "button", class: "btn btn-small btn-secondary", on: { click: () => render() } }, "更新"),
+    );
+  } catch {
+    clear(strip).append(h("span", { class: "strip-time" }, "件数を取得できません（自動で再試行します）"));
+  }
+}
+
+// Keep an open page current without disturbing work in progress.
+const REFRESH_MS = 30_000;
+setInterval(() => {
+  if (!state.session || document.visibilityState !== "visible") return;
+  if (document.querySelector("dialog[open]")) return;
+  const active = document.activeElement;
+  if (active && active.closest("main") && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
+  void render({ quiet: true });
+}, REFRESH_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.session && !document.querySelector("dialog[open]")) void render({ quiet: true });
+});
+
+window.addEventListener("hashchange", () => render());
 render();

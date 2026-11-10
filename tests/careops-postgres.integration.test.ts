@@ -122,6 +122,14 @@ test("real Postgres: CareOps lifecycle events, facility lineage and platform RPC
   assert.equal(storedDraft.content.text, "下書き");
   assert.equal(storedDraft.reviewedBy, "dispatcher-pg");
 
+  // Defense in depth: even a mistaken GRANT to a Data API role exposes no
+  // rows, because RLS is enabled and no policies exist (rolled back).
+  for (const table of ["care_cases", "care_case_events", "care_signals", "care_platform_audit_log", "care_ai_drafts", "care_tenant_memberships"]) {
+    const visible = sql(`begin; grant select on public.${table} to authenticated; set local role authenticated; select count(*) from public.${table}; rollback;`);
+    assert.equal(visible.split("\n").filter(Boolean).at(-1), "0", `${table} is RLS-protected`);
+  }
+  assert.ok(Number(sql("select count(*) from public.care_cases where tenant_id = 'tenant-pg'")) >= 1, "rows exist, so the zero above is RLS");
+
   // Data API roles have no access; service_role cannot write tables directly
   for (const role of ["anon", "authenticated"]) {
     assert.throws(() => sql(`set role ${role}; select count(*) from public.care_signals;`), /permission denied/);
