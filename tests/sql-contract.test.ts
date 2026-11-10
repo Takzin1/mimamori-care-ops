@@ -320,8 +320,8 @@ test("PLpgSQL function delimiters remain balanced", async () => {
   );
   assert.equal(
     source.match(/\nas \$\$\n/g)?.length ?? 0,
-    7,
-    "all seven persistence RPCs must open with double-dollar delimiters",
+    8,
+    "all eight persistence RPCs (incl. search_care_cases) must open with double-dollar delimiters",
   );
   assert.equal(
     source.match(/\n\$;\n/g)?.length ?? 0,
@@ -330,8 +330,8 @@ test("PLpgSQL function delimiters remain balanced", async () => {
   );
   assert.equal(
     source.match(/\n\$\$;\n/g)?.length ?? 0,
-    7,
-    "all seven persistence RPCs must close with double-dollar delimiters",
+    8,
+    "all eight persistence RPCs (incl. search_care_cases) must close with double-dollar delimiters",
   );
 });
 

@@ -839,3 +839,158 @@ grant execute on function public.complete_care_outbox(text, bigint, text)
   to service_role;
 grant execute on function public.fail_care_outbox(text, bigint, text, text, timestamptz)
   to service_role;
+
+-- Server-side Case search (CareOps). Mirrors src/persistence/case-search.ts
+-- exactly; parity is enforced by contract tests. Visibility parameters
+-- (facilityScope, visibleToActor) are always computed server-side from the
+-- authenticated membership.
+create or replace function public.search_care_cases(
+  p_tenant_id text,
+  p_query jsonb
+)
+returns jsonb
+language plpgsql
+stable
+security invoker
+set search_path = pg_catalog
+as $$
+declare
+  v_scope text[];
+  v_actor text := nullif(p_query->>'visibleToActor', '');
+  v_statuses text[];
+  v_priorities text[];
+  v_assignee text := nullif(p_query->>'assigneeId', '');
+  v_facility text := nullif(p_query->>'facilityId', '');
+  v_subject text := nullif(p_query->>'subjectId', '');
+  v_escalated boolean;
+  v_created_from timestamptz := nullif(p_query->>'createdFrom', '')::timestamptz;
+  v_created_to timestamptz := nullif(p_query->>'createdTo', '')::timestamptz;
+  v_activity_from timestamptz := nullif(p_query->>'activityFrom', '')::timestamptz;
+  v_q text := lower(nullif(p_query->>'query', '') collate "C");
+  v_sort text := coalesce(p_query->>'sort', 'createdAt');
+  v_desc boolean := coalesce(p_query->>'order', 'asc') = 'desc';
+  v_limit integer := (p_query->>'limit')::integer;
+  v_offset integer := coalesce((p_query->>'offset')::integer, 0);
+  v_result jsonb;
+begin
+  if nullif(trim(p_tenant_id), '') is null then
+    raise exception 'tenant is required';
+  end if;
+  if v_limit is null or v_limit < 1 or v_limit > 2000 or v_offset < 0 then
+    raise exception 'invalid search window';
+  end if;
+  if v_sort not in ('createdAt', 'lastActivityAt', 'priority', 'status') then
+    raise exception 'unsupported sort';
+  end if;
+
+  if jsonb_typeof(p_query->'facilityScope') = 'array' then
+    if jsonb_array_length(p_query->'facilityScope') = 0 then
+      raise exception 'facilityScope must be null or non-empty';
+    end if;
+    v_scope := array(select jsonb_array_elements_text(p_query->'facilityScope'));
+  end if;
+  if jsonb_typeof(p_query->'statuses') = 'array' and jsonb_array_length(p_query->'statuses') > 0 then
+    v_statuses := array(select jsonb_array_elements_text(p_query->'statuses'));
+  end if;
+  if jsonb_typeof(p_query->'priorities') = 'array' and jsonb_array_length(p_query->'priorities') > 0 then
+    v_priorities := array(select jsonb_array_elements_text(p_query->'priorities'));
+  end if;
+  if jsonb_typeof(p_query->'escalated') = 'boolean' then
+    v_escalated := (p_query->>'escalated')::boolean;
+  end if;
+
+  with matched as (
+    select
+      c.case_id,
+      c.snapshot,
+      c.created_at,
+      coalesce((c.snapshot->>'lastActivityAt')::timestamptz, c.created_at) as last_activity,
+      case c.priority when 'critical' then 0 when 'high' then 1 when 'normal' then 2 else 3 end as priority_rank,
+      case c.status
+        when 'NEW' then 0 when 'ACKNOWLEDGED' then 1 when 'TRIAGED' then 2
+        when 'ASSIGNED' then 3 when 'IN_PROGRESS' then 4 when 'HANDOFF_PENDING' then 5
+        when 'COMPLETED' then 6 else 7 end as status_rank
+    from public.care_cases c
+    where c.tenant_id = p_tenant_id
+      and (v_scope is null or (c.facility_id is not null and c.facility_id = any(v_scope)))
+      and (v_actor is null
+           or c.assignee_id = v_actor
+           or c.handoff_target_id = v_actor
+           or c.snapshot->>'createdBy' = v_actor)
+      and (v_statuses is null or c.status = any(v_statuses))
+      and (v_priorities is null or c.priority = any(v_priorities))
+      and (v_assignee is null
+           or (v_assignee = '__unassigned__' and c.assignee_id is null)
+           or (v_assignee <> '__unassigned__'
+               and (c.assignee_id = v_assignee or c.handoff_target_id = v_assignee)))
+      and (v_facility is null or c.facility_id = v_facility)
+      and (v_subject is null or c.subject_id = v_subject)
+      and (v_escalated is null
+           or coalesce(jsonb_typeof(c.snapshot->'escalation') = 'object', false) = v_escalated)
+      and (v_created_from is null or c.created_at >= v_created_from)
+      and (v_created_to is null or c.created_at < v_created_to)
+      and (v_activity_from is null
+           or coalesce((c.snapshot->>'lastActivityAt')::timestamptz, c.created_at) >= v_activity_from)
+      and (v_q is null
+           or strpos(lower(c.case_id collate "C"), v_q) > 0
+           or strpos(lower(c.subject_id collate "C"), v_q) > 0
+           or strpos(lower(coalesce(c.snapshot->>'category', '') collate "C"), v_q) > 0
+           or strpos(lower(coalesce(c.assignee_id, '') collate "C"), v_q) > 0
+           or strpos(lower(c.source_type collate "C"), v_q) > 0)
+  ),
+  ordered as (
+    select
+      m.*,
+      row_number() over (
+        order by
+          case when not v_desc then
+            case v_sort
+              when 'createdAt' then extract(epoch from m.created_at)
+              when 'lastActivityAt' then extract(epoch from m.last_activity)
+              when 'priority' then m.priority_rank
+              else m.status_rank
+            end
+          end asc,
+          case when v_desc then
+            case v_sort
+              when 'createdAt' then extract(epoch from m.created_at)
+              when 'lastActivityAt' then extract(epoch from m.last_activity)
+              when 'priority' then m.priority_rank
+              else m.status_rank
+            end
+          end desc,
+          m.case_id collate "C" asc
+      ) as ordinal,
+      count(*) over () as total
+    from matched m
+  )
+  select jsonb_build_object(
+    'total', coalesce(max(o.total), 0),
+    'cases', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'caseId', o.case_id,
+          'snapshot', o.snapshot,
+          'events', (
+            select jsonb_agg(e.event order by e.sequence)
+              from public.care_case_events e
+             where e.tenant_id = p_tenant_id
+               and e.case_id = o.case_id
+          )
+        )
+        order by o.ordinal
+      ) filter (where o.ordinal > v_offset and o.ordinal <= v_offset + v_limit),
+      '[]'::jsonb
+    )
+  )
+    into v_result
+    from ordered o;
+
+  return v_result;
+end;
+$$;
+
+revoke execute on function public.search_care_cases(text, jsonb)
+  from public, anon, authenticated;
+grant execute on function public.search_care_cases(text, jsonb)
+  to service_role;

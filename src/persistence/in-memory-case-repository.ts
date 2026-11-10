@@ -19,6 +19,12 @@ import type {
   CreateCaseResult,
   StoredCase,
 } from "./types.ts";
+import {
+  applyCaseSearch,
+  type CaseSearchQuery,
+  type CaseSearchResult,
+  type SearchableCaseRepository,
+} from "./case-search.ts";
 
 interface InternalRecord {
   aggregate: CaseAggregate;
@@ -62,7 +68,7 @@ function assertReplayCompatible(
   }
 }
 
-export class InMemoryCaseRepository implements CaseRepository {
+export class InMemoryCaseRepository implements CaseRepository, SearchableCaseRepository {
   private readonly records = new Map<string, InternalRecord>();
   private readonly signalIndex = new Map<string, string>();
 
@@ -134,6 +140,10 @@ export class InMemoryCaseRepository implements CaseRepository {
     }
 
     return results;
+  }
+
+  async search(query: CaseSearchQuery): Promise<CaseSearchResult> {
+    return applyCaseSearch(await this.list(query.tenantId), query);
   }
 
   async append(input: AppendCaseEventInput): Promise<CaseAggregate> {

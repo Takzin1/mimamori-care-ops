@@ -27,6 +27,13 @@ import type {
   CreateCaseResult,
   StoredCase,
 } from "./types.ts";
+import {
+  canonicalInstant,
+  validateCaseSearchQuery,
+  type CaseSearchQuery,
+  type CaseSearchResult,
+  type SearchableCaseRepository,
+} from "./case-search.ts";
 
 type FetchLike = (
   input: string | URL,
@@ -177,7 +184,30 @@ function isAppendRpcResult(value: unknown): value is AppendRpcResult {
   return Boolean(value && typeof value === "object");
 }
 
-export class PostgrestCaseRepository implements CaseRepository {
+/** JSON body for the search_care_cases RPC (shared with SQL tests). */
+export function caseSearchRpcPayload(query: CaseSearchQuery): Record<string, unknown> {
+  validateCaseSearchQuery(query);
+  return {
+    facilityScope: query.facilityScope ? [...query.facilityScope] : null,
+    visibleToActor: query.visibleToActor,
+    statuses: query.statuses ? [...query.statuses] : null,
+    priorities: query.priorities ? [...query.priorities] : null,
+    assigneeId: query.assigneeId ?? null,
+    facilityId: query.facilityId ?? null,
+    subjectId: query.subjectId ?? null,
+    escalated: query.escalated ?? null,
+    createdFrom: query.createdFrom ? canonicalInstant(query.createdFrom) : null,
+    createdTo: query.createdTo ? canonicalInstant(query.createdTo) : null,
+    activityFrom: query.activityFrom ? canonicalInstant(query.activityFrom) : null,
+    query: query.query ?? null,
+    sort: query.sort,
+    order: query.order,
+    limit: query.limit,
+    offset: query.offset,
+  };
+}
+
+export class PostgrestCaseRepository implements CaseRepository, SearchableCaseRepository {
   private readonly baseUrl: string;
   private readonly serviceRoleKey: string;
   private readonly fetchImpl: FetchLike;
@@ -497,6 +527,31 @@ export class PostgrestCaseRepository implements CaseRepository {
     }
 
     return result;
+  }
+
+  async search(query: CaseSearchQuery): Promise<CaseSearchResult> {
+    const body = await this.requestJson(this.rpcUrl("search_care_cases"), {
+      method: "POST",
+      body: JSON.stringify({
+        p_tenant_id: query.tenantId,
+        p_query: caseSearchRpcPayload(query),
+      }),
+    });
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new CaseStoreCorruptionError("Case search returned invalid object");
+    }
+    const result = body as { total?: unknown; cases?: unknown };
+    if (typeof result.total !== "number" || !Array.isArray(result.cases)) {
+      throw new CaseStoreCorruptionError("Case search returned invalid shape");
+    }
+    const cases = result.cases.map((item) => {
+      const row = item as { caseId?: unknown; snapshot?: unknown; events?: unknown };
+      if (typeof row.caseId !== "string" || !Array.isArray(row.events)) {
+        throw new CaseStoreCorruptionError("Case search returned invalid row");
+      }
+      return validateStoredCase(query.tenantId, row.caseId, row.snapshot, row.events);
+    });
+    return { total: result.total, cases };
   }
 
   async append(

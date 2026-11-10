@@ -20,6 +20,7 @@
     "test:web": "node --check web/careops/app.js && node --check web/careops/api.js && node --check web/careops/dom.js && node --check web/careops/labels.js"
   },
   "devDependencies": {
+    "playwright": "1.63.0",
     "typescript": "5.9.2"
   }
 }

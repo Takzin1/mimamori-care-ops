@@ -29,6 +29,14 @@ import type {
   CreateCaseResult,
   StoredCase,
 } from "../src/persistence/types.ts";
+import {
+  UNASSIGNED,
+  canonicalInstant,
+  validateCaseSearchQuery,
+  type CaseSearchQuery,
+  type CaseSearchResult,
+  type SearchableCaseRepository,
+} from "../src/persistence/case-search.ts";
 import type {
   ListableOutboxStore,
   OutboxListEntry,
@@ -203,7 +211,15 @@ export class CareOpsSqliteDatabase {
 
 /* ------------------------------ Cases ------------------------------- */
 
-export class SqliteCaseRepository implements CaseRepository {
+const PRIORITY_RANK_SQL =
+  "case json_extract(snapshot, '$.priority') when 'critical' then 0 when 'high' then 1 when 'normal' then 2 else 3 end";
+const STATUS_RANK_SQL =
+  "case json_extract(snapshot, '$.status') when 'NEW' then 0 when 'ACKNOWLEDGED' then 1 when 'TRIAGED' then 2 " +
+  "when 'ASSIGNED' then 3 when 'IN_PROGRESS' then 4 when 'HANDOFF_PENDING' then 5 when 'COMPLETED' then 6 else 7 end";
+const LAST_ACTIVITY_SQL =
+  "coalesce(json_extract(snapshot, '$.lastActivityAt'), json_extract(snapshot, '$.createdAt'))";
+
+export class SqliteCaseRepository implements CaseRepository, SearchableCaseRepository {
   readonly #store: CareOpsSqliteDatabase;
 
   constructor(store: CareOpsSqliteDatabase) {
@@ -283,6 +299,89 @@ export class SqliteCaseRepository implements CaseRepository {
       const caseId = str(row.case_id);
       return this.#verified(tenantId, caseId, parse<CaseAggregate>(row.snapshot), events.get(caseId) ?? []);
     });
+  }
+
+  async search(query: CaseSearchQuery): Promise<CaseSearchResult> {
+    validateCaseSearchQuery(query);
+    const where: string[] = ["tenant_id = ?"];
+    const params: (string | number | null)[] = [query.tenantId];
+    const field = (path: string) => `json_extract(snapshot, '$.${path}')`;
+
+    if (query.facilityScope !== null) {
+      where.push(`${field("facilityId")} is not null and ${field("facilityId")} in (select value from json_each(?))`);
+      params.push(JSON.stringify(query.facilityScope));
+    }
+    if (query.visibleToActor !== null) {
+      where.push(`(${field("assigneeId")} = ? or ${field("handoffTargetId")} = ? or ${field("createdBy")} = ?)`);
+      params.push(query.visibleToActor, query.visibleToActor, query.visibleToActor);
+    }
+    if (query.statuses?.length) {
+      where.push(`${field("status")} in (select value from json_each(?))`);
+      params.push(JSON.stringify(query.statuses));
+    }
+    if (query.priorities?.length) {
+      where.push(`${field("priority")} in (select value from json_each(?))`);
+      params.push(JSON.stringify(query.priorities));
+    }
+    if (query.assigneeId) {
+      if (query.assigneeId === UNASSIGNED) {
+        where.push(`${field("assigneeId")} is null`);
+      } else {
+        where.push(`(${field("assigneeId")} = ? or ${field("handoffTargetId")} = ?)`);
+        params.push(query.assigneeId, query.assigneeId);
+      }
+    }
+    if (query.facilityId) {
+      where.push(`${field("facilityId")} = ?`);
+      params.push(query.facilityId);
+    }
+    if (query.subjectId) {
+      where.push(`${field("subjectId")} = ?`);
+      params.push(query.subjectId);
+    }
+    if (query.escalated !== undefined) {
+      where.push(`(coalesce(json_type(snapshot, '$.escalation'), 'null') = 'object') = ?`);
+      params.push(query.escalated ? 1 : 0);
+    }
+    if (query.createdFrom) {
+      where.push(`${field("createdAt")} >= ?`);
+      params.push(canonicalInstant(query.createdFrom));
+    }
+    if (query.createdTo) {
+      where.push(`${field("createdAt")} < ?`);
+      params.push(canonicalInstant(query.createdTo));
+    }
+    if (query.activityFrom) {
+      where.push(`${LAST_ACTIVITY_SQL} >= ?`);
+      params.push(canonicalInstant(query.activityFrom));
+    }
+    if (query.query) {
+      const columns = ["case_id", field("subjectId"), `coalesce(${field("category")}, '')`, `coalesce(${field("assigneeId")}, '')`, field("sourceType")];
+      where.push(`(${columns.map((column) => `instr(lower(${column}), lower(?)) > 0`).join(" or ")})`);
+      for (let index = 0; index < columns.length; index += 1) params.push(query.query);
+    }
+
+    const sortExpression = {
+      createdAt: field("createdAt"),
+      lastActivityAt: LAST_ACTIVITY_SQL,
+      priority: PRIORITY_RANK_SQL,
+      status: STATUS_RANK_SQL,
+    }[query.sort];
+    const whereSql = where.join(" and ");
+    const total = num(this.#store.db.prepare(`select count(*) as total from care_cases where ${whereSql}`).get(...params)!.total);
+    const rows = this.#store.db
+      .prepare(
+        `select case_id, snapshot from care_cases where ${whereSql} ` +
+        `order by ${sortExpression} ${query.order === "desc" ? "desc" : "asc"}, case_id asc limit ? offset ?`,
+      )
+      .all(...params, query.limit, query.offset);
+    return {
+      total,
+      cases: rows.map((row) => {
+        const caseId = str(row.case_id);
+        return this.#verified(query.tenantId, caseId, parse<CaseAggregate>(row.snapshot), this.#events(query.tenantId, caseId));
+      }),
+    };
   }
 
   async append(input: AppendCaseEventInput): Promise<CaseAggregate> {

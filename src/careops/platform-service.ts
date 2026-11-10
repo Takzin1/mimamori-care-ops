@@ -24,7 +24,6 @@ import type {
 } from "../application/types.ts";
 import {
   createCase,
-  isOpenCaseStatus,
   linkSignalToCase,
 } from "../core/case-core.ts";
 import { projectCaseAuditTrail, type CaseAuditEntry } from "../core/audit-trail.ts";
@@ -45,6 +44,14 @@ import {
 import { CaseNotFoundError } from "../persistence/errors.ts";
 import type { CaseRepository, StoredCase } from "../persistence/types.ts";
 import {
+  OPEN_STATUSES,
+  applyCaseSearch,
+  isSearchableCaseRepository,
+  type CaseSearchQuery,
+  type CaseSearchResult,
+  type CaseSearchSort,
+} from "../persistence/case-search.ts";
+import {
   DisabledAiDraftProvider,
   finalizeDraftContent,
   generateWithTimeout,
@@ -63,6 +70,7 @@ import {
   projectDashboard,
   projectHandoffBoard,
   searchCases,
+  toCaseListItem,
   type CareOpsDashboard,
   type CaseListFilter,
   type CaseListPage,
@@ -202,6 +210,9 @@ const SIGNAL_DEFAULT_PRIORITY: Record<SignalType, CasePriority> = {
 };
 
 const NOTE_TEXT_MAX = 4000;
+const SCAN_PAGE = 500;
+const SCAN_CAP = 5000;
+const COLUMN_SORTS: readonly string[] = ["createdAt", "lastActivityAt", "priority", "status"];
 
 /** Same text at creation and in periodic runs (same delivery key). */
 function criticalMessage(caseId: string): string {
@@ -220,6 +231,14 @@ function optionalText(value: string | undefined, max: number): string | undefine
   const normalized = value.trim();
   if (!normalized) return undefined;
   return normalized.slice(0, max);
+}
+
+function openOnlyEmpty(filter: CaseListFilter): boolean {
+  return Boolean(
+    filter.openOnly &&
+    filter.statuses?.length &&
+    !filter.statuses.some((status) => OPEN_STATUSES.includes(status)),
+  );
 }
 
 export class CareOpsPlatformService {
@@ -301,9 +320,47 @@ export class CareOpsPlatformService {
     };
   }
 
-  async #visibleCases(membership: TenantMembership): Promise<StoredCase[]> {
-    const all = await this.#repository.list(membership.tenantId);
-    return all.filter((stored) => canReadCaseAggregate(membership, stored.aggregate));
+  async #search(query: CaseSearchQuery): Promise<CaseSearchResult> {
+    if (isSearchableCaseRepository(this.#repository)) return this.#repository.search(query);
+    // Repositories without native search fall back to the reference semantics.
+    return applyCaseSearch(await this.#repository.list(query.tenantId), query);
+  }
+
+  /** Visibility derived exclusively from the server-side membership. */
+  #scopeOf(membership: TenantMembership): Pick<CaseSearchQuery, "tenantId" | "facilityScope" | "visibleToActor"> {
+    return {
+      tenantId: membership.tenantId,
+      facilityScope: membership.facilityIds?.length ? [...membership.facilityIds] : null,
+      visibleToActor: queueVisibilityForMembership(membership) === "responder" ? membership.actorId : null,
+    };
+  }
+
+  /**
+   * Bounded scan for views that must evaluate SLA in memory. Exceeding the
+   * bound is reported explicitly instead of silently truncating results.
+   */
+  async #visibleCases(
+    membership: TenantMembership,
+    filter: Partial<Omit<CaseSearchQuery, "tenantId" | "facilityScope" | "visibleToActor" | "limit" | "offset">>,
+    cap = SCAN_CAP,
+  ): Promise<StoredCase[]> {
+    const result: StoredCase[] = [];
+    for (let offset = 0; ; offset += SCAN_PAGE) {
+      const page = await this.#search({
+        ...this.#scopeOf(membership),
+        sort: "createdAt",
+        order: "asc",
+        ...filter,
+        limit: SCAN_PAGE,
+        offset,
+      });
+      if (page.total > cap) {
+        throw new CareOpsRuleError("RESULT_TOO_LARGE", "Too many Cases for this view; narrow the filters or period");
+      }
+      // Defense in depth: the store already applied visibility.
+      result.push(...page.cases.filter((stored) => canReadCaseAggregate(membership, stored.aggregate)));
+      if (offset + SCAN_PAGE >= page.total) return result;
+    }
   }
 
   #assertFacilityFilter(membership: TenantMembership, facilityId: string | undefined | null): void {
@@ -535,15 +592,20 @@ export class CareOpsPlatformService {
 
   async #linkToOpenCase(record: SignalRecord, actorId: string | null): Promise<SignalIntakeResult | null> {
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const all = await this.#repository.list(record.tenantId);
-      const target = all
-        .filter((stored) =>
-          stored.aggregate.subjectId === record.subjectId &&
-          (stored.aggregate.facilityId ?? null) === record.facilityId &&
-          isOpenCaseStatus(stored.aggregate.status),
-        )
-        .sort((a, b) => b.aggregate.createdAt.localeCompare(a.aggregate.createdAt))[0];
-      if (!target) return null;
+      const found = await this.#search({
+        tenantId: record.tenantId,
+        facilityScope: null,
+        visibleToActor: null,
+        subjectId: record.subjectId,
+        ...(record.facilityId ? { facilityId: record.facilityId } : {}),
+        statuses: OPEN_STATUSES,
+        sort: "createdAt",
+        order: "desc",
+        limit: 1,
+        offset: 0,
+      });
+      const target = found.cases[0];
+      if (!target || (target.aggregate.facilityId ?? null) !== record.facilityId) return null;
 
       try {
         const linked = linkSignalToCase(
@@ -762,7 +824,54 @@ export class CareOpsPlatformService {
     const membership = await this.#member(ctx);
     this.#assertFacilityFilter(membership, filter.facilityId);
     const { resolve } = await this.#policyResolver(ctx.tenantId);
-    return searchCases(await this.#visibleCases(membership), filter, resolve, this.#now());
+    const statuses = filter.openOnly
+      ? OPEN_STATUSES.filter((status) => !filter.statuses?.length || filter.statuses.includes(status))
+      : filter.statuses;
+    const structural: Partial<CaseSearchQuery> = {
+      ...(statuses ? { statuses } : {}),
+      ...(filter.priorities?.length ? { priorities: filter.priorities } : {}),
+      ...(filter.assigneeId ? { assigneeId: filter.assigneeId } : {}),
+      ...(filter.facilityId ? { facilityId: filter.facilityId } : {}),
+      ...(filter.escalated !== undefined ? { escalated: filter.escalated } : {}),
+      ...(filter.createdFrom ? { createdFrom: filter.createdFrom } : {}),
+      ...(filter.createdTo ? { createdTo: filter.createdTo } : {}),
+      ...(filter.query ? { query: filter.query } : {}),
+    };
+    if (openOnlyEmpty(filter)) {
+      return { items: [], page: 1, pageSize: Math.min(filter.pageSize ?? 20, 100), total: 0, totalPages: 1, evaluatedAt: this.#now() };
+    }
+
+    const sort = filter.sort ?? "attention";
+    if (COLUMN_SORTS.includes(sort) && filter.breached === undefined) {
+      // Fully server-side: filtering, ordering and paging in the store.
+      const pageSize = Math.min(Math.max(1, Math.trunc(filter.pageSize ?? 20)), 100);
+      const requested = Math.max(1, Math.trunc(filter.page ?? 1));
+      const query = (page: number): CaseSearchQuery => ({
+        ...this.#scopeOf(membership),
+        ...structural,
+        sort: sort as CaseSearchSort,
+        order: filter.order ?? "asc",
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      let result = await this.#search(query(requested));
+      const totalPages = Math.max(1, Math.ceil(result.total / pageSize));
+      const page = Math.min(requested, totalPages);
+      if (page !== requested) result = await this.#search(query(page));
+      const now = this.#now();
+      return {
+        items: result.cases
+          .filter((stored) => canReadCaseAggregate(membership, stored.aggregate))
+          .map((stored) => toCaseListItem(stored, resolve, now)),
+        page,
+        pageSize,
+        total: result.total,
+        totalPages,
+        evaluatedAt: now,
+      };
+    }
+    // SLA-dependent ordering/filtering: bounded scan, then in-memory ranking.
+    return searchCases(await this.#visibleCases(membership, structural, 2000), filter, resolve, this.#now());
   }
 
   async dashboard(ctx: PlatformContext, facilityId?: string): Promise<CareOpsDashboard> {
@@ -772,14 +881,20 @@ export class CareOpsPlatformService {
     const pending = (await this.listSignals(ctx, "pending")).filter(
       (signal) => !facilityId || signal.facilityId === facilityId,
     ).length;
-    return projectDashboard({
-      cases: await this.#visibleCases(membership),
+    const counted = async (status: "COMPLETED" | "CLOSED") =>
+      (await this.#search({ ...this.#scopeOf(membership), statuses: [status], ...(facilityId ? { facilityId } : {}), sort: "createdAt", order: "asc", limit: 1, offset: 0 })).total;
+    const dashboard = projectDashboard({
+      cases: await this.#visibleCases(membership, { statuses: OPEN_STATUSES, ...(facilityId ? { facilityId } : {}) }),
       policyFor: resolve,
       now: this.#now(),
       actorId: membership.actorId,
       facilityId: facilityId ?? null,
       pendingSignals: pending,
     });
+    // Resolved / closed are counted in the store (not loaded).
+    dashboard.counts.resolved = await counted("COMPLETED");
+    dashboard.counts.closed = await counted("CLOSED");
+    return dashboard;
   }
 
   async caseDetail(ctx: PlatformContext, caseId: string): Promise<CaseDetailProjection> {
@@ -806,8 +921,12 @@ export class CareOpsPlatformService {
   async handoffBoard(ctx: PlatformContext): Promise<HandoffBoard> {
     const membership = await this.#memberWith(ctx, "view_handoff_board");
     const { resolve } = await this.#policyResolver(ctx.tenantId);
+    const now = this.#now();
+    const active = await this.#visibleCases(membership, { statuses: ["HANDOFF_PENDING", "ASSIGNED", "IN_PROGRESS"] });
+    const recent = await this.#visibleCases(membership, { activityFrom: new Date(Date.parse(now) - 24 * 3_600_000).toISOString() });
+    const merged = new Map([...active, ...recent].map((stored) => [stored.aggregate.id, stored]));
     return projectHandoffBoard({
-      cases: await this.#visibleCases(membership),
+      cases: [...merged.values()],
       policyFor: resolve,
       now: this.#now(),
       actorId: membership.actorId,
@@ -823,7 +942,7 @@ export class CareOpsPlatformService {
     );
     try {
       return computeCareOpsAnalytics({
-        cases: await this.#visibleCases(membership),
+        cases: await this.#analyticsCases(membership, input),
         signals,
         from: input.from,
         to: input.to,
@@ -836,13 +955,29 @@ export class CareOpsPlatformService {
     }
   }
 
+  async #analyticsCases(membership: TenantMembership, input: { from: string; to: string; facilityId?: string }): Promise<StoredCase[]> {
+    const facility = input.facilityId ? { facilityId: input.facilityId } : {};
+    // Cases with any event in the period, plus Cases still open at the end.
+    const touched = await this.#visibleCases(membership, { ...facility, createdTo: input.to, activityFrom: input.from }, 20_000);
+    const open = await this.#visibleCases(membership, { ...facility, createdTo: input.to, statuses: OPEN_STATUSES }, 20_000);
+    return [...new Map([...touched, ...open].map((stored) => [stored.aggregate.id, stored])).values()];
+  }
+
   async auditLog(ctx: PlatformContext, options: { limit?: number; facilityId?: string } = {}): Promise<UnifiedAuditEntry[]> {
     const membership = await this.#memberWith(ctx, "view_audit_log", "audit_forbidden");
     this.#assertFacilityFilter(membership, options.facilityId);
     const limit = Math.min(Math.max(1, options.limit ?? 200), 1000);
 
-    const caseEntries: UnifiedAuditEntry[] = (await this.#visibleCases(membership))
-      .filter((stored) => !options.facilityId || stored.aggregate.facilityId === options.facilityId)
+    // Most recently active Cases first; enough to fill the requested window.
+    const recentCases = (await this.#search({
+      ...this.#scopeOf(membership),
+      ...(options.facilityId ? { facilityId: options.facilityId } : {}),
+      sort: "lastActivityAt",
+      order: "desc",
+      limit: Math.min(limit, 500),
+      offset: 0,
+    })).cases.filter((stored) => canReadCaseAggregate(membership, stored.aggregate));
+    const caseEntries: UnifiedAuditEntry[] = recentCases
       .flatMap((stored) =>
         projectCaseAuditTrail(stored.events).map((entry) => ({
           source: "case_event" as const,
@@ -889,7 +1024,15 @@ export class CareOpsPlatformService {
     const now = this.#now();
     const settingsList = await this.#settings.list(tenantId);
     const settingsById = new Map(settingsList.map((settings) => [settings.facilityId, settings]));
-    const cases = (await this.#repository.list(tenantId)).filter((stored) => isOpenCaseStatus(stored.aggregate.status));
+    const cases: StoredCase[] = [];
+    for (let offset = 0; ; offset += SCAN_PAGE) {
+      const page = await this.#search({
+        tenantId, facilityScope: null, visibleToActor: null, statuses: OPEN_STATUSES,
+        sort: "createdAt", order: "asc", limit: SCAN_PAGE, offset,
+      });
+      cases.push(...page.cases);
+      if (offset + SCAN_PAGE >= page.total) break;
+    }
     let enqueued = 0;
     let suppressed = 0;
 
