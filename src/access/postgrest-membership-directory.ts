@@ -34,6 +34,7 @@ interface MembershipRow {
   actor_id?: unknown;
   roles?: unknown;
   active?: unknown;
+  facility_ids?: unknown;
 }
 
 const roleSet = new Set<string>(STAFF_ROLES);
@@ -68,6 +69,26 @@ function parseRoles(value: unknown): StaffRole[] {
   return roles;
 }
 
+const FACILITY_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+
+function parseFacilityIds(value: unknown): string[] | undefined {
+  // null / absent = tenant-wide membership (pre-facility behaviour).
+  if (value === undefined || value === null) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.some(
+      (item) =>
+        typeof item !== "string" ||
+        !FACILITY_ID_PATTERN.test(item),
+    )
+  ) {
+    throw new CaseStoreCorruptionError(
+      "Tenant membership facility scope is invalid",
+    );
+  }
+  return value.length > 0 ? [...new Set(value as string[])] : undefined;
+}
+
 function parseRow(row: MembershipRow): TenantMembership {
   if (
     typeof row.tenant_id !== "string" ||
@@ -87,6 +108,10 @@ function parseRow(row: MembershipRow): TenantMembership {
     actorId: row.actor_id,
     roles: parseRoles(row.roles),
     active: row.active,
+    ...(() => {
+      const facilityIds = parseFacilityIds(row.facility_ids);
+      return facilityIds ? { facilityIds } : {};
+    })(),
   };
 }
 
@@ -125,7 +150,7 @@ implements TenantMembershipDirectory {
     );
     url.searchParams.set(
       "select",
-      "tenant_id,principal_id,actor_id,roles,active",
+      "tenant_id,principal_id,actor_id,roles,active,facility_ids",
     );
     url.searchParams.set("tenant_id", `eq.${tenantId}`);
     url.searchParams.set(field, `eq.${value}`);

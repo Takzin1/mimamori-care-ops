@@ -38,6 +38,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Typecheck local CareOps server
+        run: npm run typecheck:server
+
       - name: Tests
         run: npm test
 
@@ -46,6 +49,9 @@ jobs:
 
       - name: Reviewer demo syntax
         run: npm run test:demo
+
+      - name: CareOps web UI syntax
+        run: npm run test:web
 
       - name: Package dry run
         run: npm pack --dry-run --ignore-scripts
