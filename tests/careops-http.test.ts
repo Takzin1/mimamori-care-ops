@@ -223,3 +223,23 @@ test("HTTP: AI draft flow and AI-disabled fallback", async () => {
   const ack = await desk2("POST", `/cases/${c2.body.aggregate.id}/commands`, { expectedVersion: 1, command: { type: "acknowledge" } });
   assert.equal(ack.status, 200);
 });
+
+test("HTTP: error responses never echo submitted personal data", async () => {
+  const instance = await app();
+  const desk = client(instance, "dev-dispatcher-sakura");
+  const marker = "山田花子090-0000-0000";
+  const attempts = [
+    await desk("POST", "/cases", { facilityId: "facility-sakura", subjectId: marker, sourceType: "manual", priority: "low" }),
+    await desk("POST", "/cases", { facilityId: "facility-sakura", subjectId: "r-1", sourceType: marker, priority: "low" }),
+    await desk("POST", "/cases", { facilityId: "facility-sakura", subjectId: "r-1", sourceType: "manual", priority: "low", rawText: marker.repeat(400) }),
+    await desk("POST", "/signals", { facilityId: marker, sourceAdapter: "phone", sourceSignalId: "x", sourceType: "manual", subjectId: "r" }),
+    await desk("POST", "/cases/case-x/commands", { expectedVersion: 1, command: { type: "add_note", kind: marker, text: marker } }),
+    await desk("GET", `/cases?q=${encodeURIComponent(marker.repeat(10))}`),
+    await desk("GET", `/cases/${encodeURIComponent(marker)}/detail`),
+  ];
+  for (const attempt of attempts) {
+    assert.ok(attempt.status >= 400, `rejected (${attempt.status})`);
+    assert.ok(!JSON.stringify(attempt.body).includes("山田"), "no echo of submitted values");
+    assert.deepEqual(Object.keys(attempt.body.error).sort(), ["code", "message", "requestId"]);
+  }
+});

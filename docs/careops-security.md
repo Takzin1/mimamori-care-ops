@@ -78,6 +78,24 @@ list. Safeguards: it throws unless constructed with stage `local`; the local
 server refuses non-loopback hosts; it is not referenced by `src/deployment`.
 Never expose the local server on a network.
 
+## Verified controls (phase 2)
+
+- Server-side identity: Supabase Auth (`/auth/v1/user`) with the publishable
+  key; the service-role key is used only for PostgREST and never sent to Auth,
+  the browser, or logs (`tests/careops-deployment.test.ts`).
+- Visibility is pushed into the database query (`search_care_cases`) from the
+  server-side membership and re-checked in TypeScript.
+- PostgreSQL: RLS enabled with no policies; Data API roles have no grants;
+  a mistaken grant still yields zero rows (integration test). Through real
+  PostgREST, anon and signed-in users cannot read tables or call RPCs (CI).
+- Membership changes (role, deactivation, facility transfer) take effect on
+  the next request; facility-scope changes are audited.
+- Error bodies contain only `code`, `message`, `requestId` and never echo
+  submitted values (test with a PII-like marker).
+- `npm run lint` blocks HTML sinks in live UIs, browser token storage,
+  `console.*` in runtime code, `node:` imports in `src/`, and committed
+  secrets (findings never print the matched value).
+
 ## Known gaps
 
 See [Remaining work](careops-remaining-work.md): encryption-at-rest and key

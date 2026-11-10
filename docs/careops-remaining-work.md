@@ -1,76 +1,81 @@
 # CareOps Remaining Work
 
-Honest status as of 2026-11-10. "Implemented" means code + automated tests in
-this repository. Nothing here is deployed.
+Status as of 2026-11-10 (phase 2: staging integration and QA). Three levels
+are distinguished:
+
+- **Implemented** — code exists in this repository.
+- **Verified** — covered by automated tests that pass (locally and/or in CI;
+  the column says where).
+- **Not done** — missing, or needs a decision / real environment.
+
+Nothing here is deployed. No production database was touched.
 
 ## Implemented and verified
 
-| Area | Evidence |
+| Area | Verified by | Where |
+|---|---|---|
+| Extended Case lifecycle, audit before/after | `careops-core.test.ts` | local + CI |
+| Platform service (intake, dedup, dashboard, handoff, settings, escalation, AI drafts, analytics) | `careops-platform.test.ts`, `careops-http.test.ts` | local + CI |
+| Server-side Case search/pagination (in-memory reference, SQLite, PostgreSQL RPC) with parity | `careops-search-parity.test.ts` (30 queries) | local PG16 + CI PG17 |
+| PostgREST adapters for every platform store + roster | `careops-deployment.test.ts` (stubbed), `tests/stack/*` (real PostgREST) | stubbed: local; real: CI `staging-stack` |
+| Production-shaped composition (`createCareOpsPlatformDeployment`) + staging server | `careops-deployment.test.ts`, `tests/stack/*` | local + CI |
+| Facility-scoped memberships, audited scope changes | `careops-membership-scope.test.ts`, `careops-postgres.integration.test.ts` | local PG16 + CI PG17 |
+| Access lifecycle: role change, departure, facility transfer, creator visibility | `careops-access-lifecycle.test.ts` (local), `tests/stack/*` (real DB) | local + CI |
+| RLS defense in depth (mistaken GRANT still yields 0 rows) | `careops-postgres.integration.test.ts` | local PG16 + CI PG17 |
+| Data API lockdown through real PostgREST | `tests/stack/*` | CI |
+| Legacy schema upgrade (verbatim pre-CareOps fixtures), re-apply safety | `careops-migration.integration.test.ts`; schema applied twice in `staging-stack` | local PG16 + CI PG17 |
+| Idempotent Case creation (`clientRequestId`), double-submit protection in UI | `careops-platform.test.ts`, `tests/stack/*` | local + CI |
+| Error responses never echo submitted personal data | `careops-http.test.ts` | local + CI |
+| Lint + secret scan (zero dependency) | `careops-lint.test.ts`, `npm run lint` | local + CI |
+| Mobile UI E2E (local/SQLite) | `tests/e2e/careops-mobile.e2e.ts` | local + CI `e2e` |
+| Staging browser E2E (Supabase-style login, PostgreSQL-backed) | `tests/e2e/careops-staging.e2e.ts` | CI `staging-stack` only |
+| Node.js 24 / PostgreSQL 17 | CI jobs | CI |
+
+Local machine limits: Node 22 locally (CI uses 24); PostgreSQL 16 locally
+(CI uses 17); PostgREST cannot be executed in the authoring environment, so
+everything involving real PostgREST is verified **only in CI**.
+
+## Not done (engineering)
+
+1. **Real Supabase staging project**: not provisioned or connected. The CI
+   stack substitutes GoTrue/Kong with a test gateway (see
+   [Staging](careops-staging.md#known-differences-from-real-supabase)).
+2. **Token refresh / session expiry UX** in the web UI (re-login required).
+3. **Adapter ingest endpoint** with machine credentials (LINE signature,
+   sensors); `ingestFromAdapter` is in-process only.
+4. **External notification channels** (LINE / e-mail / paging) and per-person
+   acknowledgement of notifications; only the in-app inbox exists.
+5. **External LLM / voice input** — not integrated (deliberately not
+   selectable via configuration).
+6. **Shift schedule model** — shift-end is an on-demand check.
+7. **Membership admin TS control plane** does not yet expose facility-scope
+   commands (the SQL trigger audits `facility_ids` changes).
+8. **Production admission/rate limiting** — the staging server uses a
+   single-instance limiter; production needs the shared/edge provider.
+9. **Dashboards and analytics** use bounded scans (5,000 / 20,000 Cases) and
+   fail with `RESULT_TOO_LARGE` beyond that; pre-aggregated counters would be
+   needed for larger tenants.
+10. **Push updates** — the UI polls every 30 s while visible.
+11. **Supabase-hosted PostgREST version** may differ from v12.2.3 used in CI.
+
+## Undecided (needs owners / approval — not engineering-only)
+
+| Topic | Current state |
 |---|---|
-| Extended Case lifecycle (TRIAGED, notes, escalation flag, reassign, handoff note/decline/cancel, duplicate link, facility) | `src/core`, `tests/careops-core.test.ts` |
-| Audit trail with before/after values | `src/core/audit-trail.ts`, core + platform tests |
-| Platform service (intake, dedup, list, dashboard, handoff board, settings, escalation, AI drafts, analytics) | `src/careops`, `tests/careops-platform.test.ts` |
-| HTTP API with strict parsing and shared error mapping | `src/careops/http.ts`, `tests/careops-http.test.ts` |
-| SQLite persistence for the local environment | `server/sqlite-stores.ts`, `tests/careops-sqlite.test.ts` |
-| Postgres contract for lifecycle + platform tables, facility-scoped memberships | `db/*.sql`, `tests/careops-postgres.integration.test.ts` (real PostgreSQL), `tests/careops-sql-contract.test.ts` |
-| Mobile-first staff UI | `web/careops`, `tests/e2e/careops-mobile.e2e.ts` |
+| Encryption at rest, key management, backup scope | Provider defaults; not configured or reviewed |
+| Retention period and deletion policy (notification text, notes, AI drafts, audit) | Not decided; nothing is deleted automatically |
+| Subject access / correction procedure | Not decided |
+| External AI provider contract (DPA), PII review, prompt-injection handling | Not done; external providers cannot be enabled |
+| SLA thresholds | Provisional; UI shows 「仮設定」 until a facility approves |
+| Escalation recipients per facility | Defaults; need facility approval |
+| Creator visibility policy | Implemented as: creator may read only while active and in the Case's facility |
+| Security Audit Round 2 of the new surface | Not done |
 
-## Not yet implemented (engineering)
+## Manual verification still required
 
-1. **Production composition of the platform layer.** `src/deployment` still
-   composes only the existing API. PostgREST adapters for
-   `SignalStore`, `FacilitySettingsStore`, `AuditLogStore`, `AiDraftStore`,
-   `StaffNotificationInbox` and a listable outbox are not written (the SQL
-   RPCs they would call exist and are tested). Until then the CareOps UI runs
-   only in the local environment.
-2. **Adapter ingest endpoint.** `ingestFromAdapter` exists in-process; there is
-   no machine-authenticated webhook (LINE signature verification, sensor
-   credentials, per-adapter tenant binding, rate limiting).
-3. **External notification channels.** Only the in-app inbox exists.
-   `StaffNotificationChannel` is the extension point (must be idempotent per
-   delivery key). No LINE / e-mail / SMS / paging, and no per-person
-   acknowledgement of notifications.
-4. **LLM / voice.** No Bedrock or other LLM is integrated in this repository;
-   only the deterministic local extractor (`RuleBasedDraftProvider`). A real
-   provider requires a data-processing agreement, PII review, prompt-injection
-   handling and evaluation. Voice input is not implemented.
-5. **Shift model.** Shift-end is an on-demand check on the handoff board;
-   there is no shift schedule or automatic shift-end handoff request.
-6. **Membership admin for facility scope.** The SQL trigger audits
-   `facility_ids` changes, but `src/membership-admin` (TS control plane) does
-   not yet expose a facility-scope command.
-7. **Scale.** `CaseRepository.list` loads all Cases of a tenant; list,
-   dashboard and analytics are computed in memory. Server-side filtered queries
-   and pagination are needed before real volumes.
-8. **Occurrence time.** Case `createdAt` is intake time. A separate
-   upstream occurrence timestamp from adapters is not modelled.
-9. **Live updates.** The UI refreshes on navigation/actions; no push or polling.
-10. **E2E in CI.** Playwright is not a repository dependency; the E2E test is
-    skipped where Playwright is unavailable. Adding it to CI needs a pinned,
-    integrity-checked install consistent with the supply-chain policy.
-11. **Legacy console renderer** (`src/console-web`) accepts the new commands
-    but was not redesigned; `web/careops` is the CareOps UI.
-12. **Pre-existing snapshots.** Postgres snapshots written before this change
-    (none in production) would fail replay verification because the aggregate
-    gained fields; re-snapshot from events if any exist.
-
-## Requires decisions / approvals (not engineering-only)
-
-- Facility approval of SLA thresholds and escalation recipients (provisional
-  values are not clinically validated).
-- Retention period and deletion policy for original notification text, notes
-  and AI drafts; subject access / correction procedure.
-- Encryption at rest, key management and backup scope at the provider.
-- Whether responders may see Cases they created (current: yes, within facility).
-- Category vocabulary per facility.
-- Independent security review of the new surface (Security Audit Round 2).
-
-## Manual verification checklist
-
-- [ ] `npm run careops:local`, walk the flow with two browser profiles on a phone and a tablet.
-- [ ] Screen reader pass (VoiceOver / TalkBack) on dashboard, Case detail, dialogs.
-- [ ] Apply `db/migrations/20261110_0001_careops_case_lifecycle.sql`, then
-      `db/case_store.sql`, `db/identity_store.sql`, `db/careops_platform.sql` on a staging
-      project; run `npm run test:postgres` against it.
-- [ ] Review the provisional thresholds with facility staff before approval.
-- [ ] Confirm no real personal data is entered in any non-production environment.
+- [ ] Apply the migration/contracts to a dedicated Supabase **staging** project
+      (procedure in [Staging](careops-staging.md)), with an approver.
+- [ ] Real Supabase Auth login on phones/tablets with synthetic staff.
+- [ ] Screen-reader pass (VoiceOver / TalkBack).
+- [ ] Facility review and approval of thresholds and escalation recipients.
+- [ ] Confirm no real personal data in any non-production environment.

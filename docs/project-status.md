@@ -52,7 +52,9 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | CareOps platform service + HTTP API (intake, list, dashboard, handoff board, settings, escalation, AI drafts, analytics, audit) | Implemented + tested (local composition) | `src/careops`, `tests/careops-platform.test.ts`, `tests/careops-http.test.ts` |
 | CareOps local server, SQLite store, mobile staff UI | Implemented + tested (synthetic data) | `server/`, `web/careops/`, `tests/careops-sqlite.test.ts`, `tests/e2e/` |
 | CareOps Postgres contract (platform tables, facility-scoped memberships) | Implemented + real-Postgres tested | `db/careops_platform.sql`, `tests/careops-postgres.integration.test.ts` |
-| CareOps production composition (PostgREST platform adapters, adapter ingest, external channels, LLM) | Not implemented | `docs/careops-remaining-work.md` |
+| CareOps production-shaped composition (Supabase Auth + PostgREST platform adapters) + staging server | Implemented + CI-verified on a staging-equivalent stack (PG17 + PostgREST) | `src/careops/deployment.ts`, `server/careops-staging-server.ts`, `tests/stack/` |
+| Server-side Case search with SQLite/PostgreSQL parity | Implemented + tested | `search_care_cases`, `tests/careops-search-parity.test.ts` |
+| Real Supabase staging project, adapter ingest, external channels, external LLM | Not implemented | `docs/careops-remaining-work.md` |
 | Live authenticated Responder Console deployment | Not implemented | renderer/Auth bridge exist; production environment + deployment remain |
 | Production deployment | Not implemented | release checklist |
 | Production PII / care data | **Not allowed** | security policy |

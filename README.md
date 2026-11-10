@@ -70,11 +70,20 @@ human-reviewed AI drafts. It runs end-to-end locally on synthetic data:
 npm run careops:local   # http://127.0.0.1:8787 (loopback only, synthetic staff login)
 ```
 
+A production-shaped composition (Supabase Auth + PostgREST/PostgreSQL) and a
+staging server exist; CI runs them against a staging-equivalent stack
+(PostgreSQL 17 + PostgREST) on every push:
+
+```bash
+npm run careops:staging  # requires the staging environment variables (see docs/careops-staging.md)
+```
+
 Not deployed and not production-ready. Read:
 
 - [CareOps Architecture](docs/careops-architecture.md)
 - [CareOps Workflow](docs/careops-workflow.md)
 - [CareOps Security](docs/careops-security.md)
+- [CareOps Staging Integration](docs/careops-staging.md)
 - [CareOps Remaining Work](docs/careops-remaining-work.md)
 - [ADR 0019](docs/adr/0019-careops-platform-layer.md)
 
@@ -290,7 +299,8 @@ npm run typecheck:server
 npm test
 npm run test:coverage
 npm run test:web
-npm run test:e2e        # requires a locally installed Playwright; skipped otherwise
+npm run lint            # CareOps safety rules + secret scan
+npm run test:e2e        # Playwright (pinned devDependency; run `npx playwright install chromium` once)
 DATABASE_URL=postgresql://... npm run test:postgres
 ```
 
