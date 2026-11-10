@@ -6,3 +6,6 @@ export * from "./projections.ts";
 export * from "./analytics.ts";
 export * from "./ai-assist.ts";
 export * from "./platform-service.ts";
+export * from "./http-parsers.ts";
+export * from "./http.ts";
+export * from "./local.ts";
