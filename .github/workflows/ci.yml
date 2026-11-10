@@ -145,7 +145,6 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
       POSTGREST_VERSION: v12.2.3
       POSTGREST_SHA256: 9f71269e61ac3a940281e93ff415760f5957e430e475ba4c3889f3ede7d5527c
-      STACK_DIR: ${{ runner.temp }}/careops-stack
       SUPABASE_URL: https://127.0.0.1:54321
       CAREOPS_STACK_URL: http://127.0.0.1:8080
 
@@ -168,6 +167,9 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y postgresql-client
           fi
+
+      - name: Prepare stack directory
+        run: echo "STACK_DIR=$RUNNER_TEMP/careops-stack" >> "$GITHUB_ENV"
 
       - name: Generate per-run stack secrets (masked)
         run: node scripts/staging-stack/generate-env.ts
