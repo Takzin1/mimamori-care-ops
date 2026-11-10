@@ -135,11 +135,46 @@ function sanitizedCommand(
       return {
         type: "set_priority",
         priority: command.priority,
+        ...(command.rationale
+          ? { rationale: command.rationale }
+          : {}),
       };
 
     case "acknowledge":
       return {
         type: "acknowledge",
+      };
+
+    case "triage":
+      return {
+        type: "triage",
+        category: command.category,
+        priority: command.priority,
+        rationale: command.rationale,
+      };
+
+    case "reassign":
+      return {
+        type: "reassign",
+        assigneeId: command.assigneeId,
+        reason: command.reason,
+      };
+
+    case "add_note":
+      // AI provenance is attached server-side only after human review.
+      return {
+        type: "add_note",
+        kind: command.kind,
+        text: command.text,
+      };
+
+    case "escalate":
+    case "clear_escalation":
+    case "decline_handoff":
+    case "cancel_handoff":
+      return {
+        type: command.type,
+        reason: command.reason,
       };
 
     case "assign":
@@ -158,6 +193,9 @@ function sanitizedCommand(
         type: "request_handoff",
         targetAssigneeId:
           command.targetAssigneeId,
+        ...(command.note
+          ? { note: command.note }
+          : {}),
       };
 
     case "accept_handoff":

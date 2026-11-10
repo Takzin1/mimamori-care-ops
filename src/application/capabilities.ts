@@ -1,5 +1,6 @@
 import {
   canExecuteCommandType,
+  canReadCaseAggregate,
   queueVisibilityForMembership,
   type CareOpsQueueVisibility,
 } from "../access/policy.ts";
@@ -22,7 +23,11 @@ export type CommandInputRequirement =
   | "outcome"
   | "summary"
   | "evidence"
-  | "reason";
+  | "reason"
+  | "category"
+  | "rationale"
+  | "noteKind"
+  | "text";
 
 export interface OperatorContextProjection {
   tenantId: string;
@@ -51,10 +56,17 @@ const INPUT_REQUIREMENTS: Record<
 > = {
   set_priority: ["priority"],
   acknowledge: [],
+  triage: ["category", "priority", "rationale"],
   assign: ["assigneeId"],
+  reassign: ["assigneeId", "reason"],
   start_action: [],
+  add_note: ["noteKind", "text"],
+  escalate: ["reason"],
+  clear_escalation: ["reason"],
   request_handoff: ["targetAssigneeId"],
   accept_handoff: [],
+  decline_handoff: ["reason"],
+  cancel_handoff: ["reason"],
   complete: [
     "outcome",
     "summary",
@@ -82,7 +94,9 @@ export function projectCaseCapabilities(
   aggregate: CaseAggregate,
   membership: TenantMembership,
 ): CaseCapabilitiesProjection {
+  const visible = canReadCaseAggregate(membership, aggregate);
   const commands = CASE_COMMAND_TYPES
+    .filter(() => visible)
     .filter(
       (type) =>
         canExecuteCommandType(

@@ -1,8 +1,10 @@
 import type { CaseCommandIntent } from "../application/types.ts";
 import { isOperationalActorId } from "../access/actor-id.ts";
 import {
+  CASE_NOTE_KINDS,
   CASE_PRIORITIES,
   COMPLETION_OUTCOMES,
+  type CaseNoteKind,
   type CompletionEvidenceItem,
   type CompletionOutcome,
   type EvidenceKind,
@@ -129,6 +131,24 @@ function parsePriority(value: unknown) {
   return priority as (typeof CASE_PRIORITIES)[number];
 }
 
+function optionalText(
+  value: unknown,
+  label: string,
+  maxLength: number,
+): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  return requiredText(value, label, maxLength);
+}
+
+function parseNoteKind(value: unknown): CaseNoteKind {
+  const kind = requiredText(value, "kind", 32);
+  if (!CASE_NOTE_KINDS.includes(kind as CaseNoteKind)) {
+    invalid("kind is not supported");
+  }
+  return kind as CaseNoteKind;
+}
+
 function parseOutcome(value: unknown): CompletionOutcome {
   const outcome = requiredText(
     value,
@@ -210,15 +230,75 @@ function parseCommand(
   );
 
   switch (type) {
-    case "set_priority":
+    case "set_priority": {
       assertExactKeys(
         value,
-        ["type", "priority"],
+        ["type", "priority", "rationale"],
         "command",
+      );
+      const rationale = optionalText(
+        value.rationale,
+        "rationale",
+        1000,
       );
       return {
         type,
         priority: parsePriority(value.priority),
+        ...(rationale ? { rationale } : {}),
+      };
+    }
+
+    case "triage":
+      assertExactKeys(
+        value,
+        ["type", "category", "priority", "rationale"],
+        "command",
+      );
+      return {
+        type,
+        category: requiredText(value.category, "category", 64),
+        priority: parsePriority(value.priority),
+        rationale: requiredText(value.rationale, "rationale", 1000),
+      };
+
+    case "reassign":
+      assertExactKeys(
+        value,
+        ["type", "assigneeId", "reason"],
+        "command",
+      );
+      return {
+        type,
+        assigneeId: actorId(value.assigneeId, "assigneeId"),
+        reason: requiredText(value.reason, "reason", 1000),
+      };
+
+    case "add_note":
+      // `origin` (AI provenance) is intentionally not accepted from
+      // clients; it is attached server-side by the AI review flow.
+      assertExactKeys(
+        value,
+        ["type", "kind", "text"],
+        "command",
+      );
+      return {
+        type,
+        kind: parseNoteKind(value.kind),
+        text: requiredText(value.text, "text", 4000),
+      };
+
+    case "escalate":
+    case "clear_escalation":
+    case "decline_handoff":
+    case "cancel_handoff":
+      assertExactKeys(
+        value,
+        ["type", "reason"],
+        "command",
+      );
+      return {
+        type,
+        reason: requiredText(value.reason, "reason", 1000),
       };
 
     case "acknowledge":
@@ -246,19 +326,22 @@ function parseCommand(
         ),
       };
 
-    case "request_handoff":
+    case "request_handoff": {
       assertExactKeys(
         value,
-        ["type", "targetAssigneeId"],
+        ["type", "targetAssigneeId", "note"],
         "command",
       );
+      const note = optionalText(value.note, "note", 2000);
       return {
         type,
         targetAssigneeId: actorId(
           value.targetAssigneeId,
           "targetAssigneeId",
         ),
+        ...(note ? { note } : {}),
       };
+    }
 
     case "complete":
       assertExactKeys(

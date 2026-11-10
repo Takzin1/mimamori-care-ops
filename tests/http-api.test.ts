@@ -748,7 +748,7 @@ test("HTTP Case capabilities combine verified RBAC and lifecycle state", async (
       (item: { type: string }) =>
         item.type,
     ),
-    ["set_priority", "acknowledge"],
+    ["set_priority", "acknowledge", "add_note", "escalate"],
   );
   assert.equal(
     Object.hasOwn(

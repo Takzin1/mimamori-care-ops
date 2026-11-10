@@ -17,6 +17,9 @@ function cloneMembership(
   return {
     ...structuredClone(membership),
     roles: [...membership.roles],
+    ...(membership.facilityIds
+      ? { facilityIds: [...membership.facilityIds] }
+      : {}),
   };
 }
 
@@ -64,5 +67,14 @@ implements TenantMembershipDirectory {
     const membership = this.byActor.get(actorKey(tenantId, actorId));
 
     return membership ? cloneMembership(membership) : null;
+  }
+
+  async listByTenant(
+    tenantId: string,
+  ): Promise<TenantMembership[]> {
+    return [...this.byPrincipal.values()]
+      .filter((membership) => membership.tenantId === tenantId)
+      .map(cloneMembership)
+      .sort((a, b) => a.actorId.localeCompare(b.actorId));
   }
 }

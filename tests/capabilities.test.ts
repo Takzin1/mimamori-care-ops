@@ -92,7 +92,7 @@ test("NEW Case capabilities combine lifecycle and RBAC", () => {
         ["dispatcher"],
       ),
     ),
-    ["set_priority", "acknowledge"],
+    ["set_priority", "acknowledge", "add_note", "escalate"],
   );
 
   assert.deepEqual(
@@ -139,7 +139,7 @@ test("ownership-sensitive capabilities follow the same Case Core preconditions",
         ["dispatcher"],
       ),
     ),
-    ["set_priority", "assign"],
+    ["set_priority", "triage", "assign", "add_note", "escalate"],
   );
 
   aggregate = executeCommand(
@@ -161,7 +161,7 @@ test("ownership-sensitive capabilities follow the same Case Core preconditions",
         ["responder"],
       ),
     ),
-    ["start_action"],
+    ["start_action", "add_note", "escalate"],
   );
 
   assert.deepEqual(
@@ -193,7 +193,7 @@ test("ownership-sensitive capabilities follow the same Case Core preconditions",
         ["responder"],
       ),
     ),
-    ["request_handoff", "complete"],
+    ["add_note", "escalate", "request_handoff", "complete"],
   );
 
   aggregate = executeCommand(
@@ -215,7 +215,7 @@ test("ownership-sensitive capabilities follow the same Case Core preconditions",
         ["responder"],
       ),
     ),
-    [],
+    ["add_note", "escalate", "cancel_handoff"],
   );
 
   assert.deepEqual(
@@ -226,7 +226,7 @@ test("ownership-sensitive capabilities follow the same Case Core preconditions",
         ["responder"],
       ),
     ),
-    ["accept_handoff"],
+    ["add_note", "escalate", "accept_handoff", "decline_handoff"],
   );
 });
 
@@ -324,7 +324,7 @@ test("COMPLETED supervisor sees close and reopen while auditor remains read-only
         ["supervisor"],
       ),
     ),
-    ["close", "reopen"],
+    ["add_note", "close", "reopen"],
   );
 
   assert.deepEqual(

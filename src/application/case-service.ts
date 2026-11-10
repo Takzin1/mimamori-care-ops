@@ -14,7 +14,9 @@ import {
   assertCanExecuteCommand,
   assertCanReadCase,
   assertCanReadCaseAggregate,
+  membershipCoversFacility,
 } from "../access/policy.ts";
+import { CaseAccessDeniedError } from "../access/errors.ts";
 import type {
   TenantMembership,
   TenantMembershipDirectory,
@@ -53,25 +55,70 @@ function bindActor(
         type: "set_priority",
         actorId,
         priority: command.priority,
+        ...(command.rationale ? { rationale: command.rationale } : {}),
       };
     case "acknowledge":
       return { type: "acknowledge", actorId };
+    case "triage":
+      return {
+        type: "triage",
+        actorId,
+        category: command.category,
+        priority: command.priority,
+        rationale: command.rationale,
+      };
     case "assign":
       return {
         type: "assign",
         actorId,
         assigneeId: command.assigneeId,
       };
+    case "reassign":
+      return {
+        type: "reassign",
+        actorId,
+        assigneeId: command.assigneeId,
+        reason: command.reason,
+      };
     case "start_action":
       return { type: "start_action", actorId };
+    case "add_note":
+      return {
+        type: "add_note",
+        actorId,
+        kind: command.kind,
+        text: command.text,
+        ...(command.origin ? { origin: command.origin } : {}),
+      };
+    case "escalate":
+      return { type: "escalate", actorId, reason: command.reason };
+    case "clear_escalation":
+      return {
+        type: "clear_escalation",
+        actorId,
+        reason: command.reason,
+      };
     case "request_handoff":
       return {
         type: "request_handoff",
         actorId,
         targetAssigneeId: command.targetAssigneeId,
+        ...(command.note ? { note: command.note } : {}),
       };
     case "accept_handoff":
       return { type: "accept_handoff", actorId };
+    case "decline_handoff":
+      return {
+        type: "decline_handoff",
+        actorId,
+        reason: command.reason,
+      };
+    case "cancel_handoff":
+      return {
+        type: "cancel_handoff",
+        actorId,
+        reason: command.reason,
+      };
     case "complete":
       return {
         type: "complete",
@@ -140,12 +187,16 @@ export class CaseService {
   private async assertTargetAssignable(
     tenantId: string,
     actorId: string,
+    facilityId: string | null,
   ): Promise<void> {
     const target = await this.memberships.findByActorId(
       tenantId,
       actorId,
     );
     assertAssignableTarget(target);
+    if (!membershipCoversFacility(target, facilityId)) {
+      throw new CaseAccessDeniedError("target_not_assignable");
+    }
   }
 
   async execute(
@@ -156,20 +207,6 @@ export class CaseService {
       input.principalId,
     );
     assertCanExecuteCommand(membership, input.command);
-
-    if (input.command.type === "assign") {
-      await this.assertTargetAssignable(
-        input.tenantId,
-        input.command.assigneeId,
-      );
-    }
-
-    if (input.command.type === "request_handoff") {
-      await this.assertTargetAssignable(
-        input.tenantId,
-        input.command.targetAssigneeId,
-      );
-    }
 
     const stored = await this.repository.load(
       input.tenantId,
@@ -184,6 +221,27 @@ export class CaseService {
       membership,
       stored.aggregate,
     );
+
+    const facilityId = stored.aggregate.facilityId ?? null;
+
+    if (
+      input.command.type === "assign" ||
+      input.command.type === "reassign"
+    ) {
+      await this.assertTargetAssignable(
+        input.tenantId,
+        input.command.assigneeId,
+        facilityId,
+      );
+    }
+
+    if (input.command.type === "request_handoff") {
+      await this.assertTargetAssignable(
+        input.tenantId,
+        input.command.targetAssigneeId,
+        facilityId,
+      );
+    }
 
     const transition = executeCommand(
       stored.aggregate,

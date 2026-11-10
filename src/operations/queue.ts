@@ -67,7 +67,9 @@ function attentionReason(
 ): QueueAttentionReason {
   if (hasActiveBreach) return "sla_breach";
   if (status === "NEW") return "unacknowledged";
-  if (status === "ACKNOWLEDGED") return "unassigned";
+  if (status === "ACKNOWLEDGED" || status === "TRIAGED") {
+    return "unassigned";
+  }
   if (status === "HANDOFF_PENDING") return "handoff_pending";
   return "active";
 }
@@ -187,7 +189,9 @@ export function projectCaseQueue(
       (item) => item.status === "NEW",
     ).length,
     unassigned: items.filter(
-      (item) => item.status === "ACKNOWLEDGED",
+      (item) =>
+        item.status === "ACKNOWLEDGED" ||
+        item.status === "TRIAGED",
     ).length,
     handoffPending: items.filter(
       (item) => item.status === "HANDOFF_PENDING",

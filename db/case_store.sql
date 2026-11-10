@@ -28,6 +28,7 @@ create table if not exists public.care_cases (
     status in (
       'NEW',
       'ACKNOWLEDGED',
+      'TRIAGED',
       'ASSIGNED',
       'IN_PROGRESS',
       'HANDOFF_PENDING',
@@ -46,6 +47,7 @@ create table if not exists public.care_cases (
   closed_at timestamptz,
   reopened_count integer not null default 0 check (reopened_count >= 0),
   completion jsonb,
+  facility_id text,
   snapshot jsonb not null,
   updated_at timestamptz not null default now(),
   primary key (tenant_id, case_id),
@@ -61,10 +63,18 @@ create table if not exists public.care_case_events (
       'case_created',
       'priority_changed',
       'acknowledged',
+      'triaged',
       'assigned',
+      'reassigned',
       'action_started',
+      'note_added',
+      'escalated',
+      'escalation_cleared',
       'handoff_requested',
       'handoff_accepted',
+      'handoff_declined',
+      'handoff_cancelled',
+      'signal_linked',
       'completed',
       'closed',
       'reopened'
@@ -117,6 +127,9 @@ create index if not exists care_cases_tenant_priority_status_idx
 create index if not exists care_cases_tenant_assignee_idx
   on public.care_cases (tenant_id, assignee_id, status)
   where assignee_id is not null;
+
+create index if not exists care_cases_tenant_facility_status_idx
+  on public.care_cases (tenant_id, facility_id, status, created_at);
 
 create index if not exists care_events_tenant_case_time_idx
   on public.care_case_events (tenant_id, case_id, occurred_at);
@@ -197,7 +210,9 @@ begin
      or p_event#>>'{data,sourceType}' is distinct from v_source_type
      or p_event#>>'{data,sourceAdapter}' is distinct from v_source_adapter
      or p_event#>>'{data,sourceSignalId}' is distinct from v_source_signal_id
-     or p_event#>>'{data,priority}' is distinct from v_priority then
+     or p_event#>>'{data,priority}' is distinct from v_priority
+     or nullif(p_event#>>'{data,facilityId}', '')
+          is distinct from nullif(p_snapshot->>'facilityId', '') then
     raise exception 'case creation lineage mismatch';
   end if;
 
@@ -221,6 +236,7 @@ begin
     closed_at,
     reopened_count,
     completion,
+    facility_id,
     snapshot,
     updated_at
   )
@@ -244,6 +260,7 @@ begin
     nullif(p_snapshot->>'closedAt', '')::timestamptz,
     coalesce((p_snapshot->>'reopenedCount')::integer, 0),
     p_snapshot->'completion',
+    nullif(p_snapshot->>'facilityId', ''),
     p_snapshot,
     now()
   )
@@ -358,6 +375,7 @@ declare
   v_source_adapter text;
   v_source_signal_id text;
   v_created_at timestamptz;
+  v_facility_id text;
   v_next_version bigint := p_expected_version + 1;
   v_snapshot_version bigint := (p_snapshot->>'version')::bigint;
   v_event_sequence bigint := (p_event->>'sequence')::bigint;
@@ -368,14 +386,16 @@ begin
     source_type,
     source_adapter,
     source_signal_id,
-    created_at
+    created_at,
+    facility_id
     into
       v_current_version,
       v_subject_id,
       v_source_type,
       v_source_adapter,
       v_source_signal_id,
-      v_created_at
+      v_created_at,
+      v_facility_id
     from public.care_cases
    where tenant_id = p_tenant_id
      and case_id = p_case_id
@@ -403,6 +423,7 @@ begin
      or p_snapshot->>'sourceAdapter' is distinct from v_source_adapter
      or p_snapshot->>'sourceSignalId' is distinct from v_source_signal_id
      or (p_snapshot->>'createdAt')::timestamptz is distinct from v_created_at
+     or nullif(p_snapshot->>'facilityId', '') is distinct from v_facility_id
      or v_snapshot_version <> v_next_version
      or v_event_sequence <> v_next_version
      or p_event->>'type' = 'case_created' then

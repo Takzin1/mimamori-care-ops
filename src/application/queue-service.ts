@@ -1,5 +1,6 @@
 import {
   assertCanReadCase,
+  membershipCoversFacility,
   queueVisibilityForMembership,
 } from "../access/policy.ts";
 import type {
@@ -69,7 +70,14 @@ export class CaseQueueService {
       throw new TenantSlaPolicyNotFoundError(input.tenantId);
     }
 
-    const storedCases = await this.repository.list(input.tenantId);
+    const storedCases = (
+      await this.repository.list(input.tenantId)
+    ).filter((stored) =>
+      membershipCoversFacility(
+        membership,
+        stored.aggregate.facilityId ?? null,
+      ),
+    );
 
     return projectCaseQueue(
       storedCases,
