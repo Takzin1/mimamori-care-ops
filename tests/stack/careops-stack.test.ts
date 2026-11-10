@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 
-import { STACK_TENANT_ID, staffByKey } from "../../scripts/staging-stack/stack.ts";
+import { STACK_OTHER_TENANT_ID, STACK_TENANT_ID, staffByKey } from "../../scripts/staging-stack/stack.ts";
 
 /**
  * Staging-equivalent stack test: Supabase-compatible Auth → CareOps staging
@@ -137,7 +137,8 @@ test("stack: facility isolation, IDOR, privilege escalation and concurrent updat
   const kaedeLead = client(await login("kaedeLead"));
   const kaedeR = client(await login("kaedeR"));
   const r1 = client(await login("r1"));
-  const other = client(await login("other"));
+  // The other tenant's supervisor, addressing its own tenant and ours.
+  const other = client(await login("other"), STACK_OTHER_TENANT_ID);
   const otherAsStackTenant = client(await login("other"), T);
 
   const requestKey = `iso-${Date.now()}`;
