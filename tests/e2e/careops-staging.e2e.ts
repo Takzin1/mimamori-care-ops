@@ -12,7 +12,8 @@ const PASSWORD = process.env.STACK_USER_PASSWORD;
 
 test("staging UI: login, Case lifecycle with handoff receipt, facility isolation (PostgreSQL-backed)", { skip: !STACK || !PASSWORD, timeout: 240_000 }, async () => {
   const browser = await playwright.chromium.launch();
-  const context = await browser.newContext({ ...playwright.devices["iPhone 13"] });
+  // The stack's Supabase endpoint uses a per-run self-signed certificate.
+  const context = await browser.newContext({ ...playwright.devices["iPhone 13"], ignoreHTTPSErrors: true });
   const page = await context.newPage();
   const errors: string[] = [];
   page.on("pageerror", (error: Error) => errors.push(String(error)));

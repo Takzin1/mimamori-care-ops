@@ -1,4 +1,6 @@
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer as createTlsServer } from "node:https";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,12 +27,14 @@ export interface GatewayOptions {
   allowedOrigin?: string;
   /** Principal IDs whose Auth account is disabled (退職 simulation). */
   disabledPrincipals?: () => readonly string[];
+  /** PEM key/cert: serve HTTPS like a real Supabase endpoint. */
+  tls?: { key: string; cert: string };
 }
 
 const FORWARD_HEADERS = ["authorization", "content-type", "accept", "prefer", "accept-profile", "content-profile", "range"];
 
 export async function startSupabaseGateway(options: GatewayOptions) {
-  const server = createServer((request, response) => {
+  const handler = (request: IncomingMessage, response: ServerResponse) => {
     void (async () => {
       const url = new URL(request.url ?? "/", "http://gateway");
       const origin = typeof request.headers.origin === "string" ? request.headers.origin : null;
@@ -117,7 +121,8 @@ export async function startSupabaseGateway(options: GatewayOptions) {
         reply(error instanceof BodyTooLargeError ? 413 : 502, { message: "gateway error" });
       }
     })();
-  });
+  };
+  const server = options.tls ? createTlsServer(options.tls, handler) : createServer(handler);
   await new Promise<void>((resolveListen, rejectListen) => {
     server.on("error", rejectListen);
     server.listen(options.port, "127.0.0.1", () => resolveListen());
@@ -139,6 +144,9 @@ if (invokedDirectly) {
     jwtSecret: required("STACK_JWT_SECRET"),
     userPassword: required("STACK_USER_PASSWORD"),
     ...(env.STACK_UI_ORIGIN ? { allowedOrigin: env.STACK_UI_ORIGIN } : {}),
+    ...(env.STACK_TLS_KEY_FILE && env.STACK_TLS_CERT_FILE
+      ? { tls: { key: await readFile(env.STACK_TLS_KEY_FILE, "utf8"), cert: await readFile(env.STACK_TLS_CERT_FILE, "utf8") } }
+      : {}),
   });
   process.stdout.write(`${JSON.stringify({ event: "stack_gateway_started" })}\n`);
 }

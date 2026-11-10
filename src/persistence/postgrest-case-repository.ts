@@ -131,7 +131,24 @@ function asEvent(value: unknown): CaseEvent {
   return structuredClone(value) as CaseEvent;
 }
 
-function validateStoredCase(
+/** Aggregate keys that existed before the CareOps lifecycle extension. */
+const LEGACY_AGGREGATE_KEYS = [
+  "id", "tenantId", "subjectId", "sourceType", "sourceAdapter", "sourceSignalId",
+  "priority", "status", "version", "assigneeId", "handoffTargetId", "createdAt",
+  "acknowledgedAt", "assignedAt", "firstActionAt", "completedAt", "closedAt",
+  "reopenedCount", "completion",
+] as const;
+
+function isLegacySnapshot(aggregate: CaseAggregate): boolean {
+  return !Object.prototype.hasOwnProperty.call(aggregate, "lastActivityAt");
+}
+
+function pickLegacy(aggregate: CaseAggregate): Record<string, unknown> {
+  const record = aggregate as unknown as Record<string, unknown>;
+  return Object.fromEntries(LEGACY_AGGREGATE_KEYS.map((key) => [key, record[key] ?? null]));
+}
+
+export function validateStoredCase(
   tenantId: string,
   caseId: string,
   snapshotValue: unknown,
@@ -162,6 +179,19 @@ function validateStoredCase(
     throw new CaseStoreCorruptionError(
       `Stored Case event stream cannot be replayed: ${tenantId}/${caseId}; ${error instanceof Error ? error.message : "unknown replay error"}`,
     );
+  }
+
+  if (isLegacySnapshot(aggregate)) {
+    // Snapshot written before the CareOps lifecycle fields existed. Accept
+    // it only if every legacy field equals the replay; the new fields are
+    // derived purely from events, so the replayed aggregate is returned
+    // and the next append persists a complete snapshot.
+    if (stableJson(pickLegacy(replayed)) !== stableJson(pickLegacy(aggregate))) {
+      throw new CaseStoreCorruptionError(
+        `Stored Case snapshot/event divergence: ${tenantId}/${caseId}`,
+      );
+    }
+    return { aggregate: replayed, events };
   }
 
   if (stableJson(replayed) !== stableJson(aggregate)) {

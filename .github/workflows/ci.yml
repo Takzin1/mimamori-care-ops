@@ -5,6 +5,10 @@ on:
   push:
     branches:
       - main
+      # Agent / feature branches get CI on push so that integration can be
+      # verified before a pull request exists.
+      - "claude/**"
+      - "feature/**"
 
 permissions:
   contents: read
@@ -40,6 +44,9 @@ jobs:
 
       - name: Typecheck local CareOps server
         run: npm run typecheck:server
+
+      - name: CareOps lint and secret scan
+        run: npm run lint
 
       - name: Tests
         run: npm test
@@ -93,3 +100,165 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: npm run test:postgres
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+
+      - name: Install locked toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install Playwright Chromium (version pinned by package-lock)
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Mobile UI E2E (local server, SQLite, synthetic data)
+        run: npm run test:e2e
+
+  staging-stack:
+    # Staging-equivalent stack: PostgreSQL 17 + pinned PostgREST +
+    # Supabase-compatible test gateway (TLS) + production composition.
+    # Synthetic data and per-run secrets only.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      POSTGREST_VERSION: v12.2.3
+      POSTGREST_SHA256: 9f71269e61ac3a940281e93ff415760f5957e430e475ba4c3889f3ede7d5527c
+      STACK_DIR: ${{ runner.temp }}/careops-stack
+      SUPABASE_URL: https://127.0.0.1:54321
+      CAREOPS_STACK_URL: http://127.0.0.1:8080
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+
+      - name: Install locked toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install Playwright Chromium (version pinned by package-lock)
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Ensure PostgreSQL client
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+
+      - name: Generate per-run stack secrets (masked)
+        run: node scripts/staging-stack/generate-env.ts
+
+      - name: Generate per-run TLS certificate for the Supabase endpoint
+        run: |
+          mkdir -p "$STACK_DIR"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$STACK_DIR/key.pem" -out "$STACK_DIR/cert.pem" \
+            -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1" 2>/dev/null
+          echo "NODE_EXTRA_CA_CERTS=$STACK_DIR/cert.pem" >> "$GITHUB_ENV"
+
+      - name: Apply schema (twice, to prove re-apply safety)
+        run: |
+          for round in 1 2; do
+            psql "$DATABASE_URL" -X -q -v ON_ERROR_STOP=1 \
+              -f tests/postgres/bootstrap.sql \
+              -f db/migrations/20261110_0001_careops_case_lifecycle.sql \
+              -f db/case_store.sql \
+              -f db/identity_store.sql \
+              -f db/careops_platform.sql
+          done
+          psql "$DATABASE_URL" -X -q -v ON_ERROR_STOP=1 \
+            -v authenticator_password="$STACK_DB_PASSWORD" \
+            -f db/staging-stack/postgrest-roles.sql
+
+      - name: Download PostgREST (pinned version and sha256)
+        run: |
+          curl -fsSL -o "$STACK_DIR/postgrest.tar.xz" \
+            "https://github.com/PostgREST/postgrest/releases/download/${POSTGREST_VERSION}/postgrest-${POSTGREST_VERSION}-linux-static-x64.tar.xz"
+          echo "${POSTGREST_SHA256}  $STACK_DIR/postgrest.tar.xz" | sha256sum -c -
+          tar -xJf "$STACK_DIR/postgrest.tar.xz" -C "$STACK_DIR"
+
+      - name: Start PostgREST
+        run: |
+          PGRST_DB_URI="postgres://authenticator:${STACK_DB_PASSWORD}@localhost:5432/postgres" \
+          PGRST_DB_SCHEMAS=public \
+          PGRST_DB_ANON_ROLE=anon \
+          PGRST_JWT_SECRET="$STACK_JWT_SECRET" \
+          PGRST_SERVER_HOST=127.0.0.1 \
+          PGRST_SERVER_PORT=3000 \
+            nohup "$STACK_DIR/postgrest" > "$STACK_DIR/postgrest.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/ || true)
+            if [ "$code" != "000" ]; then echo "PostgREST up ($code)"; exit 0; fi
+            sleep 1
+          done
+          echo "PostgREST did not start"; exit 1
+
+      - name: Start Supabase-compatible test gateway (TLS)
+        run: |
+          STACK_GATEWAY_PORT=54321 \
+          STACK_POSTGREST_URL=http://127.0.0.1:3000 \
+          STACK_UI_ORIGIN="$CAREOPS_STACK_URL" \
+          STACK_TLS_KEY_FILE="$STACK_DIR/key.pem" \
+          STACK_TLS_CERT_FILE="$STACK_DIR/cert.pem" \
+            nohup node scripts/staging-stack/supabase-gateway.ts > "$STACK_DIR/gateway.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -s --cacert "$STACK_DIR/cert.pem" -o /dev/null https://127.0.0.1:54321/; then echo "gateway up"; exit 0; fi
+            sleep 1
+          done
+          echo "gateway did not start"; exit 1
+
+      - name: Seed synthetic tenant, facilities and staff
+        run: node scripts/staging-stack/seed.ts
+
+      - name: Start CareOps staging server (production composition)
+        env:
+          CARE_OPS_ENVIRONMENT: staging
+          CARE_OPS_CONSOLE_ORIGINS: http://127.0.0.1:8080
+          CARE_OPS_SLA_POLICIES_JSON: '{"stack-tenant":{"critical":{"acknowledgeWithinMs":300000,"assignWithinMs":600000,"firstActionWithinMs":900000,"handoffAcceptWithinMs":900000,"completeWithinMs":7200000},"high":{"acknowledgeWithinMs":900000,"assignWithinMs":1800000,"firstActionWithinMs":1800000,"handoffAcceptWithinMs":1800000,"completeWithinMs":14400000},"normal":{"acknowledgeWithinMs":1800000,"assignWithinMs":3600000,"firstActionWithinMs":3600000,"handoffAcceptWithinMs":3600000,"completeWithinMs":43200000},"low":{"acknowledgeWithinMs":7200000,"assignWithinMs":14400000,"firstActionWithinMs":14400000,"handoffAcceptWithinMs":7200000,"completeWithinMs":86400000}}}'
+          CARE_OPS_AI_PROVIDER: local-rules
+          CARE_OPS_UI_TENANT_ID: stack-tenant
+          CARE_OPS_HTTP_PORT: "8080"
+          CARE_OPS_ESCALATION_INTERVAL_MS: "0"
+        run: |
+          nohup node server/careops-staging-server.ts > "$STACK_DIR/careops.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' "$CAREOPS_STACK_URL/readyz")" = "200" ]; then echo "CareOps ready"; exit 0; fi
+            sleep 1
+          done
+          echo "CareOps staging server not ready"; exit 1
+
+      - name: Staging-equivalent integration and browser E2E
+        run: npm run test:stack
+
+      - name: Stack logs (non-PII operational records only)
+        if: failure()
+        run: |
+          for file in postgrest gateway careops; do
+            echo "::group::$file"
+            tail -n 200 "$STACK_DIR/$file.log" || true
+            echo "::endgroup::"
+          done

@@ -59,6 +59,14 @@ declare module "node:http" {
   ): Server;
 }
 
+declare module "node:https" {
+  import type { IncomingMessage, ServerResponse, Server } from "node:http";
+  export function createServer(
+    options: { key: string; cert: string },
+    handler: (request: IncomingMessage, response: ServerResponse) => void,
+  ): Server;
+}
+
 declare module "node:fs/promises" {
   export function readFile(path: string): Promise<Uint8Array>;
   export function readFile(path: string, encoding: "utf8"): Promise<string>;
