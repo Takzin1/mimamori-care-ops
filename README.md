@@ -58,6 +58,26 @@ Not yet production-ready:
 
 See [Project Status](docs/project-status.md) and the open GitHub Issues for the active roadmap.
 
+## CareOps platform (見守りくん CareOps)
+
+The CareOps layer turns notifications into accountable Cases through
+confirmation → triage → assignment → action history → shift handoff with
+explicit receipt → resolution → closure, with facility isolation, configurable
+internal response targets, escalation notifications, period analytics, and
+human-reviewed AI drafts. It runs end-to-end locally on synthetic data:
+
+```bash
+npm run careops:local   # http://127.0.0.1:8787 (loopback only, synthetic staff login)
+```
+
+Not deployed and not production-ready. Read:
+
+- [CareOps Architecture](docs/careops-architecture.md)
+- [CareOps Workflow](docs/careops-workflow.md)
+- [CareOps Security](docs/careops-security.md)
+- [CareOps Remaining Work](docs/careops-remaining-work.md)
+- [ADR 0019](docs/adr/0019-careops-platform-layer.md)
+
 ## The problem boundary
 
 Many monitoring products stop at detection or notification.
@@ -160,9 +180,16 @@ src/
   console/        live Console workspace state
   console-web/    dependency-free live Console DOM renderer
   persistence/   repository contracts and in-memory reference adapter
+  careops/       CareOps platform: intake, projections, escalation, AI drafts, analytics, HTTP
+
+server/          Node-only local CareOps server + SQLite stores (synthetic data)
+web/careops/     mobile-first staff UI (no build step)
 
 db/
-  case_store.sql Postgres/Supabase persistence contract
+  case_store.sql       Postgres/Supabase persistence contract
+  identity_store.sql   memberships (incl. facility scope) + audited admin
+  careops_platform.sql signals, facility settings, audit log, AI drafts, notifications
+  migrations/          forward migrations for existing stores
 
 tests/
   core, persistence, authorization, E2E and SQL invariants
@@ -259,8 +286,12 @@ Run:
 
 ```bash
 npm run typecheck
+npm run typecheck:server
 npm test
 npm run test:coverage
+npm run test:web
+npm run test:e2e        # requires a locally installed Playwright; skipped otherwise
+DATABASE_URL=postgresql://... npm run test:postgres
 ```
 
 Before deployment, copy `.env.example` to a local ignored environment file or configure the same variables in the provider, then validate the configuration without making network requests:

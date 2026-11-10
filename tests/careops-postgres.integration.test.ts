@@ -21,7 +21,10 @@ function psql(args: string[]): string {
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
 }
-const sql = (query: string) => psql(["-c", query]);
+// Each run uses its own tenant so it never interferes with other
+// integration files running concurrently against the same database.
+const RUN_TENANT = `tenant-pg-${Date.now()}`;
+const sql = (query: string) => psql(["-c", query.replaceAll("tenant-pg", RUN_TENANT)]);
 const json = (value: unknown) => `'${JSON.stringify(value).replaceAll("'", "''")}'::jsonb`;
 const asService = (query: string) => JSON.parse(sql(`set role service_role; select (${query})::text;`));
 
@@ -29,14 +32,6 @@ test("real Postgres: CareOps lifecycle events, facility lineage and platform RPC
   for (const file of ["tests/postgres/bootstrap.sql", "db/case_store.sql", "db/identity_store.sql", "db/careops_platform.sql"]) {
     psql(["-f", file]);
   }
-  sql(
-    "truncate table public.care_ai_drafts, public.care_signals, public.care_facility_settings, " +
-    "public.care_staff_notifications, public.care_outbox, public.care_case_events, public.care_cases restart identity cascade;",
-  );
-  sql("alter table public.care_platform_audit_log disable trigger care_platform_audit_no_update; " +
-    "delete from public.care_platform_audit_log; " +
-    "alter table public.care_platform_audit_log enable trigger care_platform_audit_no_update;");
-
   // Case with facility goes through the existing RPCs with all new event types.
   const created = createCase({
     id: "case-pg-careops", tenantId: "tenant-pg", facilityId: "fac-pg", subjectId: "resident-ref-pg",
@@ -44,7 +39,7 @@ test("real Postgres: CareOps lifecycle events, facility lineage and platform RPC
     category: "体調不良", priorityRationale: "合成データ", createdBy: "dispatcher-pg", createdAt: "2026-11-10T00:00:00.000Z",
   });
   assert.equal(asService(`public.create_care_case(${json(created.aggregate)}, ${json(created.event)})`).created, true);
-  assert.equal(sql("select facility_id from public.care_cases where case_id = 'case-pg-careops'"), "fac-pg");
+  assert.equal(sql("select facility_id from public.care_cases where tenant_id = 'tenant-pg' and case_id = 'case-pg-careops'"), "fac-pg");
 
   let aggregate: CaseAggregate = created.aggregate;
   const events: CaseEvent[] = [created.event];
@@ -81,7 +76,7 @@ test("real Postgres: CareOps lifecycle events, facility lineage and platform RPC
   const storedEvents = JSON.parse(sql(
     "select json_agg(event order by sequence)::text from public.care_case_events where tenant_id = 'tenant-pg' and case_id = 'case-pg-careops'",
   )) as CaseEvent[];
-  const snapshot = JSON.parse(sql("select snapshot::text from public.care_cases where case_id = 'case-pg-careops'"));
+  const snapshot = JSON.parse(sql("select snapshot::text from public.care_cases where tenant_id = 'tenant-pg' and case_id = 'case-pg-careops'"));
   assert.deepEqual(replayCase(storedEvents), snapshot, "Postgres snapshot equals replay of stored events");
   assert.equal(snapshot.status, "IN_PROGRESS");
   assert.equal(snapshot.linkedSignalCount, 1);
@@ -103,7 +98,7 @@ test("real Postgres: CareOps lifecycle events, facility lineage and platform RPC
   const decision = { ...signal, disposition: "dismissed", rawText: "改ざん", dismissReason: "合成", decidedBy: "dispatcher-pg", decidedAt: "2026-11-10T00:05:00.000Z" };
   assert.equal(asService(`public.decide_care_signal('tenant-pg', 'sig-rec-1', 'pending', ${json(decision)})`).ok, true);
   assert.equal(asService(`public.decide_care_signal('tenant-pg', 'sig-rec-1', 'pending', ${json(decision)})`).ok, false, "CAS");
-  const storedSignal = JSON.parse(sql("select record::text from public.care_signals where id = 'sig-rec-1'"));
+  const storedSignal = JSON.parse(sql("select record::text from public.care_signals where tenant_id = 'tenant-pg' and id = 'sig-rec-1'"));
   assert.equal(storedSignal.rawText, "原文", "original text cannot be rewritten by a decision");
   assert.equal(storedSignal.replayCount, 1);
 
@@ -116,14 +111,14 @@ test("real Postgres: CareOps lifecycle events, facility lineage and platform RPC
   // audit log is append-only
   const entry = { id: "audit-1", tenantId: "tenant-pg", facilityId: "fac-pg", at: "2026-11-10T00:00:00.000Z", actorId: "supervisor-pg", action: "settings.updated", targetType: "settings", targetId: "fac-pg", before: null, after: null, reason: null };
   assert.equal(asService(`public.append_care_platform_audit(${json(entry)})`).ok, true);
-  assert.throws(() => sql("delete from public.care_platform_audit_log where id = 'audit-1'"), /append-only/);
+  assert.throws(() => sql("delete from public.care_platform_audit_log where tenant_id = 'tenant-pg' and id = 'audit-1'"), /append-only/);
 
   // AI draft content is immutable on review
   const draft = { id: "draft-1", tenantId: "tenant-pg", caseId: "case-pg-careops", status: "pending_review", provider: "local-rules", model: "m", generatedAt: "2026-11-10T00:00:00.000Z", content: { text: "下書き" } };
   assert.equal(asService(`public.insert_care_ai_draft(${json(draft)})`).ok, true);
   const review = { ...draft, status: "approved", content: { text: "書き換え" }, reviewedBy: "dispatcher-pg", reviewedAt: "2026-11-10T00:10:00.000Z" };
   assert.equal(asService(`public.review_care_ai_draft('tenant-pg', 'draft-1', 'pending_review', ${json(review)})`).ok, true);
-  const storedDraft = JSON.parse(sql("select draft::text from public.care_ai_drafts where id = 'draft-1'"));
+  const storedDraft = JSON.parse(sql("select draft::text from public.care_ai_drafts where tenant_id = 'tenant-pg' and id = 'draft-1'"));
   assert.equal(storedDraft.content.text, "下書き");
   assert.equal(storedDraft.reviewedBy, "dispatcher-pg");
 

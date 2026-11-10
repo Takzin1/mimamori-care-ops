@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-26
+Last updated: 2026-11-10
 
 Mimamori Care Ops is an **architecture/core prototype**, not a production deployment.
 
@@ -48,6 +48,11 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | Integrity-pinned TypeScript CI toolchain | Implemented + tested | `package-lock.json` + frozen CI install + supply-chain regression test |
 | Repository governance audit | Implemented + tested | manual read-only workflow checks `main` protection + required `verify` / `postgres-integration`; enforcement setting still pending #10 |
 | Security Audit Round 1 | Complete | Issue #45; remediation PRs #46, #49, #50, #54, #56, #58 |
+| CareOps lifecycle extension (triage, notes, escalation flag, reassign, handoff decline/cancel, duplicate link, facility scope) | Implemented + tested | `src/core`, `tests/careops-core.test.ts` |
+| CareOps platform service + HTTP API (intake, list, dashboard, handoff board, settings, escalation, AI drafts, analytics, audit) | Implemented + tested (local composition) | `src/careops`, `tests/careops-platform.test.ts`, `tests/careops-http.test.ts` |
+| CareOps local server, SQLite store, mobile staff UI | Implemented + tested (synthetic data) | `server/`, `web/careops/`, `tests/careops-sqlite.test.ts`, `tests/e2e/` |
+| CareOps Postgres contract (platform tables, facility-scoped memberships) | Implemented + real-Postgres tested | `db/careops_platform.sql`, `tests/careops-postgres.integration.test.ts` |
+| CareOps production composition (PostgREST platform adapters, adapter ingest, external channels, LLM) | Not implemented | `docs/careops-remaining-work.md` |
 | Live authenticated Responder Console deployment | Not implemented | renderer/Auth bridge exist; production environment + deployment remain |
 | Production deployment | Not implemented | release checklist |
 | Production PII / care data | **Not allowed** | security policy |
