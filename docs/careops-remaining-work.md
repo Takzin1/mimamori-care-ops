@@ -31,6 +31,12 @@ Nothing here is deployed. No production database was touched.
 | Staging browser E2E (Supabase-style login, PostgreSQL-backed) | `tests/e2e/careops-staging.e2e.ts` | CI `staging-stack` only |
 | Node.js 24 / PostgreSQL 17 | CI jobs | CI |
 
+CI evidence: GitHub Actions run #264 (commit `38eb5b7`, branch
+`claude/kind-franklin-t91s96`) — `verify`, `postgres-integration`, `e2e` and
+`staging-stack` all succeeded on Node 24 / PostgreSQL 17 / PostgREST v12.2.3;
+the staging-stack job ran 5 stack integration tests and the staging browser
+E2E (6 tests, 0 skipped).
+
 Local machine limits: Node 22 locally (CI uses 24); PostgreSQL 16 locally
 (CI uses 17); PostgREST cannot be executed in the authoring environment, so
 everything involving real PostgREST is verified **only in CI**.
