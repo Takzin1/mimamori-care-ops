@@ -131,3 +131,31 @@ export function formatMinutes(value) {
   const minutes = Math.round(value % 60);
   return minutes ? `${hours}時間${minutes}分` : `${hours}時間`;
 }
+
+// Date inputs are local calendar dates. Converting through UTC strings
+// shifts the day in UTC+ time zones (e.g. Japan), so every conversion here
+// uses local date parts and round-trips exactly.
+function parseDateValue(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
+  return match ? [Number(match[1]), Number(match[2]) - 1, Number(match[3])] : null;
+}
+
+/** ISO instant → "YYYY-MM-DD" in the viewer's local calendar. */
+export function localDateInputValue(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** "YYYY-MM-DD" → ISO instant of local midnight at the start of that day. */
+export function localDayStartIso(value) {
+  const parts = parseDateValue(value);
+  return parts ? new Date(parts[0], parts[1], parts[2]).toISOString() : "";
+}
+
+/** "YYYY-MM-DD" → ISO instant of local midnight at the start of the next day (exclusive end). */
+export function localNextDayStartIso(value) {
+  const parts = parseDateValue(value);
+  return parts ? new Date(parts[0], parts[1], parts[2] + 1).toISOString() : "";
+}

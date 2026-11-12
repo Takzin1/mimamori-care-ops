@@ -403,3 +403,10 @@ fieldset { border: 1px solid var(--border); border-radius: var(--radius); }
 .strip-alert { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
 .strip-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
 .strip-time { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
+
+.list-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+}

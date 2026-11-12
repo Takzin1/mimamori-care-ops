@@ -1,13 +1,14 @@
 import { ApiError, createApi, fetchAppConfig, fetchLocalStaff, supabasePasswordLogin } from "./api.js";
 import {
-  announce, clear, confirmDialog, field, formDialog, formatDateTime, formatMinutes, h, minutesSince, select,
+  announce, clear, confirmDialog, field, formDialog, formatDateTime, formatMinutes, h, localDateInputValue,
+  localDayStartIso, localNextDayStartIso, minutesSince, select,
 } from "./dom.js";
 import {
   AI_KIND, AI_STATUS, AUDIT_FIELD, COMMAND, DISPOSITION, EVENT, EVIDENCE, NOTE_KIND, OUTCOME, PRIORITY, ROLE,
   SIGNAL_TYPE, STAGE, STATUS, STATUS_ICON, entries,
 } from "./labels.js";
 
-const state = { session: null, facilityId: "" };
+const state = { session: null, facilityId: "", unsavedInput: false };
 const root = document.getElementById("app");
 
 /* ------------------------------------------------------------------ */
@@ -219,7 +220,7 @@ async function dashboardView() {
       ? h("ul", { class: "notice-list" }, notifications.slice(0, 10).map((item) =>
           h("li", { class: "notice" },
             h("span", { class: "notice-time" }, formatDateTime(item.createdAt)),
-            h("a", { href: `#/cases/${encodeURIComponent(item.caseId)}` }, item.message),
+            h("a", { href: `#/cases/${encodeURIComponent(item.caseId)}`, class: "list-link" }, item.message),
           )))
       : h("p", { class: "empty" }, "通知はありません。"),
   );
@@ -353,8 +354,8 @@ async function casesView() {
     field("優先度", select("priority", entries(PRIORITY), { value: query.priority ?? "", includeEmpty: "すべて" })),
     field("担当", select("assigneeId", [[me.actorId, "自分"], ["__unassigned__", "未割当"], ...staffOptions(null, { assignableOnly: false })], { value: query.assigneeId ?? "", includeEmpty: "すべて" })),
     me.facilities.length > 1 ? field("施設", select("facilityId", me.facilities.map((item) => [item.facilityId, item.displayName]), { value: query.facilityId ?? "", includeEmpty: "すべて" })) : null,
-    field("発生日（から）", h("input", { type: "date", name: "fromDate", value: query.from ? query.from.slice(0, 10) : "" })),
-    field("発生日（まで）", h("input", { type: "date", name: "toDate", value: query.to ? query.to.slice(0, 10) : "" })),
+    field("発生日（から）", h("input", { type: "date", name: "fromDate", value: query.from ? localDateInputValue(query.from) : "" })),
+    field("発生日（まで）", h("input", { type: "date", name: "toDate", value: query.to ? localDateInputValue(Date.parse(query.to) - 1) : "" })),
     field("検索（Case ID・対象者ID・区分）", h("input", { type: "search", name: "q", value: query.q ?? "", maxlength: "100" })),
     field("並び順", select("sort", [["attention", "要対応順"], ["createdAt", "発生日時"], ["lastActivityAt", "最終更新"], ["priority", "優先度"], ["status", "ステータス"], ["nextDeadlineAt", "期限が近い順"]], { value: query.sort ?? "attention" })),
     field("方向", select("order", [["asc", "昇順"], ["desc", "降順"]], { value: query.order ?? "asc" })),
@@ -368,8 +369,9 @@ async function casesView() {
     const values = Object.fromEntries(new FormData(filter).entries());
     const next = new URLSearchParams();
     for (const key of ["status", "priority", "assigneeId", "facilityId", "q", "sort", "order"]) if (values[key]) next.set(key, values[key]);
-    if (values.fromDate) next.set("from", new Date(`${values.fromDate}T00:00:00`).toISOString());
-    if (values.toDate) next.set("to", new Date(`${values.toDate}T23:59:59`).toISOString());
+    if (values.fromDate) next.set("from", localDayStartIso(values.fromDate));
+    // Exclusive end: start of the day after the selected (inclusive) date.
+    if (values.toDate) next.set("to", localNextDayStartIso(values.toDate));
     location.hash = `#/cases?${next.toString()}`;
   });
 
@@ -703,13 +705,13 @@ async function handoffView() {
           h("a", { class: "btn btn-primary", href: `#/cases/${encodeURIComponent(entry.caseId)}` }, "開いて引継ぎを依頼"),
         )))
       : h("p", { class: "empty ok" }, "引継ぎが必要なCaseはありません。"),
-    h("h2", {}, `施設全体の未受領・保留（${board.unaccepted.length}件）`),
+    h("h2", {}, `${state.session.me.queueVisibility === "tenant" ? "施設全体" : "あなたが関わるCase"}の未受領・保留（${board.unaccepted.length}件）`),
     board.unaccepted.length ? h("ul", { class: "card-list" }, board.unaccepted.map((entry) => item(entry, []))) : h("p", { class: "empty" }, "ありません。"),
     h("h2", {}, "最近24時間の引継ぎ履歴"),
     board.recent.length
       ? h("ul", { class: "plain-list" }, board.recent.map((entry) => h("li", {},
           `${formatDateTime(entry.at)} ${EVENT[entry.action]} / ${actorLabel(entry.actorId)}${entry.reason ? ` / 理由: ${entry.reason}` : ""} `,
-          h("a", { href: `#/cases/${encodeURIComponent(entry.caseId)}` }, "Case"))))
+          h("a", { href: `#/cases/${encodeURIComponent(entry.caseId)}`, class: "list-link" }, "Caseを開く"))))
       : h("p", { class: "empty" }, "ありません。"),
   );
 }
@@ -731,8 +733,8 @@ async function analyticsView() {
   const data = await api.analytics({ from, to, ...(facilityId ? { facilityId } : {}) });
 
   const form = h("form", { class: "panel filters" },
-    field("期間（から）", h("input", { type: "date", name: "from", value: from.slice(0, 10), required: true })),
-    field("期間（まで・この日を含む）", h("input", { type: "date", name: "to", value: new Date(Date.parse(to) - 1).toISOString().slice(0, 10), required: true })),
+    field("期間（から）", h("input", { type: "date", name: "from", value: localDateInputValue(from), required: true })),
+    field("期間（まで・この日を含む）", h("input", { type: "date", name: "to", value: localDateInputValue(Date.parse(to) - 1), required: true })),
     me.facilities.length > 1 ? field("施設", select("facilityId", me.facilities.map((item) => [item.facilityId, item.displayName]), { value: facilityId, includeEmpty: "すべて" })) : null,
     h("button", { type: "submit", class: "btn btn-primary" }, "集計する"),
   );
@@ -740,8 +742,8 @@ async function analyticsView() {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(form).entries());
     const next = new URLSearchParams({
-      from: new Date(`${values.from}T00:00:00`).toISOString(),
-      to: new Date(Date.parse(`${values.to}T00:00:00`) + 86400000).toISOString(),
+      from: localDayStartIso(values.from),
+      to: localNextDayStartIso(values.to),
     });
     if (values.facilityId) next.set("facilityId", values.facilityId);
     location.hash = `#/analytics?${next.toString()}`;
@@ -848,7 +850,7 @@ async function settingsView() {
         trigger: rule.trigger,
         enabled: data.get(`rule.${rule.trigger}.enabled`) === "on",
         notifyRoles: Object.keys(ROLE).filter((role) => data.get(`rule.${rule.trigger}.role.${role}`) === "on"),
-      })).map((rule) => ({ ...rule, notifyRoles: rule.notifyRoles.length ? rule.notifyRoles : ["supervisor"] })),
+      })),
       autoCreateCaseFor: Object.keys(SIGNAL_TYPE).filter((type) => data.get(`auto.${type}`) === "on"),
       linkDuplicateSignals: data.get("linkDuplicateSignals") === "on",
       categories: String(data.get("categories") ?? "").split("\n").map((item) => item.trim()).filter(Boolean),
@@ -873,6 +875,11 @@ async function settingsView() {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const missingRecipients = collect().escalationRules.filter((rule) => rule.notifyRoles.length === 0);
+    if (missingRecipients.length) {
+      announce(`通知先ロールが未選択のルールがあります: ${missingRecipients.map((rule) => STAGE[rule.trigger]).join("、")}。少なくとも1つ選択してください。`, "error");
+      return;
+    }
     if (!(await confirmDialog("設定を保存", "施設設定を保存します。対応期限を変更した場合は再承認が必要になります。", { confirmLabel: "保存する" }))) return;
     if (await guarded(() => api.updateSettings(current, collect()), "設定を保存しました。")) {
       state.session.me = await api.me();
@@ -971,6 +978,8 @@ fetchAppConfig().then((config) => {
 
 async function render({ quiet = false } = {}) {
   const token = ++renderToken;
+  // An explicit render (navigation, 更新, after a save) starts a clean page.
+  if (!quiet) state.unsavedInput = false;
   const scrollY = window.scrollY;
   const hash = location.hash || "#/";
   const path = hash.slice(1).split("?")[0];
@@ -1038,16 +1047,33 @@ async function fillAttentionStrip(strip) {
 }
 
 // Keep an open page current without disturbing work in progress.
+// Any edit inside the page marks it as having unsaved input; automatic
+// refresh then pauses until the user saves, navigates or presses 更新,
+// so typed notes (e.g. a phone call being recorded) are never discarded.
 const REFRESH_MS = 30_000;
-setInterval(() => {
-  if (!state.session || document.visibilityState !== "visible") return;
-  if (document.querySelector("dialog[open]")) return;
+const markUnsaved = (event) => {
+  if (event.target instanceof Element && event.target.closest("main")) {
+    state.unsavedInput = true;
+    const time = document.querySelector("#attention-strip .strip-time");
+    if (time) time.textContent = "入力中のため自動更新を停止中";
+  }
+};
+document.addEventListener("input", markUnsaved);
+document.addEventListener("change", markUnsaved);
+
+function canAutoRefresh() {
+  if (!state.session || document.visibilityState !== "visible") return false;
+  if (document.querySelector("dialog[open]")) return false;
+  if (state.unsavedInput) return false;
   const active = document.activeElement;
-  if (active && active.closest("main") && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
-  void render({ quiet: true });
+  return !(active && active.closest("main") && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName));
+}
+
+setInterval(() => {
+  if (canAutoRefresh()) void render({ quiet: true });
 }, REFRESH_MS);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && state.session && !document.querySelector("dialog[open]")) void render({ quiet: true });
+  if (canAutoRefresh()) void render({ quiet: true });
 });
 
 window.addEventListener("hashchange", () => render());
