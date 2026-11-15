@@ -26,7 +26,12 @@ import {
   createCase,
   linkSignalToCase,
 } from "../core/case-core.ts";
-import { projectCaseAuditTrail, type CaseAuditEntry } from "../core/audit-trail.ts";
+import {
+  projectCaseAuditTrail,
+  projectCaseEvidence,
+  type CaseAuditEntry,
+  type CaseEvidenceEntry,
+} from "../core/audit-trail.ts";
 import { CaseConflictError } from "../core/errors.ts";
 import type {
   CaseAggregate,
@@ -184,6 +189,8 @@ export interface CaseDetailProjection {
   events: readonly CaseEvent[];
   capabilities: CaseCapabilitiesProjection;
   auditTrail: CaseAuditEntry[];
+  /** Evidence references across the whole history (notes + resolution). */
+  evidence: CaseEvidenceEntry[];
   signals: SignalRecord[];
   drafts: AiDraft[];
   sla: CaseSlaEvaluation;
@@ -962,6 +969,7 @@ export class CareOpsPlatformService {
       events: stored.events,
       capabilities,
       auditTrail: projectCaseAuditTrail(stored.events),
+      evidence: projectCaseEvidence(stored.events),
       signals: await this.#signals.list(ctx.tenantId, { caseId }),
       drafts: await this.#drafts.listByCase(ctx.tenantId, caseId),
       sla: evaluateCaseSla(stored.aggregate, stored.events, resolve(facilityId), this.#now()),

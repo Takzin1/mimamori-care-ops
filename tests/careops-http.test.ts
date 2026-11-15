@@ -243,3 +243,20 @@ test("HTTP: error responses never echo submitted personal data", async () => {
     assert.deepEqual(Object.keys(attempt.body.error).sort(), ["code", "message", "requestId"]);
   }
 });
+
+test("HTTP: notes carry evidence and the detail lists every evidence reference", async () => {
+  const instance = await app();
+  const desk = client(instance, "dev-dispatcher-sakura");
+  const created = await desk("POST", "/cases", { facilityId: "facility-sakura", subjectId: "resident-ref-0401", sourceType: "manual", priority: "normal", rawText: "合成" });
+  const caseId = created.body.aggregate.id;
+  const noted = await desk("POST", `/cases/${caseId}/commands`, {
+    expectedVersion: 1,
+    command: { type: "add_note", kind: "contact", text: "家族へ電話、不在", evidence: [{ kind: "call", ref: "call-log:synthetic-7" }] },
+  });
+  assert.equal(noted.status, 200);
+  assert.equal((await desk("POST", `/cases/${caseId}/commands`, { expectedVersion: 2, command: { type: "add_note", kind: "other", text: "x", evidence: [{ kind: "bogus", ref: "r" }] } })).status, 400);
+  assert.equal((await desk("POST", `/cases/${caseId}/commands`, { expectedVersion: 2, command: { type: "add_note", kind: "other", text: "x", evidence: Array.from({ length: 11 }, () => ({ kind: "note", ref: "n" })) } })).status, 400);
+  const detail = await desk("GET", `/cases/${caseId}/detail`);
+  assert.deepEqual(detail.body.evidence.map((item: { source: string; kind: string; ref: string; actorId: string; sequence: number }) => [item.sequence, item.source, item.kind, item.ref, item.actorId]),
+    [[2, "note_added", "call", "call-log:synthetic-7", "staff-sakura-desk"]]);
+});

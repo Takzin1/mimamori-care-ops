@@ -2,6 +2,7 @@ import { applyEvent } from "./case-core.ts";
 import type {
   CaseAggregate,
   CaseEvent,
+  CompletionEvidenceItem,
 } from "./types.ts";
 
 /**
@@ -93,5 +94,38 @@ export function projectCaseAuditTrail(
     current = after;
   }
 
+  return entries;
+}
+
+export interface CaseEvidenceEntry {
+  sequence: number;
+  at: string;
+  actorId: string | null;
+  source: "note_added" | "completed";
+  kind: CompletionEvidenceItem["kind"];
+  ref: string;
+}
+
+/**
+ * Every evidence reference recorded on the Case, in order, with who
+ * recorded it and when. Derived from the immutable event stream.
+ */
+export function projectCaseEvidence(
+  events: readonly CaseEvent[],
+): CaseEvidenceEntry[] {
+  const entries: CaseEvidenceEntry[] = [];
+  for (const event of events) {
+    if (event.type !== "note_added" && event.type !== "completed") continue;
+    for (const item of event.data.evidence ?? []) {
+      entries.push({
+        sequence: event.sequence,
+        at: event.at,
+        actorId: event.actorId,
+        source: event.type,
+        kind: item.kind,
+        ref: item.ref,
+      });
+    }
+  }
   return entries;
 }

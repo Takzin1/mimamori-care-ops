@@ -448,6 +448,8 @@ function commandFields(type, aggregate) {
       return [
         field("種別", select("kind", entries(NOTE_KIND), { value: "observation" })),
         field("内容（事実を記録）", h("textarea", { name: "text", rows: "4", required: true, maxlength: "4000" })),
+        field("証跡の種類（任意）", select("evidenceKind", entries(EVIDENCE), { includeEmpty: "証跡なし" })),
+        field("証跡の参照（記録番号など・任意）", h("input", { name: "evidenceRef", maxlength: "1000", autocomplete: "off" }), "通話記録・訪問記録などの番号を残すと、後から対応を確認できます。"),
       ];
     case "escalate": return [reason("エスカレーションの理由")];
     case "clear_escalation": return [reason("解除の理由")];
@@ -476,7 +478,11 @@ function buildCommand(type, values) {
     case "triage": return { type, category: values.category, priority: values.priority, rationale: values.rationale };
     case "assign": return { type, assigneeId: values.assigneeId };
     case "reassign": return { type, assigneeId: values.assigneeId, reason: values.reason };
-    case "add_note": return { type, kind: values.kind, text: values.text };
+    case "add_note":
+      return {
+        type, kind: values.kind, text: values.text,
+        ...(values.evidenceKind && values.evidenceRef?.trim() ? { evidence: [{ kind: values.evidenceKind, ref: values.evidenceRef.trim() }] } : {}),
+      };
     case "request_handoff": return { type, targetAssigneeId: values.targetAssigneeId, note: values.note };
     case "complete": return { type, outcome: values.outcome, summary: values.summary, evidence: [{ kind: values.evidenceKind, ref: values.evidenceRef }] };
     case "escalate": case "clear_escalation": case "decline_handoff": case "cancel_handoff": case "reopen":
@@ -516,7 +522,10 @@ function eventDetail(event) {
     case "triaged": return [`区分: ${data.category}`, `優先度: ${PRIORITY[data.previousPriority]} → ${PRIORITY[data.priority]}`, `根拠: ${data.rationale}`];
     case "assigned": return [`担当: ${data.assigneeId}`];
     case "reassigned": return [`${data.previousAssigneeId ?? "—"} → ${data.assigneeId}`, `理由: ${data.reason}`];
-    case "note_added": return [`[${NOTE_KIND[data.kind] ?? data.kind}] ${data.text}`];
+    case "note_added": return [
+      `[${NOTE_KIND[data.kind] ?? data.kind}] ${data.text}`,
+      data.evidence?.length ? `証跡: ${data.evidence.map((item) => `${EVIDENCE[item.kind]}(${item.ref})`).join(", ")}` : null,
+    ];
     case "handoff_requested": return [`引継ぎ先: ${data.targetAssigneeId}`, data.note ? `申し送り: ${data.note}` : null];
     case "handoff_accepted": return [`前担当: ${data.previousAssigneeId}`];
     case "handoff_declined": case "handoff_cancelled": return [`引継ぎ先: ${data.targetAssigneeId}`, `理由: ${data.reason}`];
@@ -626,6 +635,15 @@ async function caseDetailView(caseId) {
 
     h("h2", {}, "重要情報"),
     h("dl", { class: "summary" }, summaryRows.map(([key, value]) => [h("dt", {}, key), h("dd", {}, value)])),
+
+    h("h2", {}, `証跡一覧（${detail.evidence.length}件）`),
+    detail.evidence.length
+      ? h("ul", { class: "plain-list evidence-list" }, detail.evidence.map((item) => h("li", {},
+          h("span", { class: "badge" }, EVIDENCE[item.kind] ?? item.kind),
+          ` ${item.ref} `,
+          h("span", { class: "hint" }, `#${item.sequence} ${EVENT[item.source]} / ${formatDateTime(item.at)} / ${actorLabel(item.actorId)}`),
+        )))
+      : h("p", { class: "empty" }, "証跡はまだ記録されていません。"),
 
     h("h2", {}, "原文・通知記録"),
     detail.signals.length

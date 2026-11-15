@@ -6,6 +6,7 @@ import {
   type CaseCreatedEvent,
   type CaseEvent,
   type CaseStatus,
+  type CompletionEvidenceItem,
   type LinkSignalInput,
   type NewCaseInput,
 } from "./types.ts";
@@ -43,6 +44,22 @@ function optionalText(value: string | undefined): string | undefined {
   if (typeof value !== "string") return undefined;
   const normalized = value.trim();
   return normalized ? normalized : undefined;
+}
+
+const MAX_NOTE_EVIDENCE = 10;
+
+function noteEvidence(
+  items: readonly CompletionEvidenceItem[],
+): CompletionEvidenceItem[] {
+  if (items.length > MAX_NOTE_EVIDENCE) {
+    throw new InvalidTransitionError(
+      `A note may reference at most ${MAX_NOTE_EVIDENCE} evidence items`,
+    );
+  }
+  return items.map((item) => ({
+    kind: item.kind,
+    ref: requireText(item.ref, "evidence ref"),
+  }));
 }
 
 function requireStatus(
@@ -185,6 +202,13 @@ export function assertCaseCommandAvailable(
 
     case "close":
       requireStatus(aggregate, "COMPLETED");
+      // An escalation needs an explicit human disposition before the
+      // Case can be closed (clear_escalation records who and why).
+      if (aggregate.escalation) {
+        throw new InvalidTransitionError(
+          "Escalation must be cleared before closing",
+        );
+      }
       return;
 
     case "reopen":
@@ -409,6 +433,11 @@ export function executeCommand(
           kind: command.kind,
           text: requireText(command.text, "note text"),
           ...(command.origin ? { origin: { ...command.origin } } : {}),
+          ...(command.evidence?.length
+            ? {
+                evidence: noteEvidence(command.evidence),
+              }
+            : {}),
         },
       };
       break;

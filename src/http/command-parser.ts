@@ -169,14 +169,16 @@ function parseOutcome(value: unknown): CompletionOutcome {
 
 function parseEvidence(
   value: unknown,
+  min = 1,
+  max = 20,
 ): CompletionEvidenceItem[] {
   if (!Array.isArray(value)) {
     invalid("evidence must be an array");
   }
 
-  if (value.length < 1 || value.length > 20) {
+  if (value.length < min || value.length > max) {
     invalid(
-      "evidence must contain between 1 and 20 items",
+      `evidence must contain between ${min} and ${max} items`,
     );
   }
 
@@ -278,13 +280,16 @@ function parseCommand(
       // clients; it is attached server-side by the AI review flow.
       assertExactKeys(
         value,
-        ["type", "kind", "text"],
+        ["type", "kind", "text", "evidence"],
         "command",
       );
       return {
         type,
         kind: parseNoteKind(value.kind),
         text: requiredText(value.text, "text", 4000),
+        ...(value.evidence !== undefined && value.evidence !== null
+          ? { evidence: parseEvidence(value.evidence, 0, 10) }
+          : {}),
       };
 
     case "escalate":

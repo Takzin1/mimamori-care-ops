@@ -89,6 +89,7 @@ function bindActor(
         kind: command.kind,
         text: command.text,
         ...(command.origin ? { origin: command.origin } : {}),
+        ...(command.evidence?.length ? { evidence: command.evidence } : {}),
       };
     case "escalate":
       return { type: "escalate", actorId, reason: command.reason };

@@ -196,6 +196,8 @@ export type CaseEvent =
         kind: CaseNoteKind;
         text: string;
         origin?: CaseNoteOrigin;
+        /** References backing this entry (call log, visit record…). */
+        evidence?: CompletionEvidenceItem[];
       };
     })
   | (EventBase & {
@@ -334,6 +336,7 @@ export type CaseCommand =
       kind: CaseNoteKind;
       text: string;
       origin?: CaseNoteOrigin;
+      evidence?: CompletionEvidenceItem[];
     }
   | { type: "escalate"; actorId: string; reason: string }
   | { type: "clear_escalation"; actorId: string; reason: string }

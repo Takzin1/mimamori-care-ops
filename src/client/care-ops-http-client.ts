@@ -166,6 +166,14 @@ function sanitizedCommand(
         type: "add_note",
         kind: command.kind,
         text: command.text,
+        ...(command.evidence?.length
+          ? {
+              evidence: command.evidence.map((item) => ({
+                kind: item.kind,
+                ref: item.ref,
+              })),
+            }
+          : {}),
       };
 
     case "escalate":
