@@ -1,7 +1,10 @@
 # CareOps Remaining Work
 
-Status as of 2026-11-10 (phase 2: staging integration and QA). Three levels
-are distinguished:
+Status as of 2026-11-15 (phase 3: Human-Centered Operations OS — hardened
+state machine, resilience, next-action candidates, Simulation Lab, operations
+metrics; design, risk register and next-PR plan in
+[Operations OS (日本語)](careops-operations-os.md)). Three levels are
+distinguished:
 
 - **Implemented** — code exists in this repository.
 - **Verified** — covered by automated tests that pass (locally and/or in CI;
@@ -30,12 +33,23 @@ Nothing here is deployed. No production database was touched.
 | Mobile UI E2E (local/SQLite) | `tests/e2e/careops-mobile.e2e.ts` | local + CI `e2e` |
 | Staging browser E2E (Supabase-style login, PostgreSQL-backed) | `tests/e2e/careops-staging.e2e.ts` | CI `staging-stack` only |
 | Node.js 24 / PostgreSQL 17 | CI jobs | CI |
+| State-machine invariants (random command sequences), close blocked while escalated, evidence on notes | `careops-invariants.test.ts`, `careops-core.test.ts` | local + CI |
+| Re-notification with bounded repeats, unavailable assignee / handoff target detection, undelivered-notification visibility | `careops-platform.test.ts`, Simulation Lab | local + CI |
+| Rule-based situation digest and next-action candidates (never executed automatically, no priority / medical wording) | `careops-advisor.test.ts`, `tests/e2e/careops-mobile.e2e.ts` | local + CI |
+| Simulation Lab: 52 synthetic scenarios (normal, night, no response, contact failure, unavailable assignee, duplicate notification, facility isolation, human/AI, concurrency) on in-memory and SQLite with an identical trace | `careops-simulation.test.ts`, `npm run sim`, `tests/e2e/careops-simulation-lab.e2e.ts` | local + CI |
+| Operations metrics: per-stage target compliance with denominators, notification delivery, AI usage, owner availability | `careops-metrics.test.ts` (in-memory + SQLite), `tests/stack/*` (PostgreSQL) | local + CI |
 
 CI evidence: GitHub Actions run #264 (commit `38eb5b7`, branch
 `claude/kind-franklin-t91s96`) — `verify`, `postgres-integration`, `e2e` and
 `staging-stack` all succeeded on Node 24 / PostgreSQL 17 / PostgREST v12.2.3;
 the staging-stack job ran 5 stack integration tests and the staging browser
 E2E (6 tests, 0 skipped).
+
+Phase 3 CI evidence: GitHub Actions run #273 (commit `8dc75c5`) — `verify`
+(including the Simulation Lab on in-memory and SQLite), `postgres-integration`,
+`e2e` and `staging-stack` all succeeded; the stack job asserts the new
+operations metrics against PostgreSQL 17 through real PostgREST. Runs #269 and
+#271 cover the earlier phase-3 commits (`46f40c7`, `89ad148`).
 
 Local machine limits: Node 22 locally (CI uses 24); PostgreSQL 16 locally
 (CI uses 17); PostgREST cannot be executed in the authoring environment, so
@@ -50,7 +64,8 @@ everything involving real PostgREST is verified **only in CI**.
 3. **Adapter ingest endpoint** with machine credentials (LINE signature,
    sensors); `ingestFromAdapter` is in-process only.
 4. **External notification channels** (LINE / e-mail / paging) and per-person
-   acknowledgement of notifications; only the in-app inbox exists.
+   acknowledgement of notifications; only the in-app inbox exists. The
+   Simulation Lab's external channel is a scripted mock for fault injection.
 5. **External LLM / voice input** — not integrated (deliberately not
    selectable via configuration).
 6. **Shift schedule model** — shift-end is an on-demand check.
@@ -63,6 +78,14 @@ everything involving real PostgREST is verified **only in CI**.
    needed for larger tenants.
 10. **Push updates** — the UI polls every 30 s while visible.
 11. **Supabase-hosted PostgREST version** may differ from v12.2.3 used in CI.
+12. **Unavailable-assignee notification is evaluated by the escalation run**,
+    not at the moment a membership changes (lists and detail views evaluate it
+    on read).
+13. **Scheduler liveness** — nothing alerts when the escalation run stops.
+14. **AI draft generator is `local-rules`** (deterministic extraction, mock
+    grade). The next-action advisor is rule-based, not an LLM.
+15. **Analytics row caps** — delivery and audit metrics read at most 1,000 rows
+    and flag `truncated` beyond that.
 
 ## Undecided (needs owners / approval — not engineering-only)
 

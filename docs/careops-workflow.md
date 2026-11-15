@@ -108,3 +108,20 @@ or created themselves — always within their facility scope.
 - Event counts (reopen, escalation, handoffs) are events occurring in the period.
 - Weekly rates are shown only for windows ≥ 7 days and state the denominator.
 - No accident-reduction or workload-reduction figures are computed or shown.
+
+## Operations OS additions (2026-11-15)
+
+- A Case cannot be closed while it is escalated; a supervisor clears the
+  escalation with a reason first.
+- Notes may carry evidence references (kind + reference id, up to 10); the
+  Case detail lists all evidence chronologically.
+- Re-notification: per trigger, a facility sets `repeatEveryMinutes` and
+  `maxRepeats` (≤ 10). By default only "critical and unacknowledged" repeats
+  (every 10 minutes, 3 times). Thresholds remain provisional until approved.
+- When an assignee or handoff target can no longer act (deactivated, moved to
+  another facility, lost the responder/supervisor role), the Case is flagged
+  in lists, detail and dashboard and supervisors/dispatchers are notified. The
+  system never reassigns by itself.
+- The Case detail shows a rule-based situation digest and next-action
+  candidates. They open the ordinary confirm dialog; nothing runs
+  automatically and no priority value is ever suggested.

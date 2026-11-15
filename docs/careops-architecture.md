@@ -142,3 +142,17 @@ The server binds to loopback only and uses `LocalDevAuthenticator`
 (`local.<principalId>` tokens for synthetic staff), which refuses to construct
 outside the `local` stage. The deployment composition in `src/deployment`
 never uses it.
+
+## Operations OS additions (2026-11-15)
+
+| Module | Role |
+|---|---|
+| `src/careops/advisor.ts` | Rule-based situation digest and next-action candidates. Reads structured state only; every candidate maps to an existing command and is executed by a human through the normal confirm dialog. |
+| `src/careops/simulation/` | Simulation Lab: `SimWorld` (virtual clock, mutable memberships, scripted channel), 52 scenarios, runner with post-scenario invariants. Runs the real `CareOpsPlatformService`. |
+| `src/access/mutable-membership-directory.ts` | Reference membership directory whose rows can change (departure, transfer, role change) for tests and the lab. |
+| `scripts/simulation-lab.ts` | `npm run sim` CLI (in-memory or SQLite, JSON report). |
+| `server/careops-local-server.ts` | `GET /local/simulation/scenarios`, `POST /local/simulation/run` — local server only; each run uses its own in-memory world and never touches the server's store. |
+
+`GET /analytics` additionally returns `sla.stages`, `notifications` (null
+unless the viewer holds `view_audit_log`), `ai` and `ownership`. No schema
+change or migration was needed. Details: [Operations OS](careops-operations-os.md).

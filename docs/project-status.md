@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-11-10
+Last updated: 2026-11-15
 
 Mimamori Care Ops is an **architecture/core prototype**, not a production deployment.
 
@@ -54,6 +54,10 @@ Mimamori Care Ops is an **architecture/core prototype**, not a production deploy
 | CareOps Postgres contract (platform tables, facility-scoped memberships) | Implemented + real-Postgres tested | `db/careops_platform.sql`, `tests/careops-postgres.integration.test.ts` |
 | CareOps production-shaped composition (Supabase Auth + PostgREST platform adapters) + staging server | Implemented + CI-verified on a staging-equivalent stack (PG17 + PostgREST) | `src/careops/deployment.ts`, `server/careops-staging-server.ts`, `tests/stack/` |
 | Server-side Case search with SQLite/PostgreSQL parity | Implemented + tested | `search_care_cases`, `tests/careops-search-parity.test.ts` |
+| CareOps operations hardening: state-machine invariants, bounded re-notification, unavailable-owner detection, undelivered-notification visibility, evidence on notes | Implemented + tested | `tests/careops-invariants.test.ts`, `tests/careops-platform.test.ts` |
+| Rule-based situation digest / next-action candidates (human executes; no LLM) | Implemented + tested | `src/careops/advisor.ts`, `tests/careops-advisor.test.ts` |
+| Simulation Lab (52 synthetic scenarios, CLI, local demo page) | Implemented + tested (in-memory and SQLite) | `src/careops/simulation/`, `npm run sim`, `tests/careops-simulation.test.ts` |
+| Operations metrics (target compliance, notification delivery, AI usage) | Implemented + tested | `src/careops/analytics.ts`, `tests/careops-metrics.test.ts` |
 | Real Supabase staging project, adapter ingest, external channels, external LLM | Not implemented | `docs/careops-remaining-work.md` |
 | Live authenticated Responder Console deployment | Not implemented | renderer/Auth bridge exist; production environment + deployment remain |
 | Production deployment | Not implemented | release checklist |

@@ -68,7 +68,15 @@ human-reviewed AI drafts. It runs end-to-end locally on synthetic data:
 
 ```bash
 npm run careops:local   # http://127.0.0.1:8787 (loopback only, synthetic staff login)
+npm run sim             # Simulation Lab: 52 synthetic scenarios against the real service
 ```
+
+The Simulation Lab replays normal, night-shift, no-response, contact-failure,
+unavailable-assignee, duplicate-notification and facility-isolation situations
+in throw-away worlds (virtual clock, fault injection) and is also available as
+a local demo page (`#/lab`). Humans stay in charge: the system never
+acknowledges, prioritises, reassigns, resolves or closes a Case by itself, and
+AI output is a draft until a staff member approves it.
 
 A production-shaped composition (Supabase Auth + PostgREST/PostgreSQL) and a
 staging server exist; CI runs them against a staging-equivalent stack
@@ -85,6 +93,7 @@ Not deployed and not production-ready. Read:
 - [CareOps Security](docs/careops-security.md)
 - [CareOps Staging Integration](docs/careops-staging.md)
 - [CareOps Remaining Work](docs/careops-remaining-work.md)
+- [CareOps Operations OS — 設計書・リスク一覧・次のPR計画（日本語）](docs/careops-operations-os.md)
 - [ADR 0019](docs/adr/0019-careops-platform-layer.md)
 
 ## The problem boundary

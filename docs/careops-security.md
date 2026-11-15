@@ -102,3 +102,17 @@ See [Remaining work](careops-remaining-work.md): encryption-at-rest and key
 management are provider responsibilities to be configured; retention/deletion
 policy, DPA for any external AI provider, adapter webhook authentication, and
 an independent security review are not done.
+
+## Operations OS additions (2026-11-15)
+
+- **Simulation endpoints** (`/local/simulation/*`) exist only in the local
+  development server, which binds to loopback. They accept a list of known
+  scenario ids, build a throw-away in-memory world per run and never read or
+  write the server's store (verified by `tests/e2e/careops-simulation-lab.e2e.ts`).
+  The staging/production composition does not expose them.
+- **Notification delivery metrics** follow `view_audit_log` (supervisor,
+  auditor) and are facility-scoped; dispatchers receive `notifications: null`.
+- **Next-action candidates** are projected with the same capability rules as
+  command execution; showing a candidate grants nothing.
+- **Evidence references** are bounded strings; the referenced records are not
+  stored or fetched.
