@@ -644,6 +644,27 @@ async function caseDetailView(caseId) {
     sla.hasActiveBreach ? h("p", { class: "callout callout-danger" }, `内部対応期限を超過しています: ${sla.breachedStages.map((stage) => STAGE[stage]).join("、")}`) : null,
     detail.slaApproved ? null : h("p", { class: "callout callout-warn", role: "note" }, "この施設の対応期限は仮設定（未承認）です。臨床的な基準ではありません。"),
 
+    h("h2", {}, "状況の要約"),
+    h("dl", { class: "summary situation" }, detail.advice.situation.map((fact) => [h("dt", {}, fact.label), h("dd", {}, fact.value)])),
+
+    h("h2", {}, "次の対応候補"),
+    h("p", { class: "hint" }, `${detail.advice.disclaimer}（ルールに基づく提示・LLM不使用）`),
+    detail.advice.candidates.length
+      ? h("ul", { class: "card-list advice-list" }, detail.advice.candidates.map((candidate) =>
+          h("li", { class: `card advice${candidate.attention ? " advice-attention" : ""}`, dataset: { advice: candidate.id } },
+            h("div", { class: "card-row" },
+              candidate.attention ? h("span", { class: "badge flag-breach" }, "要対応") : h("span", { class: "badge" }, "候補"),
+              h("strong", {}, candidate.title),
+            ),
+            h("p", { class: "advice-reason" }, candidate.reason),
+            candidate.command && candidate.executableByViewer
+              ? h("button", { type: "button", class: "btn btn-secondary", dataset: { adviceCommand: candidate.command }, on: { click: () => runCommand(a, candidate.command) } }, "この操作を開く（内容を確認して実行）")
+              : candidate.command
+                ? h("p", { class: "hint" }, `実行できるロール: ${candidate.requiredRoles.map((role) => ROLE[role]).join("・")}`)
+                : null,
+          )))
+      : h("p", { class: "empty" }, "現在、提示できる候補はありません。"),
+
     h("h2", {}, "操作"),
     commands.length
       ? h("div", { class: "action-grid" }, commands.map((type) =>

@@ -60,7 +60,15 @@ test("mobile UI: completion criteria 1-10 through the real server and SQLite", {
     // 2/3. another staff member (supervisor) acknowledges, triages and assigns
     await loginAs(/さくら館 管理者/);
     await openCase(caseId);
+    // next-action candidates only open the normal confirm dialog; nothing runs by itself
+    assert.match(await page.locator('[data-advice="acknowledge"]').innerText(), /内容を確認して受付する/);
+    await page.locator('[data-advice="acknowledge"] button').click();
+    assert.equal(await page.locator(".status-row .status-NEW").count(), 1, "opening a candidate does not change the Case");
+    await page.getByRole("dialog").getByRole("button", { name: "キャンセル" }).click();
+    assert.equal(await page.locator(".status-row .status-NEW").count(), 1);
     await command("acknowledge");
+    assert.equal(await page.locator('[data-advice="acknowledge"]').count(), 0, "candidates follow the new state");
+    await page.locator('[data-advice="triage"]').waitFor();
     await command("triage", async () => {
       await dialog().getByLabel("区分").selectOption("体調不良");
       await dialog().getByLabel("優先度").selectOption("high");

@@ -410,3 +410,7 @@ fieldset { border: 1px solid var(--border); border-radius: var(--radius); }
   min-height: 44px;
   padding: 0 4px;
 }
+
+.advice-attention { border: 2px solid var(--danger); }
+.advice-reason { margin: 4px 0 8px; }
+.situation { margin-bottom: 8px; }

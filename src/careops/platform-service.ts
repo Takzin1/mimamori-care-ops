@@ -63,6 +63,7 @@ import {
   type AiDraftProvider,
   type AiSourceText,
 } from "./ai-assist.ts";
+import { adviseCase, type CaseAdvice } from "./advisor.ts";
 import { computeCareOpsAnalytics, type CareOpsAnalytics } from "./analytics.ts";
 import { PROVISIONAL_SLA_POLICY, defaultFacilitySettings, effectiveEscalationRules } from "./defaults.ts";
 import {
@@ -203,6 +204,8 @@ export interface CaseDetailProjection {
     assigneeUnavailable: boolean;
     handoffTargetUnavailable: boolean;
   };
+  /** Rule-based situation digest and next-action candidates (never executed automatically). */
+  advice: CaseAdvice;
 }
 
 export interface EscalationRunResult {
@@ -1017,6 +1020,11 @@ export class CareOpsPlatformService {
     const { resolve, approved } = await this.#policyResolver(ctx.tenantId);
     const facilityId = stored.aggregate.facilityId ?? null;
 
+    const now = this.#now();
+    const drafts = await this.#drafts.listByCase(ctx.tenantId, caseId);
+    const sla = evaluateCaseSla(stored.aggregate, stored.events, resolve(facilityId), now);
+    const ownership = await this.#ownership(stored);
+    const slaApproved = approved(facilityId);
     return {
       aggregate: stored.aggregate,
       events: stored.events,
@@ -1024,11 +1032,21 @@ export class CareOpsPlatformService {
       auditTrail: projectCaseAuditTrail(stored.events),
       evidence: projectCaseEvidence(stored.events),
       signals: await this.#signals.list(ctx.tenantId, { caseId }),
-      drafts: await this.#drafts.listByCase(ctx.tenantId, caseId),
-      sla: evaluateCaseSla(stored.aggregate, stored.events, resolve(facilityId), this.#now()),
-      slaApproved: approved(facilityId),
+      drafts,
+      sla,
+      slaApproved,
       aiAvailable: this.#ai.name !== "disabled",
-      ownership: await this.#ownership(stored),
+      ownership,
+      advice: adviseCase({
+        aggregate: stored.aggregate,
+        events: stored.events,
+        sla,
+        capabilities,
+        ownership,
+        pendingDraftCount: drafts.filter((draft) => draft.status === "pending_review").length,
+        slaApproved,
+        now,
+      }),
     };
   }
 
