@@ -1,4 +1,6 @@
-import { ApiError, createApi, fetchAppConfig, fetchLocalStaff, supabasePasswordLogin } from "./api.js";
+import {
+  ApiError, createApi, fetchAppConfig, fetchLocalStaff, fetchSimulationScenarios, runSimulation, supabasePasswordLogin,
+} from "./api.js";
 import {
   announce, clear, confirmDialog, field, formDialog, formatDateTime, formatMinutes, h, localDateInputValue,
   localDayStartIso, localNextDayStartIso, minutesSince, select,
@@ -8,7 +10,7 @@ import {
   SIGNAL_TYPE, STAGE, STATUS, STATUS_ICON, entries,
 } from "./labels.js";
 
-const state = { session: null, facilityId: "", unsavedInput: false };
+const state = { session: null, facilityId: "", unsavedInput: false, labEnabled: false, lab: { report: null, running: false, category: "" } };
 const root = document.getElementById("app");
 
 /* ------------------------------------------------------------------ */
@@ -136,6 +138,9 @@ async function loginView() {
   return h("section", { class: "login" },
     pageHeader("職員を選択してログイン"),
     h("p", { class: "callout callout-info" }, "ローカル検証環境です。登場する施設・職員・入居者IDはすべて合成データです。実在の個人情報を入力しないでください。"),
+    config.simulationLab
+      ? h("p", {}, h("a", { href: "#/lab", class: "btn btn-secondary", dataset: { lab: "open" } }, "Simulation Lab（合成シナリオの検証）を開く"))
+      : null,
     h("ul", { class: "staff-list" },
       data.staff.map((member) =>
         h("li", {},
@@ -1016,6 +1021,102 @@ async function auditView() {
 /* shell + router                                                      */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Simulation Lab (local environment only)                             */
+/* ------------------------------------------------------------------ */
+
+const LAB_STEP_MARK = { action: "▶", time: "⏱", fault: "⚡", note: "・" };
+
+function labStep(step) {
+  const mark = step.kind === "check" ? (step.ok ? "✓" : "✗") : LAB_STEP_MARK[step.kind] ?? "・";
+  return h("li", { class: `lab-step lab-step-${step.kind}${step.kind === "check" ? (step.ok ? " lab-ok" : " lab-ng") : ""}` },
+    h("span", { class: "lab-step-mark", "aria-hidden": "true" }, mark),
+    h("span", { class: "lab-step-time" }, step.at.slice(-5)),
+    h("span", { class: "lab-step-body" },
+      step.kind === "check" ? h("span", { class: "visually-hidden" }, step.ok ? "成立: " : "不成立: ") : null,
+      step.label,
+      step.detail ? h("span", { class: "hint" }, ` — ${step.detail}`) : null),
+  );
+}
+
+function labResultCard(result) {
+  return h("li", { class: `card lab-result ${result.passed ? "lab-pass" : "lab-fail"}`, dataset: { scenario: result.id, passed: String(result.passed) } },
+    h("div", { class: "card-row" },
+      h("span", { class: `badge ${result.passed ? "status-COMPLETED" : "status-NEW"}` }, result.passed ? "✓ 成立" : "✗ 不成立"),
+      h("span", { class: "badge" }, result.categoryLabel),
+      h("span", { class: "hint" }, `${result.id} ・ 開始 ${result.startAt} ・ 経過 ${result.simulatedMinutes}分 ・ Case ${result.cases}件`)),
+    h("p", { class: "card-title" }, result.title),
+    h("p", { class: "hint" }, `確認していること: ${result.verifies}`),
+    h("details", { class: "lab-steps", open: result.passed ? undefined : true },
+      h("summary", {}, `経過と検証（${result.checks.total - result.checks.failed}/${result.checks.total} 件成立）`),
+      h("ol", { class: "lab-step-list" }, result.steps.map(labStep))),
+  );
+}
+
+async function labView() {
+  const catalog = await fetchSimulationScenarios();
+  const lab = state.lab;
+  const scenarios = catalog.scenarios.filter((scenario) => !lab.category || scenario.category === lab.category);
+  const run = async (ids) => {
+    if (lab.running) return;
+    lab.running = true;
+    await render({ quiet: true });
+    try {
+      lab.report = await runSimulation(ids);
+      announce(`${lab.report.totals.passed}/${lab.report.totals.scenarios} シナリオが成立しました。`, lab.report.totals.failed ? "error" : "success");
+    } catch {
+      announce("シミュレーションの実行に失敗しました。", "error");
+    } finally {
+      lab.running = false;
+      await render({ quiet: true });
+    }
+  };
+  const report = lab.report;
+  const shown = report ? report.results.filter((result) => !lab.category || result.category === lab.category) : [];
+  const categorySelect = select("category",
+    [["", `すべて（${catalog.scenarios.length}）`], ...catalog.categories.map((item) =>
+      [item.category, `${item.label}（${catalog.scenarios.filter((scenario) => scenario.category === item.category).length}）`])],
+    { value: lab.category });
+  categorySelect.addEventListener("change", () => {
+    lab.category = categorySelect.value;
+    // A filter is not unsaved input: re-render once this event has finished bubbling.
+    setTimeout(() => { state.unsavedInput = false; void render({ quiet: true }); }, 0);
+  });
+
+  return h("section", { class: "lab" },
+    pageHeader("Simulation Lab"),
+    h("p", { class: "callout callout-info" },
+      "合成データだけを使い、実行のたびに作られる使い捨ての環境で、製品と同じ権限判定・状態遷移・期限チェックを動かして検証します。",
+      "この画面の操作は、ログイン後に表示されるCase・通知・設定には一切影響しません。"),
+    h("div", { class: "filters" },
+      field("カテゴリ", categorySelect),
+      h("div", { class: "actions" },
+        h("button", { type: "button", class: "btn btn-primary", disabled: lab.running, dataset: { lab: "run" }, on: { click: () => run(scenarios.map((scenario) => scenario.id)) } },
+          lab.running ? "実行中…" : `${lab.category ? "このカテゴリ" : "すべて"}の${scenarios.length}シナリオを実行`),
+        state.session ? null : h("a", { href: "#/", class: "btn btn-secondary" }, "ログイン画面へ戻る"))),
+    report
+      ? h("div", { class: "lab-summary", dataset: { lab: "summary" } },
+          h("ul", { class: "tiles" },
+            h("li", {}, h("div", { class: `tile ${report.totals.failed ? "tile-alert" : "tile-ok"}`, dataset: { tile: "lab-scenarios" } },
+              h("span", { class: "tile-count" }, `${report.totals.passed}/${report.totals.scenarios}`), h("span", { class: "tile-label" }, "成立したシナリオ"))),
+            h("li", {}, h("div", { class: `tile ${report.totals.failedChecks ? "tile-alert" : "tile-ok"}`, dataset: { tile: "lab-checks" } },
+              h("span", { class: "tile-count" }, `${report.totals.checks - report.totals.failedChecks}/${report.totals.checks}`), h("span", { class: "tile-label" }, "成立した検証"))),
+            report.byCategory.map((row) =>
+              h("li", {}, h("div", { class: `tile ${row.passed === row.scenarios ? "tile-ok" : "tile-alert"}` },
+                h("span", { class: "tile-count" }, `${row.passed}/${row.scenarios}`), h("span", { class: "tile-label" }, row.label))))),
+          h("p", { class: "hint" }, `保存先: ${report.store}（実行ごとに破棄）。各シナリオの最後に、履歴の再生一致・欠番なし・テナント境界・担当者の存在を自動で再検証しています。`))
+      : h("p", { class: "hint" }, "まだ実行していません。「実行」を押すと、下の一覧のシナリオが順に実行されます。"),
+    h("h2", {}, report ? `結果（${shown.length}件）` : `シナリオ一覧（${scenarios.length}件）`),
+    report
+      ? h("ul", { class: "card-list", id: "lab-results" }, shown.length ? shown.map(labResultCard) : h("li", { class: "hint" }, "このカテゴリはまだ実行していません。"))
+      : h("ul", { class: "card-list", id: "lab-catalog" }, scenarios.map((scenario) =>
+          h("li", { class: "card", dataset: { scenario: scenario.id } },
+            h("div", { class: "card-row" }, h("span", { class: "badge" }, scenario.categoryLabel), h("span", { class: "hint" }, `${scenario.id} ・ 開始 ${scenario.startAt}`)),
+            h("p", { class: "card-title" }, scenario.title),
+            h("p", { class: "hint" }, `確認していること: ${scenario.verifies}`)))),
+  );
+}
+
 function nav(path) {
   const items = [
     ["#/dashboard", "ホーム", true],
@@ -1025,6 +1126,7 @@ function nav(path) {
     ["#/analytics", "分析", can("view_analytics")],
     ["#/settings", "設定", true],
     ["#/audit", "監査", can("view_audit_log")],
+    ["#/lab", "Lab", state.labEnabled],
   ];
   return h("nav", { class: "main-nav", "aria-label": "メインメニュー" },
     h("ul", {}, items.filter(([, , visible]) => visible).map(([href, label]) =>
@@ -1035,6 +1137,8 @@ let renderToken = 0;
 let envLabel = "検証環境 ・ 合成データのみ";
 fetchAppConfig().then((config) => {
   envLabel = config.mode === "supabase" ? "ステージング環境 ・ 合成データのみ" : "ローカル検証環境 ・ 合成データのみ";
+  // The Simulation Lab only exists on the local development server.
+  state.labEnabled = config.simulationLab === true;
   const banner = document.querySelector(".env-banner");
   if (banner) banner.textContent = envLabel;
 }).catch(() => {});
@@ -1062,7 +1166,8 @@ async function render({ quiet = false } = {}) {
 
   try {
     let view;
-    if (!state.session) view = await loginView();
+    if (path === "/lab") view = await labView();
+    else if (!state.session) view = await loginView();
     else if (path === "/dashboard" || path === "/") view = await dashboardView();
     else if (path === "/inbox") view = await inboxView();
     else if (path === "/cases") view = await casesView();

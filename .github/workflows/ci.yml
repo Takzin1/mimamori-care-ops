@@ -54,6 +54,11 @@ jobs:
       - name: Coverage report
         run: npm run test:coverage
 
+      - name: Simulation Lab (synthetic scenarios, in-memory and SQLite)
+        run: |
+          npm run sim
+          npm run sim -- --store sqlite
+
       - name: Reviewer demo syntax
         run: npm run test:demo
 

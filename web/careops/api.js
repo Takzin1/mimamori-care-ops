@@ -110,3 +110,22 @@ export async function fetchLocalStaff() {
   if (!response.ok) throw new Error("ローカル職員一覧を取得できません");
   return response.json();
 }
+
+/** Simulation Lab (local environment only; isolated synthetic worlds). */
+export async function fetchSimulationScenarios() {
+  const response = await fetch("/local/simulation/scenarios", { cache: "no-store", credentials: "omit" });
+  if (!response.ok) throw new ApiError(response.status, "LAB_UNAVAILABLE", "Simulation Lab is not available");
+  return response.json();
+}
+
+export async function runSimulation(ids) {
+  const response = await fetch("/local/simulation/run", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(ids?.length ? { ids } : {}),
+    credentials: "omit",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new ApiError(response.status, "LAB_FAILED", "Simulation run failed");
+  return response.json();
+}

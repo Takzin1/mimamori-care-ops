@@ -23,7 +23,8 @@
     "stack:gateway": "node scripts/staging-stack/supabase-gateway.ts",
     "stack:seed": "node scripts/staging-stack/seed.ts",
     "stack:env": "node scripts/staging-stack/generate-env.ts",
-    "lint": "node scripts/careops-lint.ts"
+    "lint": "node scripts/careops-lint.ts",
+    "sim": "node scripts/simulation-lab.ts"
   },
   "devDependencies": {
     "playwright": "1.63.0",

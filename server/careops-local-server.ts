@@ -9,10 +9,12 @@ import {
   type AiDraftProvider,
 } from "../src/careops/ai-assist.ts";
 import { createLocalCareOpsApp, type LocalCareOpsApp } from "../src/careops/local.ts";
+import { SIM_CATEGORIES, SIM_CATEGORY_LABEL, listScenarios, runSimulationLab } from "../src/careops/simulation/index.ts";
 import {
   BodyTooLargeError,
   ROOT,
   jsonError,
+  readBody,
   securityHeaders,
   send,
   serveStatic,
@@ -43,6 +45,24 @@ export interface RunningLocalServer {
   close(): Promise<void>;
 }
 
+/** `{}` or `{ "ids": ["N01", ...] }`; null when malformed. */
+function parseSimulationIds(body: Uint8Array | null): string[] | null {
+  if (!body || body.length === 0) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(body));
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const ids = (parsed as { ids?: unknown }).ids;
+  if (ids === undefined) return [];
+  if (!Array.isArray(ids) || ids.length > 200) return null;
+  const known = new Set(listScenarios().map((scenario) => scenario.id));
+  if (!ids.every((id): id is string => typeof id === "string" && known.has(id))) return null;
+  return [...new Set(ids)];
+}
+
 export async function startCareOpsLocalServer(options: LocalServerOptions = {}): Promise<RunningLocalServer> {
   const host = options.host ?? "127.0.0.1";
   if (!LOOPBACK.has(host)) {
@@ -62,7 +82,26 @@ export async function startCareOpsLocalServer(options: LocalServerOptions = {}):
       const url = new URL(request.url ?? "/", `http://${host}`);
       try {
         if (url.pathname === "/careops-config.json" && request.method === "GET") {
-          send(response, 200, JSON.stringify({ mode: "local", tenantId: app.tenantId }), json, headers);
+          send(response, 200, JSON.stringify({ mode: "local", tenantId: app.tenantId, simulationLab: true }), json, headers);
+          return;
+        }
+        // Simulation Lab (local only): every run builds its own throw-away
+        // in-memory world. It never reads or writes this server's store.
+        if (url.pathname === "/local/simulation/scenarios" && request.method === "GET") {
+          send(response, 200, JSON.stringify({
+            synthetic: true,
+            categories: SIM_CATEGORIES.map((category) => ({ category, label: SIM_CATEGORY_LABEL[category] })),
+            scenarios: listScenarios(),
+          }), json, headers);
+          return;
+        }
+        if (url.pathname === "/local/simulation/run" && request.method === "POST") {
+          const ids = parseSimulationIds(await readBody(request));
+          if (!ids) {
+            send(response, 400, JSON.stringify({ error: { code: "INVALID_INPUT", message: "ids must be a list of known scenario ids" } }), json, headers);
+            return;
+          }
+          send(response, 200, JSON.stringify(await runSimulationLab(ids.length ? { ids } : {})), json, headers);
           return;
         }
         if (url.pathname === "/local/staff" && request.method === "GET") {
