@@ -130,6 +130,21 @@ test("mobile UI: completion criteria 1-10 through the real server and SQLite", {
     await dialog().locator("button[type=submit]").click();
     await page.locator(".timeline .badge-ai").waitFor();
 
+    // operations metrics: internal-target compliance with denominators, delivery and AI usage
+    await page.getByRole("navigation").getByRole("link", { name: "分析" }).click();
+    await page.locator('table[data-metric="sla"]').waitFor();
+    assert.equal(await page.locator('table[data-metric="sla"] tbody tr').count(), 5);
+    assert.equal(await page.locator('tr[data-stage="acknowledge"] [data-cell="rate"]').innerText(), "100%（1/1件）");
+    assert.equal(await page.locator('tr[data-stage="handoff_accept"] [data-cell="rate"]').innerText(), "100%（1/1件）");
+    await page.locator('[data-metric="provisional"]').waitFor();
+    const analyticsText = await page.locator("main").innerText();
+    assert.match(analyticsText, /職員が承認\s*1/);
+    assert.match(analyticsText, /期間内に配信完了/);
+    assert.match(analyticsText, /臨床的基準ではありません/);
+    await loginAs(/さくら館 受付/);
+    await page.getByRole("navigation").getByRole("link", { name: "分析" }).click();
+    await page.locator('[data-metric="notifications-hidden"]').waitFor();
+
     // 9. another facility cannot open the Case
     await loginAs(/かえで館 管理者/);
     await page.goto(`${server.url}/#/cases/${caseId}`);

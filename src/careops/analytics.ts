@@ -1,9 +1,10 @@
-import { isOpenCaseStatus } from "../core/case-core.ts";
+import { isOpenCaseStatus, replayCase } from "../core/case-core.ts";
 import type { CaseEvent } from "../core/types.ts";
-import { evaluateCaseSla } from "../operations/sla.ts";
+import { evaluateCaseSla, type SlaStage } from "../operations/sla.ts";
 import type { StoredCase } from "../persistence/types.ts";
+import type { OutboxListEntry } from "./in-memory-stores.ts";
 import type { SlaPolicyResolver } from "./projections.ts";
-import type { SignalRecord } from "./types.ts";
+import type { PlatformAuditEntry, SignalRecord, StaffNotification, StaffNotificationPayload } from "./types.ts";
 
 /**
  * Duration statistic over a defined cohort.
@@ -62,6 +63,38 @@ export interface CareOpsAnalytics {
     /** Requests in the period still not accepted at `to`. */
     unacceptedAtEnd: number;
   };
+  /**
+   * Internal response targets (facility-defined, not clinical standards):
+   * how many Cases of the cohort met each stage's target by the end of
+   * the period. Always shown with its denominators.
+   */
+  sla: {
+    stages: SlaStageCompliance[];
+    /** true when a facility in scope still runs on unapproved (仮設定) thresholds. */
+    provisionalThresholds: boolean;
+    note: string;
+  };
+  /**
+   * Staff-notification delivery (null for roles that may not see
+   * delivery status).
+   */
+  notifications: NotificationStats | null;
+  /** AI assistance usage, from the audit log. Humans approve every use. */
+  ai: {
+    generated: number;
+    failed: number;
+    approved: number;
+    /** Approved after the reviewer edited the text. */
+    approvedWithEdits: number;
+    rejected: number;
+    /** Generated in the period and not reviewed by its end. */
+    awaitingReview: number;
+    truncated: boolean;
+  };
+  ownership: {
+    /** Open Cases whose assignee / handoff target cannot act right now. */
+    assigneeUnavailableNow: number;
+  };
   frequency: {
     signalsPerWeek: number | null;
     casesPerWeek: number | null;
@@ -71,6 +104,33 @@ export interface CareOpsAnalytics {
   };
   limitations: string[];
 }
+
+export interface SlaStageCompliance {
+  stage: SlaStage;
+  /** Cohort Cases that entered the stage before the end of the period. */
+  applicable: number;
+  met: number;
+  /** Completed late, or still open past the target at the end. */
+  breached: number;
+  /** Still inside the target at the end of the period. */
+  pending: number;
+  /** met / (met + breached); null when nothing is decided yet. */
+  complianceRate: number | null;
+}
+
+export interface NotificationStats {
+  /** Delivered to every channel within the period. */
+  deliveredInPeriod: number;
+  /** Of those, repeat notifications for work nobody had acted on. */
+  renotificationsInPeriod: number;
+  byKind: Record<StaffNotification["kind"], number>;
+  /** Snapshot at evaluation time (not limited to the period). */
+  undeliveredNow: { retrying: number; deadLetter: number; queued: number };
+  /** true when the store returned as many rows as requested (older rows may be missing). */
+  truncated: boolean;
+}
+
+export const SLA_STAGES: readonly SlaStage[] = ["acknowledge", "assign", "first_action", "handoff_accept", "complete"];
 
 const DAY_MS = 86_400_000;
 const MIN_DAYS_FOR_RATE = 7;
@@ -119,6 +179,81 @@ function inWindow(value: string, fromMs: number, toMs: number): boolean {
   return ms >= fromMs && ms < toMs;
 }
 
+const NOTIFICATION_KINDS: readonly StaffNotification["kind"][] = [
+  "critical_unacknowledged",
+  "sla_breach",
+  "manual_escalation",
+  "assignee_unavailable",
+];
+
+function notificationStats(
+  deliveries: { entries: readonly OutboxListEntry[]; truncated: boolean },
+  facilityId: string | null,
+  fromMs: number,
+  toMs: number,
+): NotificationStats {
+  const byKind = Object.fromEntries(NOTIFICATION_KINDS.map((kind) => [kind, 0])) as Record<StaffNotification["kind"], number>;
+  const stats: NotificationStats = {
+    deliveredInPeriod: 0,
+    renotificationsInPeriod: 0,
+    byKind,
+    undeliveredNow: { retrying: 0, deadLetter: 0, queued: 0 },
+    truncated: deliveries.truncated,
+  };
+  for (const entry of deliveries.entries) {
+    const payload = entry.payload as Partial<StaffNotificationPayload>;
+    if (facilityId && payload.facilityId !== facilityId) continue;
+    if (entry.status === "failed") stats.undeliveredNow.retrying += 1;
+    else if (entry.status === "dead_letter") stats.undeliveredNow.deadLetter += 1;
+    else if (entry.status !== "delivered") stats.undeliveredNow.queued += 1;
+    if (entry.status !== "delivered" || !entry.deliveredAt || !inWindow(entry.deliveredAt, fromMs, toMs)) continue;
+    stats.deliveredInPeriod += 1;
+    if (/:r\d+$/.test(entry.deliveryKey)) stats.renotificationsInPeriod += 1;
+    if (payload.kind && payload.kind in byKind) byKind[payload.kind] += 1;
+  }
+  return stats;
+}
+
+function aiUsage(
+  audit: { entries: readonly PlatformAuditEntry[]; truncated: boolean },
+  facilityId: string | null,
+  fromMs: number,
+  toMs: number,
+): CareOpsAnalytics["ai"] {
+  const usage = { generated: 0, failed: 0, approved: 0, approvedWithEdits: 0, rejected: 0, awaitingReview: 0, truncated: audit.truncated };
+  const generatedIds = new Set<string>();
+  const reviewedIds = new Set<string>();
+  for (const entry of audit.entries) {
+    if (entry.targetType !== "ai_draft") continue;
+    if (facilityId && entry.facilityId !== facilityId) continue;
+    // Reviews up to the end of the period settle a draft, whenever it was generated.
+    if ((entry.action === "ai_draft.approved" || entry.action === "ai_draft.rejected") && Date.parse(entry.at) < toMs) {
+      reviewedIds.add(entry.targetId);
+    }
+    if (!inWindow(entry.at, fromMs, toMs)) continue;
+    switch (entry.action) {
+      case "ai_draft.generated":
+        usage.generated += 1;
+        generatedIds.add(entry.targetId);
+        break;
+      case "ai_draft.failed":
+        usage.failed += 1;
+        break;
+      case "ai_draft.approved":
+        usage.approved += 1;
+        if ((entry.after as { edited?: unknown } | null)?.edited === true) usage.approvedWithEdits += 1;
+        break;
+      case "ai_draft.rejected":
+        usage.rejected += 1;
+        break;
+      default:
+        break;
+    }
+  }
+  usage.awaitingReview = [...generatedIds].filter((id) => !reviewedIds.has(id)).length;
+  return usage;
+}
+
 export function computeCareOpsAnalytics(input: {
   cases: readonly StoredCase[];
   signals: readonly SignalRecord[];
@@ -128,6 +263,12 @@ export function computeCareOpsAnalytics(input: {
   policyFor: SlaPolicyResolver;
   /** Evaluation clock; "at end" metrics use min(to, now). */
   now: string;
+  /** Whether a facility has approved its own thresholds. */
+  slaApprovedFor?: (facilityId: string | null) => boolean;
+  /** Staff-notification outbox rows (null: viewer may not see delivery). */
+  deliveries?: { entries: readonly OutboxListEntry[]; truncated: boolean } | null;
+  auditEntries?: { entries: readonly PlatformAuditEntry[]; truncated: boolean };
+  assigneeUnavailableNow?: number;
 }): CareOpsAnalytics {
   const fromMs = Date.parse(input.from);
   const toMs = Date.parse(input.to);
@@ -226,6 +367,32 @@ export function computeCareOpsAnalytics(input: {
     ).hasActiveBreach;
   }).length;
 
+  // Internal-target compliance of the cohort, evaluated on the history as
+  // it stood at the end of the period (later events do not count).
+  const stageCounts = new Map(SLA_STAGES.map((stage) => [stage, { applicable: 0, met: 0, breached: 0, pending: 0 }]));
+  let provisionalThresholds = false;
+  for (const stored of cohort) {
+    const facilityId = stored.aggregate.facilityId ?? null;
+    if (input.slaApprovedFor && !input.slaApprovedFor(facilityId)) provisionalThresholds = true;
+    const eventsAtEnd = stored.events.filter((event) => Date.parse(event.at) < toMs);
+    if (eventsAtEnd.length === 0) continue;
+    const evaluation = evaluateCaseSla(replayCase(eventsAtEnd), eventsAtEnd, input.policyFor(facilityId), endIso);
+    for (const checkpoint of evaluation.checkpoints) {
+      const counts = stageCounts.get(checkpoint.stage);
+      if (!counts || checkpoint.state === "not_applicable") continue;
+      counts.applicable += 1;
+      counts[checkpoint.state] += 1;
+    }
+  }
+  const stages: SlaStageCompliance[] = SLA_STAGES.map((stage) => {
+    const counts = stageCounts.get(stage)!;
+    const decided = counts.met + counts.breached;
+    return { stage, ...counts, complianceRate: decided === 0 ? null : Math.round((counts.met / decided) * 1000) / 1000 };
+  });
+
+  const notifications = input.deliveries ? notificationStats(input.deliveries, input.facilityId, fromMs, toMs) : null;
+  const ai = aiUsage(input.auditEntries ?? { entries: [], truncated: false }, input.facilityId, fromMs, toMs);
+
   const observedDays = Math.round(((toMs - fromMs) / DAY_MS) * 10) / 10;
   const weeks = (toMs - fromMs) / (7 * DAY_MS);
   const rateAllowed = observedDays >= MIN_DAYS_FOR_RATE;
@@ -267,6 +434,14 @@ export function computeCareOpsAnalytics(input: {
       cancelled,
       unacceptedAtEnd,
     },
+    sla: {
+      stages,
+      provisionalThresholds,
+      note: "達成率 = 目標内に完了した件数 ÷（目標内に完了 + 超過）。期間末時点で目標内かつ未完了のCaseは分母に含めません。同じ段階を複数回通ったCaseは最新の1回を数えます。",
+    },
+    notifications,
+    ai,
+    ownership: { assigneeUnavailableNow: input.assigneeUnavailableNow ?? 0 },
     frequency: {
       signalsPerWeek: rateAllowed ? Math.round((periodSignals.length / weeks) * 10) / 10 : null,
       casesPerWeek: rateAllowed ? Math.round((cohort.length / weeks) * 10) / 10 : null,
@@ -279,6 +454,9 @@ export function computeCareOpsAnalytics(input: {
       "所要時間は業務記録上のタイムスタンプに基づく指標であり、事故削減率や業務削減率を示すものではありません。",
       "未到達（missing）のCaseは平均・中央値・P90の計算から除外しています。",
       "SLA期限は施設が設定した内部対応目標であり、臨床的基準ではありません。",
+      "目標達成率は記録上の時刻に基づく運用指標であり、ケアの質や安全性を直接示すものではありません。件数が少ない期間の率は参考値です。",
+      "通知の「配信」はすべての通知チャネルへの送信完了を指し、職員が内容を読んだことを示すものではありません。",
+      "AI支援の件数は監査ログに基づきます。AIの下書きは職員が承認した場合のみ対応履歴に反映されます。",
     ],
   };
 }

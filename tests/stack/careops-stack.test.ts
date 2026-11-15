@@ -218,4 +218,18 @@ test("stack: escalation notifications and AI drafts persist through PostgreSQL",
   assert.equal(psql(`select status from public.care_ai_drafts where tenant_id = '${T}' and id = '${draft.body.id}'`), "approved");
   const stored = JSON.parse(psql(`select draft::text from public.care_ai_drafts where tenant_id = '${T}' and id = '${draft.body.id}'`));
   assert.equal(stored.content.text, draft.body.content.text, "generated content is immutable");
+
+  // operations metrics are computed from PostgreSQL rows (outbox, audit log, events)
+  const from = new Date(Date.now() - 86_400_000).toISOString();
+  const to = new Date(Date.now() + 60_000).toISOString();
+  const analytics = await lead("GET", `/analytics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&facilityId=stack-sakura`);
+  assert.equal(analytics.status, 200);
+  assert.ok(analytics.body.notifications.deliveredInPeriod >= 1);
+  assert.ok(analytics.body.notifications.byKind.critical_unacknowledged >= 1);
+  assert.ok(analytics.body.ai.generated >= 1 && analytics.body.ai.approved >= 1);
+  assert.deepEqual(analytics.body.sla.stages.map((item: { stage: string }) => item.stage), ["acknowledge", "assign", "first_action", "handoff_accept", "complete"]);
+  const acknowledge = analytics.body.sla.stages[0];
+  assert.equal(acknowledge.applicable, acknowledge.met + acknowledge.breached + acknowledge.pending);
+  // dispatchers see analytics without delivery status
+  assert.equal((await desk("GET", `/analytics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).body.notifications, null);
 });

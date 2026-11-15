@@ -83,6 +83,7 @@ import {
   type CaseListPage,
   type HandoffBoard,
   type SlaPolicyResolver,
+  hasUnavailableOwner,
 } from "./projections.ts";
 import {
   MAX_ESCALATION_REPEATS,
@@ -244,6 +245,8 @@ export function escalationRepeatIndex(rule: FacilityEscalationRule, elapsedMs: n
   return Math.min(max, Math.max(0, Math.floor(elapsedMs / (every * 60_000))));
 }
 
+/** Upper bound of outbox / audit rows read for one analytics request. */
+const ANALYTICS_ROW_CAP = 1000;
 const SCAN_PAGE = 500;
 const SCAN_CAP = 5000;
 const COLUMN_SORTS: readonly string[] = ["createdAt", "lastActivityAt", "priority", "status"];
@@ -1081,20 +1084,45 @@ export class CareOpsPlatformService {
   async analytics(ctx: PlatformContext, input: { from: string; to: string; facilityId?: string }): Promise<CareOpsAnalytics> {
     const membership = await this.#memberWith(ctx, "view_analytics", "analytics_forbidden");
     this.#assertFacilityFilter(membership, input.facilityId);
-    const { resolve } = await this.#policyResolver(ctx.tenantId);
+    const { resolve, approved } = await this.#policyResolver(ctx.tenantId);
     const signals = (await this.#signals.list(ctx.tenantId, {
       receivedFrom: new Date(Date.parse(input.from)).toISOString(),
       receivedTo: new Date(Date.parse(input.to)).toISOString(),
     })).filter((signal) => membershipCoversFacility(membership, signal.facilityId));
+
+    // Delivery status follows the audit-log permission (supervisor, auditor).
+    let deliveries: { entries: OutboxListEntry[]; truncated: boolean } | null = null;
+    if (hasPlatformPermission(membership, "view_audit_log")) {
+      const rows = await this.#outbox.list(ctx.tenantId, ANALYTICS_ROW_CAP, STAFF_NOTIFICATION_TOPIC);
+      deliveries = {
+        entries: rows.filter((entry) => membershipCoversFacility(membership, (entry.payload as Partial<StaffNotificationPayload>).facilityId ?? null)),
+        truncated: rows.length >= ANALYTICS_ROW_CAP,
+      };
+    }
+    const auditRows = await this.#audit.list(ctx.tenantId, { limit: ANALYTICS_ROW_CAP });
+    const auditEntries = {
+      entries: auditRows.filter((entry) => membershipCoversFacility(membership, entry.facilityId)),
+      truncated: auditRows.length >= ANALYTICS_ROW_CAP,
+    };
+
     try {
+      const cases = await this.#analyticsCases(membership, input);
+      const open = cases.filter((stored) => OPEN_STATUSES.includes(stored.aggregate.status));
+      const isAvailable = await this.#availabilityFor(ctx.tenantId, open);
       return computeCareOpsAnalytics({
-        cases: await this.#analyticsCases(membership, input),
+        cases,
         signals,
         from: input.from,
         to: input.to,
         facilityId: input.facilityId ?? null,
         policyFor: resolve,
         now: this.#now(),
+        slaApprovedFor: approved,
+        deliveries,
+        auditEntries,
+        assigneeUnavailableNow: open.filter((stored) =>
+          (!input.facilityId || stored.aggregate.facilityId === input.facilityId) && hasUnavailableOwner(stored.aggregate, isAvailable),
+        ).length,
       });
     } catch (error) {
       throw new CareOpsRuleError("INVALID_PERIOD", error instanceof Error ? error.message : "invalid period");
