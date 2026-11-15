@@ -48,6 +48,29 @@ alter table public.care_tenant_memberships
   add column if not exists version bigint
   not null default 1;
 
+-- Facility scope inside a tenant (CareOps). NULL = tenant-wide.
+alter table public.care_tenant_memberships
+  add column if not exists facility_ids text[];
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conname = 'care_tenant_memberships_facility_ids_check'
+  ) then
+    alter table public.care_tenant_memberships
+      add constraint care_tenant_memberships_facility_ids_check
+      check (
+        facility_ids is null
+        or (
+          cardinality(facility_ids) between 1 and 100
+          and array_position(facility_ids, null) is null
+        )
+      );
+  end if;
+end;
+$$;
+
 create index if not exists care_memberships_tenant_active_idx
   on public.care_tenant_memberships (
     tenant_id,
@@ -85,7 +108,8 @@ create table if not exists public.care_membership_admin_events (
       'roles_replaced',
       'membership_activated',
       'membership_deactivated',
-      'actor_id_changed'
+      'actor_id_changed',
+      'facility_scope_replaced'
     )
   ),
   admin_actor_id text not null
@@ -110,6 +134,20 @@ create table if not exists public.care_membership_admin_events (
     on update restrict
     on delete restrict
 );
+
+alter table public.care_membership_admin_events
+  drop constraint if exists care_membership_admin_events_event_type_check;
+alter table public.care_membership_admin_events
+  add constraint care_membership_admin_events_event_type_check check (
+    event_type in (
+      'membership_created',
+      'roles_replaced',
+      'membership_activated',
+      'membership_deactivated',
+      'actor_id_changed',
+      'facility_scope_replaced'
+    )
+  );
 
 create index if not exists care_membership_admin_events_actor_idx
   on public.care_membership_admin_events (
@@ -305,6 +343,10 @@ begin
     v_changes := v_changes + 1;
   end if;
 
+  if new.facility_ids is distinct from old.facility_ids then
+    v_changes := v_changes + 1;
+  end if;
+
   if v_changes <> 1 then
     raise exception
       'exactly one membership field may change per version'
@@ -347,7 +389,8 @@ begin
     v_data := jsonb_build_object(
       'actorId', new.actor_id,
       'roles', to_jsonb(new.roles),
-      'active', new.active
+      'active', new.active,
+      'facilityIds', to_jsonb(new.facility_ids)
     );
   elsif new.actor_id is distinct from old.actor_id then
     v_event_type := 'actor_id_changed';
@@ -367,6 +410,12 @@ begin
   elsif new.active = false and old.active = true then
     v_event_type := 'membership_deactivated';
     v_data := '{}'::jsonb;
+  elsif new.facility_ids is distinct from old.facility_ids then
+    v_event_type := 'facility_scope_replaced';
+    v_data := jsonb_build_object(
+      'previousFacilityIds', to_jsonb(old.facility_ids),
+      'facilityIds', to_jsonb(new.facility_ids)
+    );
   else
     raise exception
       'unsupported membership mutation'

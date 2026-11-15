@@ -83,8 +83,24 @@ function eventTitle(event: CaseEvent): string {
       return "優先度変更";
     case "acknowledged":
       return "確認済み";
+    case "triaged":
+      return "トリアージ";
     case "assigned":
       return "担当確定";
+    case "reassigned":
+      return "担当変更";
+    case "note_added":
+      return "対応履歴";
+    case "escalated":
+      return "エスカレーション";
+    case "escalation_cleared":
+      return "エスカレーション解除";
+    case "handoff_declined":
+      return "引継ぎ差し戻し";
+    case "handoff_cancelled":
+      return "引継ぎ取消";
+    case "signal_linked":
+      return "重複通知を紐付け";
     case "action_started":
       return "対応開始";
     case "handoff_requested":
@@ -108,6 +124,19 @@ function eventDetail(event: CaseEvent): string | null {
       return `${event.data.previousPriority} → ${event.data.priority}`;
     case "assigned":
       return `担当: ${event.data.assigneeId}`;
+    case "triaged":
+      return `${event.data.category} / ${event.data.previousPriority} → ${event.data.priority}`;
+    case "reassigned":
+      return `${event.data.previousAssigneeId ?? "—"} → ${event.data.assigneeId}`;
+    case "note_added":
+      return event.data.kind;
+    case "escalated":
+    case "escalation_cleared":
+    case "handoff_declined":
+    case "handoff_cancelled":
+      return event.data.reason;
+    case "signal_linked":
+      return `${event.data.sourceAdapter} / ${event.data.sourceType}`;
     case "handoff_requested":
       return `引継ぎ先: ${event.data.targetAssigneeId}`;
     case "handoff_accepted":

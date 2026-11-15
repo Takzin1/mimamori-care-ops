@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts", "server/**/*.ts", "scripts/staging-stack/**/*.ts", "scripts/careops-lint.ts", "scripts/simulation-lab.ts"]
+}

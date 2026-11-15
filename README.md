@@ -58,6 +58,44 @@ Not yet production-ready:
 
 See [Project Status](docs/project-status.md) and the open GitHub Issues for the active roadmap.
 
+## CareOps platform (見守りくん CareOps)
+
+The CareOps layer turns notifications into accountable Cases through
+confirmation → triage → assignment → action history → shift handoff with
+explicit receipt → resolution → closure, with facility isolation, configurable
+internal response targets, escalation notifications, period analytics, and
+human-reviewed AI drafts. It runs end-to-end locally on synthetic data:
+
+```bash
+npm run careops:local   # http://127.0.0.1:8787 (loopback only, synthetic staff login)
+npm run sim             # Simulation Lab: 52 synthetic scenarios against the real service
+```
+
+The Simulation Lab replays normal, night-shift, no-response, contact-failure,
+unavailable-assignee, duplicate-notification and facility-isolation situations
+in throw-away worlds (virtual clock, fault injection) and is also available as
+a local demo page (`#/lab`). Humans stay in charge: the system never
+acknowledges, prioritises, reassigns, resolves or closes a Case by itself, and
+AI output is a draft until a staff member approves it.
+
+A production-shaped composition (Supabase Auth + PostgREST/PostgreSQL) and a
+staging server exist; CI runs them against a staging-equivalent stack
+(PostgreSQL 17 + PostgREST) on every push:
+
+```bash
+npm run careops:staging  # requires the staging environment variables (see docs/careops-staging.md)
+```
+
+Not deployed and not production-ready. Read:
+
+- [CareOps Architecture](docs/careops-architecture.md)
+- [CareOps Workflow](docs/careops-workflow.md)
+- [CareOps Security](docs/careops-security.md)
+- [CareOps Staging Integration](docs/careops-staging.md)
+- [CareOps Remaining Work](docs/careops-remaining-work.md)
+- [CareOps Operations OS — 設計書・リスク一覧・次のPR計画（日本語）](docs/careops-operations-os.md)
+- [ADR 0019](docs/adr/0019-careops-platform-layer.md)
+
 ## The problem boundary
 
 Many monitoring products stop at detection or notification.
@@ -160,9 +198,16 @@ src/
   console/        live Console workspace state
   console-web/    dependency-free live Console DOM renderer
   persistence/   repository contracts and in-memory reference adapter
+  careops/       CareOps platform: intake, projections, escalation, AI drafts, analytics, HTTP
+
+server/          Node-only local CareOps server + SQLite stores (synthetic data)
+web/careops/     mobile-first staff UI (no build step)
 
 db/
-  case_store.sql Postgres/Supabase persistence contract
+  case_store.sql       Postgres/Supabase persistence contract
+  identity_store.sql   memberships (incl. facility scope) + audited admin
+  careops_platform.sql signals, facility settings, audit log, AI drafts, notifications
+  migrations/          forward migrations for existing stores
 
 tests/
   core, persistence, authorization, E2E and SQL invariants
@@ -259,8 +304,13 @@ Run:
 
 ```bash
 npm run typecheck
+npm run typecheck:server
 npm test
 npm run test:coverage
+npm run test:web
+npm run lint            # CareOps safety rules + secret scan
+npm run test:e2e        # Playwright (pinned devDependency; run `npx playwright install chromium` once)
+DATABASE_URL=postgresql://... npm run test:postgres
 ```
 
 Before deployment, copy `.env.example` to a local ignored environment file or configure the same variables in the provider, then validate the configuration without making network requests:

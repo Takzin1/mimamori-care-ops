@@ -297,6 +297,15 @@ function baseHeaders(
   });
 }
 
+export function careOpsJson(
+  value: unknown,
+  status: number,
+  requestId: string,
+  extraHeaders?: HeadersInit,
+): Response {
+  return json(value, status, requestId, extraHeaders);
+}
+
 function json(
   value: unknown,
   status: number,
@@ -335,6 +344,21 @@ function errorBody(
       ...(details ? { details } : {}),
     },
   };
+}
+
+/**
+ * Shared, non-leaky error mapping for every Care Ops HTTP surface.
+ * `extend` lets other surfaces map their own error types first.
+ */
+export function careOpsErrorResponse(
+  error: unknown,
+  requestId: string,
+): Response {
+  return errorResponse(error, requestId);
+}
+
+export function careOpsBearerToken(request: Request): string {
+  return accessToken(request);
 }
 
 function errorResponse(

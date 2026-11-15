@@ -1,4 +1,5 @@
 import {
+  CASE_NOTE_KINDS,
   CASE_PRIORITIES,
   COMPLETION_OUTCOMES,
   EVIDENCE_KINDS,
@@ -276,8 +277,52 @@ function actionFields(
           textArea(
             doc,
             "reason",
-            "Reopen reason",
+            action.type === "reopen" ? "Reopen reason" : "Reason",
             1000,
+          ),
+        );
+        break;
+
+      case "category": {
+        const input = actionInput(
+          doc,
+          "category",
+          "Category",
+          64,
+        );
+        fields.push(fieldWrapper(input));
+        break;
+      }
+
+      case "rationale":
+        fields.push(
+          textArea(
+            doc,
+            "rationale",
+            "Priority rationale",
+            1000,
+          ),
+        );
+        break;
+
+      case "noteKind":
+        fields.push(
+          selectField(
+            doc,
+            "noteKind",
+            "Note kind",
+            CASE_NOTE_KINDS,
+          ),
+        );
+        break;
+
+      case "text":
+        fields.push(
+          textArea(
+            doc,
+            "text",
+            "Note",
+            4000,
           ),
         );
         break;

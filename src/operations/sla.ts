@@ -207,6 +207,7 @@ function currentStage(
     case "NEW":
       return "acknowledge";
     case "ACKNOWLEDGED":
+    case "TRIAGED":
       return "assign";
     case "ASSIGNED":
       return "first_action";
@@ -228,6 +229,7 @@ function currentStageStartedAt(
     case "NEW":
       return aggregate.createdAt;
     case "ACKNOWLEDGED":
+    case "TRIAGED":
       return aggregate.acknowledgedAt;
     case "ASSIGNED":
       return aggregate.assignedAt;
@@ -239,6 +241,9 @@ function currentStageStartedAt(
       const operationalStart = latestEvent(events, [
         "action_started",
         "handoff_accepted",
+        "handoff_declined",
+        "handoff_cancelled",
+        "reassigned",
         "reopened",
       ]);
       return operationalStart?.at ?? aggregate.firstActionAt;

@@ -5,10 +5,12 @@ import type {
   CaseCommandIntent,
 } from "../application/types.ts";
 import {
+  CASE_NOTE_KINDS,
   CASE_PRIORITIES,
   COMPLETION_OUTCOMES,
   EVIDENCE_KINDS,
   type CaseCommandType,
+  type CaseNoteKind,
   type CasePriority,
   type CompletionOutcome,
   type EvidenceKind,
@@ -101,6 +103,45 @@ export function buildConsoleCommandIntent(
 
     case "acknowledge":
       return { type };
+
+    case "triage":
+      return {
+        type,
+        category: required(values.category, "category", 64),
+        priority: oneOf(
+          values.priority,
+          CASE_PRIORITIES,
+          "priority",
+        ) as CasePriority,
+        rationale: required(values.rationale, "rationale", 1000),
+      };
+
+    case "reassign":
+      return {
+        type,
+        assigneeId: actorId(values.assigneeId, "assigneeId"),
+        reason: required(values.reason, "reason", 1000),
+      };
+
+    case "add_note":
+      return {
+        type,
+        kind: oneOf(
+          values.noteKind,
+          CASE_NOTE_KINDS,
+          "noteKind",
+        ) as CaseNoteKind,
+        text: required(values.text, "text", 4000),
+      };
+
+    case "escalate":
+    case "clear_escalation":
+    case "decline_handoff":
+    case "cancel_handoff":
+      return {
+        type,
+        reason: required(values.reason, "reason", 1000),
+      };
 
     case "assign":
       return {

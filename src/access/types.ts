@@ -13,6 +13,12 @@ export interface TenantMembership {
   actorId: string;
   roles: readonly StaffRole[];
   active: boolean;
+  /**
+   * Facility scope inside the tenant. Omitted or empty means the
+   * membership covers every facility of the tenant. When present, the
+   * member may only read or act on Cases of the listed facilities.
+   */
+  facilityIds?: readonly string[];
 }
 
 export interface TenantMembershipDirectory {
@@ -25,4 +31,9 @@ export interface TenantMembershipDirectory {
     tenantId: string,
     actorId: string,
   ): Promise<TenantMembership | null>;
+
+  /** Optional roster listing used for assignment pickers. */
+  listByTenant?(
+    tenantId: string,
+  ): Promise<TenantMembership[]>;
 }

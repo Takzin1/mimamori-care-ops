@@ -8,14 +8,26 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "test": "node --test tests/*.test.ts",
     "test:coverage": "node --test --experimental-test-coverage tests/*.test.ts",
-    "test:postgres": "node --test tests/postgres-real.integration.test.ts tests/identity-postgres.integration.test.ts",
+    "test:postgres": "node --test --test-concurrency=1 tests/postgres-real.integration.test.ts tests/identity-postgres.integration.test.ts tests/careops-postgres.integration.test.ts tests/careops-search-parity.test.ts tests/careops-migration.integration.test.ts",
     "test:demo": "node --check demo/responder-console/app.js",
     "preflight:staging": "node scripts/staging-preflight.ts",
-    "config:validate": "node scripts/deployment-config-validate.ts"
+    "config:validate": "node scripts/deployment-config-validate.ts",
+    "careops:local": "node server/careops-local-server.ts",
+    "test:e2e": "node --test --test-concurrency=1 tests/e2e/*.e2e.ts",
+    "test:web": "node --check web/careops/app.js && node --check web/careops/api.js && node --check web/careops/dom.js && node --check web/careops/labels.js",
+    "test:stack": "node --test --test-concurrency=1 tests/stack/*.test.ts tests/e2e/careops-staging.e2e.ts",
+    "careops:staging": "node server/careops-staging-server.ts",
+    "stack:gateway": "node scripts/staging-stack/supabase-gateway.ts",
+    "stack:seed": "node scripts/staging-stack/seed.ts",
+    "stack:env": "node scripts/staging-stack/generate-env.ts",
+    "lint": "node scripts/careops-lint.ts",
+    "sim": "node scripts/simulation-lab.ts"
   },
   "devDependencies": {
+    "playwright": "1.63.0",
     "typescript": "5.9.2"
   }
 }

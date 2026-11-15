@@ -89,6 +89,10 @@ export interface ConsoleCommandFormValues {
   evidenceKind?: EvidenceKind | string;
   evidenceRef?: string;
   reason?: string;
+  category?: string;
+  rationale?: string;
+  noteKind?: string;
+  text?: string;
 }
 
 export interface LiveConsoleWebRendererOptions {
