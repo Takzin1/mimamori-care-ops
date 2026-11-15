@@ -77,12 +77,35 @@ export interface SignalStore {
 /* Facility settings                                                    */
 /* ------------------------------------------------------------------ */
 
-export type EscalationTrigger = SlaStage | "critical_unacknowledged";
+export type EscalationTrigger =
+  | SlaStage
+  | "critical_unacknowledged"
+  /** Assignee or handoff target can no longer act (deactivated / moved). */
+  | "assignee_unavailable";
+
+export const ESCALATION_TRIGGERS: readonly EscalationTrigger[] = [
+  "critical_unacknowledged",
+  "acknowledge",
+  "assign",
+  "first_action",
+  "handoff_accept",
+  "complete",
+  "assignee_unavailable",
+];
+
+export const MAX_ESCALATION_REPEATS = 10;
 
 export interface FacilityEscalationRule {
   trigger: EscalationTrigger;
   enabled: boolean;
   notifyRoles: StaffRole[];
+  /**
+   * Re-notify while the condition persists and nobody has acted.
+   * Omitted / 0 = notify once.
+   */
+  repeatEveryMinutes?: number;
+  /** Upper bound of re-notifications (default 3, max MAX_ESCALATION_REPEATS). */
+  maxRepeats?: number;
 }
 
 export interface SlaApproval {
@@ -231,7 +254,7 @@ export interface StaffNotification {
   facilityId: string | null;
   deliveryKey: string;
   recipientRoles: StaffRole[];
-  kind: "sla_breach" | "critical_unacknowledged" | "manual_escalation";
+  kind: "sla_breach" | "critical_unacknowledged" | "manual_escalation" | "assignee_unavailable";
   caseId: string;
   /** Non-PII operational message (no resident identifiers). */
   message: string;

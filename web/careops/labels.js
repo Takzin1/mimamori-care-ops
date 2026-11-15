@@ -82,6 +82,7 @@ export const STAGE = {
   handoff_accept: "引継ぎ受領",
   complete: "解決",
   critical_unacknowledged: "重大Caseの未確認",
+  assignee_unavailable: "担当者不在（無効化・施設外）",
 };
 
 export const COMMAND = {

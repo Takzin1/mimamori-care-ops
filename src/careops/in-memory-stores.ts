@@ -198,7 +198,8 @@ export interface OutboxListEntry extends OutboxMessage {
 }
 
 export interface ListableOutboxStore extends OutboxStore {
-  list(tenantId: string, limit?: number): Promise<OutboxListEntry[]>;
+  /** Most recent first; optionally restricted to one topic. */
+  list(tenantId: string, limit?: number, topic?: string): Promise<OutboxListEntry[]>;
 }
 
 /**
@@ -304,9 +305,10 @@ export class InMemoryOutboxStore implements ListableOutboxStore {
     return { ok: true, status: message.status };
   }
 
-  async list(tenantId: string, limit = 200): Promise<OutboxListEntry[]> {
+  async list(tenantId: string, limit = 200, topic?: string): Promise<OutboxListEntry[]> {
     return this.#messages
       .filter((message) => message.tenantId === tenantId)
+      .filter((message) => !topic || message.topic === topic)
       .slice(-limit)
       .reverse()
       .map(clone);

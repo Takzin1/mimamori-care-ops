@@ -20,6 +20,8 @@ import type {
 import { CASE_SORT_KEYS, type CaseListFilter, type CaseSortKey, UNASSIGNED_FILTER } from "./projections.ts";
 import {
   AI_DRAFT_KINDS,
+  ESCALATION_TRIGGERS,
+  MAX_ESCALATION_REPEATS,
   SIGNAL_DISPOSITIONS,
   type AiDraftKind,
   type EscalationTrigger,
@@ -257,14 +259,6 @@ const SLA_KEYS: readonly (keyof SlaDurations)[] = [
   "handoffAcceptWithinMs",
   "completeWithinMs",
 ];
-const ESCALATION_TRIGGERS: readonly EscalationTrigger[] = [
-  "critical_unacknowledged",
-  "acknowledge",
-  "assign",
-  "first_action",
-  "handoff_accept",
-  "complete",
-];
 const MAX_SLA_MS = 7 * 86_400_000;
 
 function parseSla(value: unknown): CaseSlaPolicy {
@@ -304,7 +298,16 @@ export function parseSettingsUpdate(body: unknown): { expectedVersion: number; p
     const seen = new Set<string>();
     patch.escalationRules = value.escalationRules.map((item, index): FacilityEscalationRule => {
       const rule = record(item, `escalationRules[${index}]`);
-      exactKeys(rule, ["trigger", "enabled", "notifyRoles"], `escalationRules[${index}]`);
+      exactKeys(rule, ["trigger", "enabled", "notifyRoles", "repeatEveryMinutes", "maxRepeats"], `escalationRules[${index}]`);
+      const bounded = (value: unknown, label: string, min: number, max: number): number | undefined => {
+        if (value === undefined || value === null) return undefined;
+        if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
+          invalid(`${label} must be an integer between ${min} and ${max}`);
+        }
+        return value;
+      };
+      const repeatEveryMinutes = bounded(rule.repeatEveryMinutes, "repeatEveryMinutes", 0, 1440);
+      const maxRepeats = bounded(rule.maxRepeats, "maxRepeats", 1, MAX_ESCALATION_REPEATS);
       const trigger = oneOf<EscalationTrigger>(rule.trigger, ESCALATION_TRIGGERS, "trigger");
       if (seen.has(trigger)) invalid("escalationRules has duplicate trigger");
       seen.add(trigger);
@@ -313,6 +316,8 @@ export function parseSettingsUpdate(body: unknown): { expectedVersion: number; p
         trigger,
         enabled: bool(rule.enabled, "enabled"),
         notifyRoles: [...new Set(rule.notifyRoles.map((role) => oneOf<StaffRole>(role, STAFF_ROLES, "notifyRoles")))],
+        ...(repeatEveryMinutes ? { repeatEveryMinutes } : {}),
+        ...(repeatEveryMinutes && maxRepeats ? { maxRepeats } : {}),
       };
     });
   }

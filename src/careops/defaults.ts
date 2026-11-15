@@ -1,6 +1,6 @@
 import type { CaseSlaPolicy } from "../operations/sla.ts";
 import { validateSlaPolicy } from "../operations/sla.ts";
-import type { FacilitySettings } from "./types.ts";
+import type { FacilityEscalationRule, FacilitySettings } from "./types.ts";
 
 const MINUTE = 60_000;
 
@@ -52,6 +52,33 @@ export const DEFAULT_CATEGORIES = [
   "その他",
 ];
 
+/**
+ * PROVISIONAL defaults (not clinically validated). Stored settings that
+ * predate a trigger fall back to the default rule for that trigger.
+ */
+export function defaultEscalationRules(): FacilityEscalationRule[] {
+  return [
+    { trigger: "critical_unacknowledged", enabled: true, notifyRoles: ["supervisor"], repeatEveryMinutes: 10, maxRepeats: 3 },
+    { trigger: "acknowledge", enabled: true, notifyRoles: ["supervisor", "dispatcher"] },
+    { trigger: "assign", enabled: true, notifyRoles: ["supervisor", "dispatcher"] },
+    { trigger: "first_action", enabled: true, notifyRoles: ["supervisor"] },
+    { trigger: "handoff_accept", enabled: true, notifyRoles: ["supervisor"] },
+    { trigger: "complete", enabled: false, notifyRoles: ["supervisor"] },
+    { trigger: "assignee_unavailable", enabled: true, notifyRoles: ["supervisor", "dispatcher"] },
+  ];
+}
+
+/** Stored rules plus defaults for triggers the stored settings lack. */
+export function effectiveEscalationRules(
+  stored: readonly FacilityEscalationRule[] | undefined,
+): FacilityEscalationRule[] {
+  const rules = [...(stored ?? [])];
+  for (const fallback of defaultEscalationRules()) {
+    if (!rules.some((rule) => rule.trigger === fallback.trigger)) rules.push(fallback);
+  }
+  return rules;
+}
+
 export function defaultFacilitySettings(input: {
   tenantId: string;
   facilityId: string;
@@ -71,14 +98,7 @@ export function defaultFacilitySettings(input: {
       approvedAt: null,
       note: null,
     },
-    escalationRules: [
-      { trigger: "critical_unacknowledged", enabled: true, notifyRoles: ["supervisor"] },
-      { trigger: "acknowledge", enabled: true, notifyRoles: ["supervisor", "dispatcher"] },
-      { trigger: "assign", enabled: true, notifyRoles: ["supervisor", "dispatcher"] },
-      { trigger: "first_action", enabled: true, notifyRoles: ["supervisor"] },
-      { trigger: "handoff_accept", enabled: true, notifyRoles: ["supervisor"] },
-      { trigger: "complete", enabled: false, notifyRoles: ["supervisor"] },
-    ],
+    escalationRules: defaultEscalationRules(),
     autoCreateCaseFor: ["sos", "crisis_no_response"],
     linkDuplicateSignals: true,
     categories: [...DEFAULT_CATEGORIES],

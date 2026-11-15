@@ -64,7 +64,7 @@ import {
   type AiSourceText,
 } from "./ai-assist.ts";
 import { computeCareOpsAnalytics, type CareOpsAnalytics } from "./analytics.ts";
-import { PROVISIONAL_SLA_POLICY, defaultFacilitySettings } from "./defaults.ts";
+import { PROVISIONAL_SLA_POLICY, defaultFacilitySettings, effectiveEscalationRules } from "./defaults.ts";
 import {
   CareOpsConflictError,
   CareOpsNotFoundError,
@@ -76,6 +76,7 @@ import {
   projectHandoffBoard,
   searchCases,
   toCaseListItem,
+  type AvailabilityCheck,
   type CareOpsDashboard,
   type CaseListFilter,
   type CaseListPage,
@@ -83,6 +84,7 @@ import {
   type SlaPolicyResolver,
 } from "./projections.ts";
 import {
+  MAX_ESCALATION_REPEATS,
   STAFF_NOTIFICATION_TOPIC,
   type AiDraft,
   type AiDraftKind,
@@ -196,6 +198,11 @@ export interface CaseDetailProjection {
   sla: CaseSlaEvaluation;
   slaApproved: boolean;
   aiAvailable: boolean;
+  /** Whether the accountable people can still act on this Case. */
+  ownership: {
+    assigneeUnavailable: boolean;
+    handoffTargetUnavailable: boolean;
+  };
 }
 
 export interface EscalationRunResult {
@@ -223,6 +230,17 @@ const SIGNAL_DEFAULT_PRIORITY: Record<SignalType, CasePriority> = {
 };
 
 const NOTE_TEXT_MAX = 4000;
+/**
+ * 0 for the first notification, n for the n-th re-notification that is
+ * due now. Bounded so a forgotten Case cannot generate unbounded noise.
+ */
+export function escalationRepeatIndex(rule: FacilityEscalationRule, elapsedMs: number): number {
+  const every = rule.repeatEveryMinutes ?? 0;
+  if (!Number.isFinite(every) || every <= 0) return 0;
+  const max = Math.min(Math.max(0, rule.maxRepeats ?? 3), MAX_ESCALATION_REPEATS);
+  return Math.min(max, Math.max(0, Math.floor(elapsedMs / (every * 60_000))));
+}
+
 const SCAN_PAGE = 500;
 const SCAN_CAP = 5000;
 const COLUMN_SORTS: readonly string[] = ["createdAt", "lastActivityAt", "priority", "status"];
@@ -321,7 +339,8 @@ export class CareOpsPlatformService {
   async #facility(tenantId: string, facilityId: string): Promise<FacilitySettings> {
     const settings = await this.#settings.get(tenantId, facilityId);
     if (!settings) throw new CareOpsNotFoundError("facility");
-    return settings;
+    // Settings stored before a trigger existed show its default rule.
+    return { ...settings, escalationRules: effectiveEscalationRules(settings.escalationRules) };
   }
 
   async #policyResolver(tenantId: string): Promise<{ resolve: SlaPolicyResolver; approved: (facilityId: string | null) => boolean }> {
@@ -345,6 +364,34 @@ export class CareOpsPlatformService {
       tenantId: membership.tenantId,
       facilityScope: membership.facilityIds?.length ? [...membership.facilityIds] : null,
       visibleToActor: queueVisibilityForMembership(membership) === "responder" ? membership.actorId : null,
+    };
+  }
+
+  /**
+   * Resolves whether the owners (assignee / handoff target) of the given
+   * Cases can still act: active membership, an assignable role, and
+   * facility scope covering the Case. One directory lookup per actor.
+   */
+  async #availabilityFor(tenantId: string, cases: readonly StoredCase[]): Promise<AvailabilityCheck> {
+    const actors = new Set<string>();
+    for (const stored of cases) {
+      if (stored.aggregate.assigneeId) actors.add(stored.aggregate.assigneeId);
+      if (stored.aggregate.handoffTargetId) actors.add(stored.aggregate.handoffTargetId);
+    }
+    const members = new Map<string, TenantMembership | null>();
+    await Promise.all([...actors].map(async (actorId) => {
+      members.set(actorId, await this.#memberships.findByActorId(tenantId, actorId));
+    }));
+    return (actorId, facilityId) => {
+      const member = members.get(actorId);
+      // Actors outside the resolved set are not judged.
+      if (member === undefined) return true;
+      return Boolean(
+        member &&
+        member.active &&
+        member.roles.some((role) => role === "responder" || role === "supervisor") &&
+        membershipCoversFacility(member, facilityId),
+      );
     };
   }
 
@@ -918,10 +965,10 @@ export class CareOpsPlatformService {
       const page = Math.min(requested, totalPages);
       if (page !== requested) result = await this.#search(query(page));
       const now = this.#now();
+      const pageCases = result.cases.filter((stored) => canReadCaseAggregate(membership, stored.aggregate));
+      const isAvailable = await this.#availabilityFor(ctx.tenantId, pageCases);
       return {
-        items: result.cases
-          .filter((stored) => canReadCaseAggregate(membership, stored.aggregate))
-          .map((stored) => toCaseListItem(stored, resolve, now)),
+        items: pageCases.map((stored) => toCaseListItem(stored, resolve, now, isAvailable)),
         page,
         pageSize,
         total: result.total,
@@ -930,7 +977,8 @@ export class CareOpsPlatformService {
       };
     }
     // SLA-dependent ordering/filtering: bounded scan, then in-memory ranking.
-    return searchCases(await this.#visibleCases(membership, structural, 2000), filter, resolve, this.#now());
+    const scanned = await this.#visibleCases(membership, structural, 2000);
+    return searchCases(scanned, filter, resolve, this.#now(), await this.#availabilityFor(ctx.tenantId, scanned));
   }
 
   async dashboard(ctx: PlatformContext, facilityId?: string): Promise<CareOpsDashboard> {
@@ -942,13 +990,18 @@ export class CareOpsPlatformService {
     ).length;
     const counted = async (status: "COMPLETED" | "CLOSED") =>
       (await this.#search({ ...this.#scopeOf(membership), statuses: [status], ...(facilityId ? { facilityId } : {}), sort: "createdAt", order: "asc", limit: 1, offset: 0 })).total;
+    const openCases = await this.#visibleCases(membership, { statuses: OPEN_STATUSES, ...(facilityId ? { facilityId } : {}) });
     const dashboard = projectDashboard({
-      cases: await this.#visibleCases(membership, { statuses: OPEN_STATUSES, ...(facilityId ? { facilityId } : {}) }),
+      cases: openCases,
       policyFor: resolve,
       now: this.#now(),
       actorId: membership.actorId,
       facilityId: facilityId ?? null,
       pendingSignals: pending,
+      isAvailable: await this.#availabilityFor(ctx.tenantId, openCases),
+      delivery: hasPlatformPermission(membership, "run_escalation")
+        ? await this.#deliveryProblems(membership, facilityId)
+        : null,
     });
     // Resolved / closed are counted in the store (not loaded).
     dashboard.counts.resolved = await counted("COMPLETED");
@@ -975,6 +1028,20 @@ export class CareOpsPlatformService {
       sla: evaluateCaseSla(stored.aggregate, stored.events, resolve(facilityId), this.#now()),
       slaApproved: approved(facilityId),
       aiAvailable: this.#ai.name !== "disabled",
+      ownership: await this.#ownership(stored),
+    };
+  }
+
+  async #ownership(stored: StoredCase): Promise<CaseDetailProjection["ownership"]> {
+    const aggregate = stored.aggregate;
+    if (!OPEN_STATUSES.includes(aggregate.status)) {
+      return { assigneeUnavailable: false, handoffTargetUnavailable: false };
+    }
+    const isAvailable = await this.#availabilityFor(aggregate.tenantId, [stored]);
+    const facilityId = aggregate.facilityId ?? null;
+    return {
+      assigneeUnavailable: Boolean(aggregate.assigneeId && !isAvailable(aggregate.assigneeId, facilityId)),
+      handoffTargetUnavailable: Boolean(aggregate.handoffTargetId && !isAvailable(aggregate.handoffTargetId, facilityId)),
     };
   }
 
@@ -1067,12 +1134,27 @@ export class CareOpsPlatformService {
     );
   }
 
-  async deliveryStatus(ctx: PlatformContext): Promise<OutboxListEntry[]> {
-    const membership = await this.#memberWith(ctx, "run_escalation", "settings_forbidden");
-    return (await this.#outbox.list(ctx.tenantId, 200)).filter((entry) => {
+  async #staffDeliveries(membership: TenantMembership): Promise<OutboxListEntry[]> {
+    // Only staff notifications: the Case-event outbox topic is not shown.
+    return (await this.#outbox.list(membership.tenantId, 200, STAFF_NOTIFICATION_TOPIC)).filter((entry) => {
       const payload = entry.payload as Partial<StaffNotificationPayload>;
       return membershipCoversFacility(membership, payload.facilityId ?? null);
     });
+  }
+
+  async #deliveryProblems(membership: TenantMembership, facilityId?: string): Promise<{ failed: number; deadLetter: number }> {
+    const entries = (await this.#staffDeliveries(membership)).filter((entry) =>
+      !facilityId || (entry.payload as Partial<StaffNotificationPayload>).facilityId === facilityId,
+    );
+    return {
+      failed: entries.filter((entry) => entry.status === "failed").length,
+      deadLetter: entries.filter((entry) => entry.status === "dead_letter").length,
+    };
+  }
+
+  async deliveryStatus(ctx: PlatformContext): Promise<OutboxListEntry[]> {
+    const membership = await this.#memberWith(ctx, "run_escalation", "settings_forbidden");
+    return this.#staffDeliveries(membership);
   }
 
   async runEscalations(ctx: PlatformContext): Promise<EscalationRunResult> {
@@ -1096,43 +1178,75 @@ export class CareOpsPlatformService {
     }
     let enqueued = 0;
     let suppressed = 0;
+    const count = (created: boolean) => { created ? (enqueued += 1) : (suppressed += 1); };
+    const isAvailable = await this.#availabilityFor(tenantId, cases);
+    const nowMs = Date.parse(now);
 
     for (const stored of cases) {
       const aggregate = stored.aggregate;
-      const settings = aggregate.facilityId ? settingsById.get(aggregate.facilityId) : undefined;
-      const rules = settings?.escalationRules ?? [];
+      const facilityId = aggregate.facilityId ?? null;
+      const settings = facilityId ? settingsById.get(facilityId) : undefined;
+      const rules = effectiveEscalationRules(settings?.escalationRules);
       const rule = (trigger: string) => rules.find((item) => item.trigger === trigger && item.enabled);
 
+      // 1. critical and still unacknowledged (re-notified while it stays so)
       if (aggregate.priority === "critical" && aggregate.status === "NEW") {
         const critical = rule("critical_unacknowledged");
         if (critical) {
-          const created = await this.#enqueueNotification(aggregate, {
+          const repeat = escalationRepeatIndex(critical, nowMs - Date.parse(aggregate.createdAt));
+          count(await this.#enqueueNotification(aggregate, {
             kind: "critical_unacknowledged",
-            deliveryKey: `critical:${aggregate.id}`,
+            deliveryKey: repeat === 0 ? `critical:${aggregate.id}` : `critical:${aggregate.id}:r${repeat}`,
             recipientRoles: critical.notifyRoles,
-            message: criticalMessage(aggregate.id),
+            message: repeat === 0 ? criticalMessage(aggregate.id) : `重大(critical)のCase ${aggregate.id} が未確認のままです（再通知 ${repeat} 回目）。職員による確認が必要です。`,
             stage: "critical_unacknowledged",
-          });
-          created ? (enqueued += 1) : (suppressed += 1);
+          }));
         }
       }
 
+      // 2. internal response targets exceeded
       const sla = evaluateCaseSla(aggregate, stored.events, settings?.sla ?? this.#fallbackSla, now);
       for (const checkpoint of sla.checkpoints) {
         if (checkpoint.state !== "breached" || checkpoint.completedAt !== null) continue;
         const matched = rule(checkpoint.stage);
         if (!matched) continue;
-        const created = await this.#enqueueNotification(aggregate, {
+        const repeat = escalationRepeatIndex(matched, checkpoint.overdueMs);
+        // One notification per breach episode of a stage, plus bounded
+        // re-notifications while nobody has acted. Messages are stable per
+        // key so that re-evaluation yields an identical payload.
+        const key = `sla:${aggregate.id}:${checkpoint.stage}:${checkpoint.startedAt}`;
+        count(await this.#enqueueNotification(aggregate, {
           kind: "sla_breach",
-          // One notification per breach episode of a stage.
-          deliveryKey: `sla:${aggregate.id}:${checkpoint.stage}:${checkpoint.startedAt}`,
+          deliveryKey: repeat === 0 ? key : `${key}:r${repeat}`,
           recipientRoles: matched.notifyRoles,
-          // Stable per breach episode so that re-evaluation yields an
-          // identical payload for the same delivery key.
-          message: `Case ${aggregate.id} が内部対応期限（${checkpoint.stage}、期限 ${checkpoint.dueAt}）を超過しました。`,
+          message: repeat === 0
+            ? `Case ${aggregate.id} が内部対応期限（${checkpoint.stage}、期限 ${checkpoint.dueAt}）を超過しました。`
+            : `Case ${aggregate.id} が内部対応期限（${checkpoint.stage}、期限 ${checkpoint.dueAt}）を超過したまま対応されていません（再通知 ${repeat} 回目）。`,
           stage: checkpoint.stage,
-        });
-        created ? (enqueued += 1) : (suppressed += 1);
+        }));
+      }
+
+      // 3. the accountable person can no longer act (left / moved facility)
+      const unavailable = rule("assignee_unavailable");
+      if (unavailable) {
+        if (aggregate.assigneeId && !isAvailable(aggregate.assigneeId, facilityId)) {
+          count(await this.#enqueueNotification(aggregate, {
+            kind: "assignee_unavailable",
+            deliveryKey: `unavailable:${aggregate.id}:assignee:${aggregate.assigneeId}`,
+            recipientRoles: unavailable.notifyRoles,
+            message: `Case ${aggregate.id} の担当者が対応できない状態です（無効化または施設外）。担当変更が必要です。`,
+            stage: "assignee_unavailable",
+          }));
+        }
+        if (aggregate.handoffTargetId && !isAvailable(aggregate.handoffTargetId, facilityId)) {
+          count(await this.#enqueueNotification(aggregate, {
+            kind: "assignee_unavailable",
+            deliveryKey: `unavailable:${aggregate.id}:target:${aggregate.handoffTargetId}`,
+            recipientRoles: unavailable.notifyRoles,
+            message: `Case ${aggregate.id} の引継ぎ先が対応できない状態です（無効化または施設外）。引継ぎ先の変更が必要です。`,
+            stage: "assignee_unavailable",
+          }));
+        }
       }
     }
 
@@ -1146,7 +1260,7 @@ export class CareOpsPlatformService {
 
   async #enqueueCritical(aggregate: CaseAggregate): Promise<void> {
     const settings = aggregate.facilityId ? await this.#settings.get(aggregate.tenantId, aggregate.facilityId) : null;
-    const rule = settings?.escalationRules.find((item) => item.trigger === "critical_unacknowledged" && item.enabled);
+    const rule = effectiveEscalationRules(settings?.escalationRules).find((item) => item.trigger === "critical_unacknowledged" && item.enabled);
     if (!rule) return;
     await this.#enqueueNotification(aggregate, {
       kind: "critical_unacknowledged",

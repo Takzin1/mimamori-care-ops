@@ -260,3 +260,25 @@ test("HTTP: notes carry evidence and the detail lists every evidence reference",
   assert.deepEqual(detail.body.evidence.map((item: { source: string; kind: string; ref: string; actorId: string; sequence: number }) => [item.sequence, item.source, item.kind, item.ref, item.actorId]),
     [[2, "note_added", "call", "call-log:synthetic-7", "staff-sakura-desk"]]);
 });
+
+test("HTTP: escalation rules accept bounded re-notification settings", async () => {
+  const instance = await app();
+  const lead = client(instance, "dev-supervisor-sakura");
+  const settings = await lead("GET", "/settings/facilities/facility-sakura");
+  assert.ok(settings.body.escalationRules.some((rule: { trigger: string }) => rule.trigger === "assignee_unavailable"));
+  const rules = settings.body.escalationRules.map((rule: { trigger: string }) =>
+    rule.trigger === "acknowledge" ? { ...rule, repeatEveryMinutes: 15, maxRepeats: 2 } : rule);
+  const saved = await lead("POST", "/settings/facilities/facility-sakura", { expectedVersion: settings.body.version, escalationRules: rules });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(
+    saved.body.escalationRules.find((rule: { trigger: string }) => rule.trigger === "acknowledge"),
+    { trigger: "acknowledge", enabled: true, notifyRoles: ["supervisor", "dispatcher"], repeatEveryMinutes: 15, maxRepeats: 2 },
+  );
+  for (const bad of [{ repeatEveryMinutes: -1 }, { repeatEveryMinutes: 100000 }, { repeatEveryMinutes: 5, maxRepeats: 99 }, { repeatEveryMinutes: 1.5 }]) {
+    const response = await lead("POST", "/settings/facilities/facility-sakura", {
+      expectedVersion: saved.body.version,
+      escalationRules: [{ trigger: "acknowledge", enabled: true, notifyRoles: ["supervisor"], ...bad }],
+    });
+    assert.equal(response.status, 400, JSON.stringify(bad));
+  }
+});

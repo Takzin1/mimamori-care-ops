@@ -681,10 +681,10 @@ export class SqliteOutboxStore implements ListableOutboxStore {
     });
   }
 
-  async list(tenantId: string, limit = 200): Promise<OutboxListEntry[]> {
+  async list(tenantId: string, limit = 200, topic?: string): Promise<OutboxListEntry[]> {
     return this.#store.db
-      .prepare("select * from care_outbox where tenant_id = ? order by id desc limit ?")
-      .all(tenantId, limit)
+      .prepare("select * from care_outbox where tenant_id = ? and (? is null or topic = ?) order by id desc limit ?")
+      .all(tenantId, topic ?? null, topic ?? null, limit)
       .map(outboxRow);
   }
 }

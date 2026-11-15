@@ -15,7 +15,7 @@ import {
   InMemoryOutboxStore,
   InMemorySignalStore,
   InMemoryStaffNotificationInbox,
-  InMemoryTenantMembershipDirectory,
+  MutableTenantMembershipDirectory,
   InvalidTransitionError,
   RuleBasedDraftProvider,
   defaultFacilitySettings,
@@ -43,7 +43,7 @@ function setup(options: { ai?: AiDraftProvider; channels?: StaffNotificationChan
   const clock = new Clock();
   let seq = 0;
   const newId = () => `id${String(++seq).padStart(4, "0")}`;
-  const memberships = new InMemoryTenantMembershipDirectory([
+  const memberships = new MutableTenantMembershipDirectory([
     m("p-disp", "dispatcher-a", ["dispatcher"], ["fac-a"]),
     m("p-resp-a", "responder-a", ["responder"], ["fac-a"]),
     m("p-resp-b", "responder-b", ["responder"], ["fac-a"]),
@@ -76,7 +76,11 @@ function setup(options: { ai?: AiDraftProvider; channels?: StaffNotificationChan
     notificationRetryDelayMs: 60_000,
   });
   const ctx = (principalId: string, tenantId = TENANT) => ({ tenantId, principalId });
-  return { platform, clock, ctx, outbox, inbox };
+  const directory = {
+    set: (membership: TenantMembership) => memberships.set(membership),
+    update: (principalId: string, patch: Parameters<typeof memberships.update>[2], tenantId = TENANT) => memberships.update(tenantId, principalId, patch),
+  };
+  return { platform, clock, ctx, outbox, inbox, directory };
 }
 
 async function openCase(env: ReturnType<typeof setup>, overrides: Partial<{ priority: "critical" | "high" | "normal" | "low"; subjectId: string; facilityId: string }> = {}) {
@@ -525,18 +529,92 @@ test("signals can be dismissed with a reason by intake roles only", async () => 
   await assert.rejects(platform.createCaseFromSignal(ctx("p-disp"), signal.signal.id, { priority: "low" }), CareOpsConflictError);
 });
 
-test("escalation re-evaluation is idempotent for critical and SLA notifications", async () => {
+test("escalation re-evaluation is idempotent; unacknowledged critical Cases are re-notified on a bounded schedule", async () => {
   const env = setup();
   const { platform, ctx, clock } = env;
-  await openCase(env, { priority: "critical" });
-  clock.advance(10);
+  const created = await openCase(env, { priority: "critical" });
+  clock.advance(6);
   const first = await platform.runEscalations(ctx("p-sup"));
   assert.ok(first.suppressedDuplicates >= 1, "creation-time critical notification is not duplicated");
   const second = await platform.runEscalations(ctx("p-sup"));
   assert.equal(second.enqueued, 0);
-  const inbox = await platform.notifications(ctx("p-sup"));
+  let inbox = await platform.notifications(ctx("p-sup"));
   assert.equal(inbox.filter((item) => item.kind === "critical_unacknowledged").length, 1);
   assert.ok(inbox.some((item) => item.kind === "sla_breach"), "acknowledge target (5 min, provisional) breached");
+
+  // still nobody acknowledges → one re-notification per interval (default 10 min, max 3)
+  clock.advance(6);
+  const third = await platform.runEscalations(ctx("p-sup"));
+  assert.equal(third.enqueued, 1);
+  assert.equal((await platform.runEscalations(ctx("p-sup"))).enqueued, 0, "the same re-notification is not repeated");
+  inbox = await platform.notifications(ctx("p-sup"));
+  const critical = inbox.filter((item) => item.kind === "critical_unacknowledged");
+  assert.equal(critical.length, 2);
+  assert.ok(critical.some((item) => item.message.includes("再通知 1 回目")));
+
+  clock.advance(600);
+  await platform.runEscalations(ctx("p-sup"));
+  clock.advance(600);
+  await platform.runEscalations(ctx("p-sup"));
+  inbox = await platform.notifications(ctx("p-sup"));
+  assert.equal(inbox.filter((item) => item.kind === "critical_unacknowledged").length, 3, "re-notifications are bounded (latest due only, max 3)");
+
+  // once a human acknowledges, critical re-notification stops
+  await platform.execute(ctx("p-sup"), created.id, created.version, { type: "acknowledge" });
+  clock.advance(60);
+  const after = await platform.runEscalations(ctx("p-sup"));
+  inbox = await platform.notifications(ctx("p-sup"));
+  assert.equal(inbox.filter((item) => item.kind === "critical_unacknowledged").length, 3);
+  assert.ok(after.enqueued >= 1, "the next stage (assign) is now tracked instead");
+});
+
+test("unavailable assignees are detected, notified once, and resolved by reassignment", async () => {
+  const env = setup();
+  const { platform, ctx } = env;
+  let aggregate = await openCase(env);
+  aggregate = (await platform.execute(ctx("p-sup"), aggregate.id, aggregate.version, { type: "acknowledge" })).aggregate;
+  aggregate = (await platform.execute(ctx("p-sup"), aggregate.id, aggregate.version, { type: "assign", assigneeId: "responder-a" })).aggregate;
+  let dashboard = await platform.dashboard(ctx("p-sup"));
+  assert.equal(dashboard.counts.assigneeUnavailable, 0);
+
+  env.directory.update("p-resp-a", { active: false }); // 退職
+  dashboard = await platform.dashboard(ctx("p-sup"));
+  assert.equal(dashboard.counts.assigneeUnavailable, 1);
+  assert.equal(dashboard.attention[0]!.assigneeUnavailable, true);
+  assert.equal((await platform.listCases(ctx("p-sup"), { sort: "createdAt" })).items[0]!.assigneeUnavailable, true);
+
+  const run = await platform.runEscalations(ctx("p-sup"));
+  assert.ok(run.enqueued >= 1);
+  await platform.runEscalations(ctx("p-sup"));
+  const inbox = await platform.notifications(ctx("p-sup"));
+  assert.equal(inbox.filter((item) => item.kind === "assignee_unavailable").length, 1, "notified once per unavailable assignee");
+  assert.ok(!inbox.some((item) => item.message.includes("resident-ref")));
+
+  aggregate = (await platform.execute(ctx("p-sup"), aggregate.id, aggregate.version, { type: "reassign", assigneeId: "responder-b", reason: "退職のため" })).aggregate;
+  assert.equal((await platform.dashboard(ctx("p-sup"))).counts.assigneeUnavailable, 0);
+
+  // a transferred handoff target is detected too
+  aggregate = (await platform.execute(ctx("p-resp-b"), aggregate.id, aggregate.version, { type: "start_action" })).aggregate;
+  env.directory.set(m("p-resp-c", "responder-c", ["responder"], ["fac-a"]));
+  aggregate = (await platform.execute(ctx("p-resp-b"), aggregate.id, aggregate.version, { type: "request_handoff", targetAssigneeId: "responder-c", note: "申し送り" })).aggregate;
+  env.directory.update("p-resp-c", { facilityIds: ["fac-b"] }); // 施設異動
+  assert.equal((await platform.dashboard(ctx("p-sup"))).counts.assigneeUnavailable, 1);
+});
+
+test("delivery problems are visible to supervisors on the dashboard only", async () => {
+  const broken: StaffNotificationChannel = { name: "broken", async deliver() { throw new Error("down"); } };
+  const env = setup({ channels: [broken] });
+  await openCase(env, { priority: "critical" });
+  let dashboard = await env.platform.dashboard(env.ctx("p-sup"));
+  assert.deepEqual(dashboard.delivery, { failed: 1, deadLetter: 0 });
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    env.clock.advance(2);
+    await env.platform.deliverNotifications(TENANT);
+  }
+  dashboard = await env.platform.dashboard(env.ctx("p-sup"));
+  assert.ok(dashboard.delivery!.deadLetter >= 1);
+  assert.equal((await env.platform.dashboard(env.ctx("p-disp"))).delivery, null, "delivery status is not exposed to other roles");
+  assert.equal((await env.platform.dashboard(env.ctx("p-sup-x"))).delivery!.deadLetter, 0, "other facility sees none");
 });
 
 test("double submit with the same clientRequestId never creates a duplicate Case", async () => {

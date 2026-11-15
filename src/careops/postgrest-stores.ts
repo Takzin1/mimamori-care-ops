@@ -299,10 +299,11 @@ export class PostgrestListableOutboxStore extends PostgrestOutboxStore implement
     this.#client = client;
   }
 
-  async list(tenantId: string, limit = 200): Promise<OutboxListEntry[]> {
+  async list(tenantId: string, limit = 200, topic?: string): Promise<OutboxListEntry[]> {
     const rows = await this.#client.select<OutboxRow>("care_outbox", {
       select: "id,tenant_id,topic,delivery_key,payload,status,attempt_count,max_attempts,available_at,claimed_at,lease_until,worker_id,last_error,delivered_at",
       tenant_id: eq(tenantId),
+      ...(topic ? { topic: eq(topic) } : {}),
       order: "id.desc",
     }, limit);
     return rows.map((row) => ({

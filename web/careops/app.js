@@ -55,6 +55,7 @@ function flags(item) {
     item.needsHumanReview ? h("span", { class: "badge flag-review" }, "⚠ 要確認（重大・未確認）") : null,
     item.hasActiveBreach ? h("span", { class: "badge flag-breach" }, "⏰ 期限超過") : null,
     item.escalated ? h("span", { class: "badge flag-escalated" }, "⬆ エスカレーション中") : null,
+    item.assigneeUnavailable ? h("span", { class: "badge flag-breach" }, "👤 担当者不在") : null,
   ];
 }
 
@@ -209,7 +210,17 @@ async function dashboardView() {
       tile("エスカレーション中", c.escalated, `#/cases?escalated=true&open=true${facility}`, "alert"),
       tile("解決済み", c.resolved, `#/cases?status=COMPLETED${facility}`, "ok"),
       tile("未処理の通知", dashboard.pendingSignals, "#/inbox", "info"),
+      tile("担当者不在", c.assigneeUnavailable, `#/cases?open=true${facility}`, c.assigneeUnavailable > 0 ? "alert" : "ok"),
+      dashboard.delivery
+        ? tile("通知未到達", dashboard.delivery.failed + dashboard.delivery.deadLetter, "#/settings", dashboard.delivery.failed + dashboard.delivery.deadLetter > 0 ? "alert" : "ok")
+        : null,
     ),
+    c.assigneeUnavailable > 0
+      ? h("p", { class: "callout callout-danger", role: "alert" }, `担当者が対応できない状態のCaseが ${c.assigneeUnavailable} 件あります（退職・異動など）。担当変更が必要です。`)
+      : null,
+    dashboard.delivery && dashboard.delivery.deadLetter > 0
+      ? h("p", { class: "callout callout-warn", role: "note" }, `職員向け通知 ${dashboard.delivery.deadLetter} 件が届いていません（再試行の上限に到達）。設定画面の「通知の送信状況」を確認してください。`)
+      : null,
     h("p", { class: "mine" }, `あなたの担当: ${dashboard.mine.assigned} 件 / あなた宛の引継ぎ（未受領）: ${dashboard.mine.incomingHandoffs} 件`),
     h("h2", {}, "優先して確認するCase"),
     dashboard.attention.length
@@ -619,11 +630,17 @@ async function caseDetailView(caseId) {
     h("a", { href: "#/cases", class: "btn btn-link" }, "← Case一覧へ"),
     pageHeader(`Case ${a.id.slice(0, 13)}`),
     h("div", { class: "card-row status-row" }, statusBadge(a.status), priorityBadge(a.priority),
-      ...flags({ needsHumanReview: a.priority === "critical" && a.status === "NEW", hasActiveBreach: sla.hasActiveBreach, escalated: Boolean(a.escalation) })),
+      ...flags({ needsHumanReview: a.priority === "critical" && a.status === "NEW", hasActiveBreach: sla.hasActiveBreach, escalated: Boolean(a.escalation), assigneeUnavailable: detail.ownership.assigneeUnavailable || detail.ownership.handoffTargetUnavailable })),
     a.priority === "critical" && a.status === "NEW"
       ? h("p", { class: "callout callout-danger", role: "alert" }, "重大なCaseです。職員が状況を確認し、判断を記録してください。システムやAIは緊急性の最終判断を行いません。")
       : null,
     a.escalation ? h("p", { class: "callout callout-warn" }, `エスカレーション中: ${a.escalation.reason}（${a.escalation.escalatedBy} / ${formatDateTime(a.escalation.escalatedAt)}）`) : null,
+    detail.ownership.assigneeUnavailable
+      ? h("p", { class: "callout callout-danger", role: "alert" }, "現在の担当者は対応できない状態です（無効化または施設外）。管理者・受付による担当変更が必要です。")
+      : null,
+    detail.ownership.handoffTargetUnavailable
+      ? h("p", { class: "callout callout-danger", role: "alert" }, "引継ぎ先は対応できない状態です。引継ぎの取消または担当変更が必要です。")
+      : null,
     sla.hasActiveBreach ? h("p", { class: "callout callout-danger" }, `内部対応期限を超過しています: ${sla.breachedStages.map((stage) => STAGE[stage]).join("、")}`) : null,
     detail.slaApproved ? null : h("p", { class: "callout callout-warn", role: "note" }, "この施設の対応期限は仮設定（未承認）です。臨床的な基準ではありません。"),
 
@@ -830,6 +847,9 @@ async function settingsView() {
     h("td", {}, h("input", { type: "checkbox", name: `rule.${rule.trigger}.enabled`, checked: rule.enabled, disabled: !editable, "aria-label": `${STAGE[rule.trigger]} 有効` })),
     h("td", {}, Object.keys(ROLE).map((role) => h("label", { class: "inline-check" },
       h("input", { type: "checkbox", name: `rule.${rule.trigger}.role.${role}`, checked: rule.notifyRoles.includes(role), disabled: !editable }), ROLE[role]))),
+    h("td", {}, rule.trigger === "assignee_unavailable"
+      ? "—"
+      : h("input", { type: "number", min: "0", max: "1440", step: "1", name: `rule.${rule.trigger}.repeat`, value: String(rule.repeatEveryMinutes ?? 0), disabled: !editable, "aria-label": `${STAGE[rule.trigger]} 再通知間隔（分、0は再通知なし）` })),
   ));
 
   const form = h("form", { class: "panel" },
@@ -841,7 +861,8 @@ async function settingsView() {
         : "対応期限は仮設定（未承認）です。初期値に臨床的妥当性はありません。施設で検討のうえ承認してください。閾値を変更すると再承認が必要になります。"),
     h("div", { class: "table-wrap" }, slaTable),
     h("h3", {}, "通知・エスカレーションのルール"),
-    h("div", { class: "table-wrap" }, h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "契機"), h("th", {}, "有効"), h("th", {}, "通知先ロール"))), h("tbody", {}, ruleRows))),
+    h("div", { class: "table-wrap" }, h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "契機"), h("th", {}, "有効"), h("th", {}, "通知先ロール"), h("th", {}, "再通知間隔（分・0=なし）"))), h("tbody", {}, ruleRows))),
+    h("p", { class: "hint" }, "誰も対応しない状態が続く間、設定した間隔で再通知します（最大3回）。間隔は施設の運用に合わせた仮の値で、臨床的な基準ではありません。"),
     h("h3", {}, "通知の受付ルール"),
     h("fieldset", {}, h("legend", {}, "自動でCaseを作成する通知種別"),
       Object.entries(SIGNAL_TYPE).map(([type, label]) => h("label", { class: "inline-check" }, h("input", { type: "checkbox", name: `auto.${type}`, checked: settings.autoCreateCaseFor.includes(type), disabled: !editable }), label))),
@@ -868,6 +889,9 @@ async function settingsView() {
         trigger: rule.trigger,
         enabled: data.get(`rule.${rule.trigger}.enabled`) === "on",
         notifyRoles: Object.keys(ROLE).filter((role) => data.get(`rule.${rule.trigger}.role.${role}`) === "on"),
+        ...(Number(data.get(`rule.${rule.trigger}.repeat`)) > 0
+          ? { repeatEveryMinutes: Math.round(Number(data.get(`rule.${rule.trigger}.repeat`))), maxRepeats: rule.maxRepeats ?? 3 }
+          : {}),
       })),
       autoCreateCaseFor: Object.keys(SIGNAL_TYPE).filter((type) => data.get(`auto.${type}`) === "on"),
       linkDuplicateSignals: data.get("linkDuplicateSignals") === "on",
@@ -1056,6 +1080,7 @@ async function fillAttentionStrip(strip) {
       item("引継ぎ未受領", c.handoffPending, "#/handoffs", "warn"),
       item("期限超過", c.overdue, "#/cases?breached=true&open=true", "alert"),
       c.needsHumanReview > 0 ? item("重大・要確認", c.needsHumanReview, "#/cases?priority=critical&status=NEW", "alert") : null,
+      c.assigneeUnavailable > 0 ? item("担当者不在", c.assigneeUnavailable, "#/dashboard", "alert") : null,
       h("span", { class: "strip-time" }, `最終更新 ${new Date().toLocaleTimeString("ja-JP")}`),
       h("button", { type: "button", class: "btn btn-small btn-secondary", on: { click: () => render() } }, "更新"),
     );

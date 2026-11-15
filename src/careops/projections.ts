@@ -34,6 +34,8 @@ export interface CareOpsCaseListItem {
   escalated: boolean;
   /** critical and still unacknowledged: a human must look now. */
   needsHumanReview: boolean;
+  /** Assignee or handoff target can no longer act on this Case. */
+  assigneeUnavailable: boolean;
   hasActiveBreach: boolean;
   breachedStages: SlaStage[];
   currentStage: SlaStage | null;
@@ -108,10 +110,26 @@ export function evaluateStoredCaseSla(
   );
 }
 
+/** true when the actor can currently act on Cases of the facility. */
+export type AvailabilityCheck = (actorId: string, facilityId: string | null) => boolean;
+
+export function hasUnavailableOwner(
+  aggregate: CaseAggregate,
+  isAvailable: AvailabilityCheck | undefined,
+): boolean {
+  if (!isAvailable || !isOpenCaseStatus(aggregate.status)) return false;
+  const facilityId = aggregate.facilityId ?? null;
+  return Boolean(
+    (aggregate.assigneeId && !isAvailable(aggregate.assigneeId, facilityId)) ||
+    (aggregate.handoffTargetId && !isAvailable(aggregate.handoffTargetId, facilityId)),
+  );
+}
+
 export function toCaseListItem(
   stored: StoredCase,
   policyFor: SlaPolicyResolver,
   now: string,
+  isAvailable?: AvailabilityCheck,
 ): CareOpsCaseListItem {
   const aggregate = stored.aggregate;
   const sla = evaluateStoredCaseSla(stored, policyFor, now);
@@ -132,6 +150,7 @@ export function toCaseListItem(
     lastCheckedAt: aggregate.lastCheckedAt ?? null,
     escalated: Boolean(aggregate.escalation),
     needsHumanReview: aggregate.priority === "critical" && aggregate.status === "NEW",
+    assigneeUnavailable: hasUnavailableOwner(aggregate, isAvailable),
     hasActiveBreach: sla.hasActiveBreach,
     breachedStages: [...sla.breachedStages],
     currentStage: sla.currentStage,
@@ -153,6 +172,7 @@ function compareAttention(a: CareOpsCaseListItem, b: CareOpsCaseListItem): numbe
   const openB = isOpenCaseStatus(b.status) ? 0 : 1;
   if (openA !== openB) return openA - openB;
   if (a.needsHumanReview !== b.needsHumanReview) return a.needsHumanReview ? -1 : 1;
+  if (a.assigneeUnavailable !== b.assigneeUnavailable) return a.assigneeUnavailable ? -1 : 1;
   if (a.hasActiveBreach !== b.hasActiveBreach) return a.hasActiveBreach ? -1 : 1;
   if (a.escalated !== b.escalated) return a.escalated ? -1 : 1;
   const priority = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
@@ -190,6 +210,7 @@ export function searchCases(
   filter: CaseListFilter,
   policyFor: SlaPolicyResolver,
   now: string,
+  isAvailable?: AvailabilityCheck,
 ): CaseListPage {
   const pageSize = Math.min(Math.max(1, Math.trunc(filter.pageSize ?? 20)), MAX_PAGE_SIZE);
   const query = filter.query?.trim().toLowerCase() ?? "";
@@ -197,7 +218,7 @@ export function searchCases(
   const toMs = filter.createdTo ? Date.parse(filter.createdTo) : null;
 
   const items = cases
-    .map((stored) => toCaseListItem(stored, policyFor, now))
+    .map((stored) => toCaseListItem(stored, policyFor, now, isAvailable))
     .filter((item) => !filter.statuses?.length || filter.statuses.includes(item.status))
     .filter((item) => !filter.priorities?.length || filter.priorities.includes(item.priority))
     .filter((item) => !filter.openOnly || isOpenCaseStatus(item.status))
@@ -255,8 +276,15 @@ export interface CareOpsDashboard {
     overdue: number;
     escalated: number;
     needsHumanReview: number;
+    /** Open Cases whose assignee / handoff target can no longer act. */
+    assigneeUnavailable: number;
     openTotal: number;
   };
+  /**
+   * Staff-notification delivery problems (supervisors only; null for
+   * roles that may not see delivery status).
+   */
+  delivery: { failed: number; deadLetter: number } | null;
   byPriority: Record<CasePriority, number>;
   mine: {
     assigned: number;
@@ -274,9 +302,11 @@ export function projectDashboard(input: {
   actorId: string;
   facilityId: string | null;
   pendingSignals: number;
+  isAvailable?: AvailabilityCheck;
+  delivery?: { failed: number; deadLetter: number } | null;
 }): CareOpsDashboard {
   const items = input.cases
-    .map((stored) => toCaseListItem(stored, input.policyFor, input.now))
+    .map((stored) => toCaseListItem(stored, input.policyFor, input.now, input.isAvailable))
     .filter((item) => !input.facilityId || item.facilityId === input.facilityId);
   const open = items.filter((item) => isOpenCaseStatus(item.status));
 
@@ -298,6 +328,7 @@ export function projectDashboard(input: {
       overdue: open.filter((item) => item.hasActiveBreach).length,
       escalated: open.filter((item) => item.escalated).length,
       needsHumanReview: open.filter((item) => item.needsHumanReview).length,
+      assigneeUnavailable: open.filter((item) => item.assigneeUnavailable).length,
       openTotal: open.length,
     },
     byPriority,
@@ -307,6 +338,7 @@ export function projectDashboard(input: {
     },
     attention: [...open].sort(compareAttention).slice(0, 8),
     pendingSignals: input.pendingSignals,
+    delivery: input.delivery ?? null,
   };
 }
 
