@@ -9,6 +9,9 @@ export async function dispatchPersonalized(service,accessToken,method,path,body=
   if(method==="GET"&&p.length===8&&r==="residents")return service.residents(req);
   if(method==="GET"&&key&&r==="residents")return service.resident(req,key);
   if(method==="GET"&&key&&r==="sops")return service.sopHistory(req,key);
+  if(method==="GET"&&p.length===8&&r==="roleplays")return service.roleplays(req);
+  if(method==="GET"&&p.length===8&&r==="scenario-admin")return service.scenarioAdmin(req);
+  if(method==="GET"&&key&&r==="roleplay-sessions")return service.resumeRoleplay(req,key);
   if(method==="GET"&&p.length===8&&r==="academy")return service.academy(req);
   if(method==="GET"&&p.length===8&&r==="lesson-sources")return service.lessonSources(req);
   if(method==="GET"&&p.length===8&&r==="lesson-admin")return service.lessonAdmin(req);
@@ -23,6 +26,10 @@ export async function dispatchPersonalized(service,accessToken,method,path,body=
       case "sops":return service.putSop(req,body);
       case "sop-transitions":return service.transitionSop(req,body);
       case "resident-deletions":await service.deleteResident(req,body.resident_id,body.expected_version);return {deleted:true};
+      case "scenario-drafts":return service.draftScenario(req,body);
+      case "scenario-transitions":return service.transitionScenario(req,body);
+      case "roleplay-start":return service.startRoleplay(req,body);
+      case "roleplay-turn":return service.advanceRoleplay(req,body);
       case "lesson-drafts":return service.draftLesson(req,body);
       case "lesson-transitions":return service.transitionLesson(req,body);
       case "lesson-practice":return service.practiceLesson(req,body);

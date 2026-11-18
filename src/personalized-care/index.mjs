@@ -1,6 +1,7 @@
 // Isolated P0 slice: memory or explicitly supplied synthetic snapshot repository.
 import { retrieveSopEvidence, knowledgeCoverage } from "./knowledge.mjs";
 import { educationFields, lessonEvidence, reviewSchedule, learnerView } from "./academy.mjs";
+import { validateScenario,sessionView,nextStep,debrief } from "./roleplay.mjs";
 
 export const categories=["hospitality","greeting","request","life_consultation","room_visit","outing","family","equipment","complaint","report","handover","checkin","irregular","emergency"];
 
@@ -57,15 +58,15 @@ export function resolveGuide({profile,preferences,sops,category,actorRoles,asOf,
 
 // Synthetic snapshot format v1; scope rows are validated on load before use.
 export function encodeSnapshot(store){
-  return JSON.stringify({format:1,profiles:[...store.profiles],preferences:[...store.preferences],sops:[...store.sops],logs:[...store.logs],lessons:[...(store.lessons??new Map())],learning:[...(store.learning??new Map())],audit:store.audit});
+  return JSON.stringify({format:1,profiles:[...store.profiles],preferences:[...store.preferences],sops:[...store.sops],logs:[...store.logs],lessons:[...(store.lessons??new Map())],learning:[...(store.learning??new Map())],scenarios:[...(store.scenarios??new Map())],simulations:[...(store.simulations??new Map())],audit:store.audit});
 }
 export function decodeSnapshot(payload,t,f){
   let raw;try{raw=JSON.parse(payload);}catch{fail("SNAPSHOT_CORRUPT",500);}
   if(!raw||raw.format!==1||!Array.isArray(raw.audit))fail("SNAPSHOT_CORRUPT",500);
   const scope=x=>x&&x.tenant_id===t&&x.facility_id===f;
   const result={audit:raw.audit};
-  for(const [name,key] of [["profiles","resident_id"],["preferences","preference_id"],["sops","sop_id"],["logs","interaction_id"],["lessons","lesson_id"],["learning","progress_key"]]){
-    const rows=Object.hasOwn(raw,name)?raw[name]:["lessons","learning"].includes(name)?[]:undefined;if(!Array.isArray(rows))fail("SNAPSHOT_CORRUPT",500);
+  for(const [name,key] of [["profiles","resident_id"],["preferences","preference_id"],["sops","sop_id"],["logs","interaction_id"],["lessons","lesson_id"],["learning","progress_key"],["scenarios","scenario_id"],["simulations","session_key"]]){
+    const rows=Object.hasOwn(raw,name)?raw[name]:["lessons","learning","scenarios","simulations"].includes(name)?[]:undefined;if(!Array.isArray(rows))fail("SNAPSHOT_CORRUPT",500);
     const map=new Map();
     for(const entry of rows){
       if(!Array.isArray(entry)||entry.length!==2||typeof entry[0]!=="string"||map.has(entry[0]))fail("SNAPSHOT_CORRUPT",500);
@@ -77,12 +78,14 @@ export function decodeSnapshot(payload,t,f){
   }
   for(const v of [...result.preferences.values(),...result.logs.values()])if(!result.profiles.has(v.resident_id))fail("SNAPSHOT_CORRUPT",500);
   for(const p of result.learning.values())if(p.progress_key!==JSON.stringify([p.actor_id,p.lesson_id])||!result.lessons.has(p.lesson_id))fail("SNAPSHOT_CORRUPT",500);
+  for(const s of result.scenarios.values())if(!result.lessons.has(s.lesson_id))fail("SNAPSHOT_CORRUPT",500);
+  for(const p of result.simulations.values())if(p.session_key!==JSON.stringify([p.actor_id,p.session_id])||!result.scenarios.has(p.scenario_id))fail("SNAPSHOT_CORRUPT",500);
   return result;
 }
 
 export class PersonalizedCareService {
-  #auth;#members;#grant;#case;#binding;#clock;#snapshots;#scopes=new Map();#pending=new Set();
-  constructor({authenticator,memberships,facilityGrant,caseService=null,caseBinding=async()=>null,clock=()=>new Date().toISOString(),snapshotRepository=null}){this.#auth=authenticator;this.#members=memberships;this.#grant=facilityGrant;this.#case=caseService;this.#binding=caseBinding;this.#clock=clock;this.#snapshots=snapshotRepository;}
+  #auth;#members;#grant;#case;#binding;#clock;#snapshots;#scopes=new Map();#pending=new Set();#simulationEnabled;
+  constructor({authenticator,memberships,facilityGrant,caseService=null,caseBinding=async()=>null,clock=()=>new Date().toISOString(),snapshotRepository=null,syntheticRoleplay=false}){this.#simulationEnabled=syntheticRoleplay===true;this.#auth=authenticator;this.#members=memberships;this.#grant=facilityGrant;this.#case=caseService;this.#binding=caseBinding;this.#clock=clock;this.#snapshots=snapshotRepository;}
   #now(){return instant(this.#clock());}
   async #authorize(req,admin=false){
     const t=id(req.tenant_id),f=id(req.facility_id);
@@ -93,7 +96,7 @@ export class PersonalizedCareService {
     const r=m.roles.filter(x=>roles.includes(x)&&g.roles.includes(x));
     if(!r.length||admin&&!r.includes("supervisor"))fail("FORBIDDEN",403);
     const key=JSON.stringify([t,f]);
-    const fresh=()=>({profiles:new Map(),preferences:new Map(),sops:new Map(),logs:new Map(),lessons:new Map(),learning:new Map(),audit:[]});
+    const fresh=()=>({profiles:new Map(),preferences:new Map(),sops:new Map(),logs:new Map(),lessons:new Map(),learning:new Map(),scenarios:new Map(),simulations:new Map(),audit:[]});
     if(this.#snapshots){const context={principalId:p.principalId,actorId:id(m.actorId),roles:[...r],provider:p.provider,lineBinding:p.lineBinding??null};const raw=await this.#snapshots.load(t,f,context);const store=raw?decodeSnapshot(raw.payload,t,f):fresh();return {t,f,key,actor:context.actorId,roles:r,store,context,snapshotVersion:raw?.version??0};}
     if(!this.#scopes.has(key))this.#scopes.set(key,fresh());
     return {t,f,key,actor:id(m.actorId),roles:r,store:this.#scopes.get(key)};
@@ -278,6 +281,79 @@ export class PersonalizedCareService {
     a.store.learning.set(key,{progress_key:key,actor_id:a.actor,lesson_id:lid,tenant_id:a.t,facility_id:a.f,version:pv+1,practice_count:(old?.practice_count??0)+1,streak:plan.streak,due_at:plan.due_at,last_attempt_id:attempt,last_option_id:choice,feedback});
     await this.#audit(a,"lesson_practiced",lid);return clone(feedback);
   }
+  #simulationGate(){if(!this.#simulationEnabled)fail("NOT_FOUND",404);}
+  #simulationEvidence(a,s){
+    const l=a.store.lessons.get(s.lesson_id);
+    return l?.status==="APPROVED"&&l.revision===s.lesson_revision?this.#lessonSource(a,l):null;
+  }
+  async draftScenario(req,raw){
+    this.#simulationGate();const a=await this.#authorize(req,true),x=validateScenario(raw);
+    if(a.store.scenarios.has(x.scenario_id))fail("VERSION_CONFLICT",409);
+    if(a.store.scenarios.size>=100)fail("ACADEMY_LIMIT",413);
+    const l=a.store.lessons.get(x.lesson_id);
+    if(!l||l.status!=="APPROVED"||!this.#lessonSource(a,l))fail("LESSON_SOURCE_UNAVAILABLE",409);
+    const s={...x,tenant_id:a.t,facility_id:a.f,lesson_revision:l.revision,status:"DRAFT",revision:1,author_id:a.actor,approved_by:null,created_at:this.#now()};
+    a.store.scenarios.set(s.scenario_id,s);await this.#audit(a,"simulation_drafted",s.scenario_id);return clone(s);
+  }
+  async transitionScenario(req,raw){
+    this.#simulationGate();const a=await this.#authorize(req,true),x=obj(raw),sid=id(x.scenario_id),s=a.store.scenarios.get(sid);
+    if(!s)fail("NOT_FOUND",404);
+    if(Object.keys(x).sort().join(",")!=="expected_revision,human_confirmed,scenario_id,status"||x.human_confirmed!==true)fail("HUMAN_CONFIRMATION_REQUIRED");
+    if(ver(x.expected_revision,1)!==s.revision)fail("VERSION_CONFLICT",409);
+    const next=one(x.status,["APPROVED","ARCHIVED"]);
+    if(s.status==="ARCHIVED"||next==="APPROVED"&&s.status!=="DRAFT")fail("INVALID_TRANSITION",409);
+    if(next==="APPROVED"){if(s.author_id===a.actor)fail("INDEPENDENT_REVIEW_REQUIRED",403);if(!this.#simulationEvidence(a,s))fail("LESSON_SOURCE_UNAVAILABLE",409);}
+    const updated={...s,status:next,revision:s.revision+1,approved_by:next==="APPROVED"?a.actor:s.approved_by};
+    a.store.scenarios.set(sid,updated);await this.#audit(a,"simulation_"+next.toLowerCase(),sid);return clone(updated);
+  }
+  async scenarioAdmin(req){
+    this.#simulationGate();const a=await this.#authorize(req,true);
+    const items=[...a.store.scenarios.values()].map(s=>({...s,source_current:!!this.#simulationEvidence(a,s),can_approve:s.status==="DRAFT"&&s.author_id!==a.actor&&!!this.#simulationEvidence(a,s)}));
+    await this.#audit(a,"simulation_admin_read","scope");return clone(items);
+  }
+  async roleplays(req){
+    this.#simulationGate();const a=await this.#authorize(req),items=[];
+    for(const s of a.store.scenarios.values()){
+      if(s.status!=="APPROVED"||!this.#simulationEvidence(a,s))continue;
+      const sessions=[...a.store.simulations.values()].filter(p=>p.actor_id===a.actor&&p.scenario_id===s.scenario_id&&p.scenario_revision===s.revision);
+      const active=sessions.find(p=>p.node!==null);
+      items.push({scenario_id:s.scenario_id,title:s.title,objective:s.objective,revision:s.revision,active_session_id:active?.session_id??null,completed_count:sessions.filter(p=>p.node===null).length});
+    }
+    await this.#audit(a,"simulation_list","scope");return clone({items,mode:"SCRIPTED",training_only:true});
+  }
+  #playable(a,s){if(!s||s.status!=="APPROVED")fail("NOT_FOUND",404);const e=this.#simulationEvidence(a,s);if(!e)fail("LESSON_SOURCE_UNAVAILABLE",409);return e;}
+  #simulationResult(s,p,e){return {...sessionView(s,p),debrief:p.node===null?debrief(s,p,e):null};}
+  async startRoleplay(req,raw){
+    this.#simulationGate();const a=await this.#authorize(req),x=obj(raw),sid=id(x.scenario_id),session=id(x.session_id);
+    if(Object.keys(x).sort().join(",")!=="expected_revision,scenario_id,session_id")fail("INVALID_SIMULATION_REQUEST");
+    const s=a.store.scenarios.get(sid),e=this.#playable(a,s);
+    if(ver(x.expected_revision,1)!==s.revision)fail("VERSION_CONFLICT",409);
+    const key=JSON.stringify([a.actor,session]),old=a.store.simulations.get(key);
+    if(old){if(old.scenario_id!==sid||old.scenario_revision!==s.revision)fail("IDEMPOTENCY_CONFLICT",409);await this.#audit(a,"simulation_start_replayed",sid);return clone(this.#simulationResult(s,old,e));}
+    if([...a.store.simulations.values()].some(p=>p.actor_id===a.actor&&p.scenario_id===sid&&p.scenario_revision===s.revision&&p.node!==null))fail("SIMULATION_IN_PROGRESS",409);
+    if(a.store.simulations.size>=3000)fail("ACADEMY_LIMIT",413);
+    const p={session_key:key,session_id:session,actor_id:a.actor,scenario_id:sid,scenario_revision:s.revision,tenant_id:a.t,facility_id:a.f,version:1,node:0,transcript:[],last_choice_id:null,last_attempt_id:null};
+    a.store.simulations.set(key,p);await this.#audit(a,"simulation_started",sid);return clone(this.#simulationResult(s,p,e));
+  }
+  async resumeRoleplay(req,sid){
+    this.#simulationGate();const a=await this.#authorize(req),key=JSON.stringify([a.actor,id(sid)]),p=a.store.simulations.get(key);
+    if(!p)fail("NOT_FOUND",404);const s=a.store.scenarios.get(p.scenario_id),e=this.#playable(a,s);
+    if(s.revision!==p.scenario_revision)fail("VERSION_CONFLICT",409);
+    await this.#audit(a,"simulation_resumed",p.scenario_id);return clone(this.#simulationResult(s,p,e));
+  }
+  async advanceRoleplay(req,raw){
+    this.#simulationGate();const a=await this.#authorize(req),x=obj(raw),key=JSON.stringify([a.actor,id(x.session_id)]),choice=id(x.choice_id),attempt=id(x.attempt_id);
+    if(Object.keys(x).sort().join(",")!=="attempt_id,choice_id,expected_version,session_id")fail("INVALID_SIMULATION_REQUEST");
+    const p=a.store.simulations.get(key);if(!p)fail("NOT_FOUND",404);
+    const s=a.store.scenarios.get(p.scenario_id),e=this.#playable(a,s);
+    if(s.revision!==p.scenario_revision)fail("VERSION_CONFLICT",409);
+    const v=ver(x.expected_version,1);
+    if(p.last_attempt_id===attempt){if(p.last_choice_id!==choice||p.version!==v+1)fail("IDEMPOTENCY_CONFLICT",409);await this.#audit(a,"simulation_turn_replayed",s.scenario_id);return clone(this.#simulationResult(s,p,e));}
+    if(v!==p.version)fail("VERSION_CONFLICT",409);
+    if(p.node===null)fail("SIMULATION_COMPLETED",409);
+    const updated={...nextStep(s,p,choice),last_choice_id:choice,last_attempt_id:attempt};
+    a.store.simulations.set(key,updated);await this.#audit(a,"simulation_turn",s.scenario_id);return clone(this.#simulationResult(s,updated,e));
+  }
   async searchKnowledge(req,raw){
     const a=await this.#authorize(req),x=obj(raw);
     if(Object.keys(x).sort().join(",")!=="category,query")fail("INVALID_KNOWLEDGE_REQUEST");
@@ -294,7 +370,7 @@ export class PersonalizedCareService {
   }
   async operator(req){
     const a=await this.#authorize(req);
-    return {roles:[...a.roles].sort(cmp),can_review:a.roles.includes("supervisor"),can_attempt_promotion:!this.#snapshots&&!!this.#case&&a.roles.some(r=>r==="supervisor"||r==="dispatcher"),synthetic_persistence:!!this.#snapshots};
+    return {roles:[...a.roles].sort(cmp),can_review:a.roles.includes("supervisor"),can_attempt_promotion:!this.#snapshots&&!!this.#case&&a.roles.some(r=>r==="supervisor"||r==="dispatcher"),synthetic_persistence:!!this.#snapshots,synthetic_roleplay:this.#simulationEnabled};
   }
   async followups(req){
     const a=await this.#authorize(req);
@@ -338,4 +414,20 @@ export async function seedDemo(service,req){
 export async function seedAcademyDemo(service,author,reviewer){
  await service.draftLesson(author,{lesson_id:"morning-choice-1",category:"greeting",title:"本人の希望を尊重する",objective:"登録済みの希望と現在の意思を区別する",scenario:"架空の入居者が、普段の起床時刻とは違う時間まで休みたいと話しました。最初に何を確認しますか？",options:[{option_id:"a",text:"登録された時刻だけで対応を決める"},{option_id:"b",text:"現在の本人の希望を確認し、施設の承認済み手順を確認する"},{option_id:"c",text:"必要な確認を自動的に取り消す"}],correct_option_id:"b",rationale:"本人が今伝えた希望を確認することが第一歩です。安全基準との矛盾や不明点は責任者に相談します。",reflection_prompt:"自分の施設では、本人の希望が変わったとき誰に確認しますか？",evidence:{sop_id:"morning",version:1,revision:3,field:"steps",index:0},pii_reviewed:true});
  await service.transitionLesson(reviewer,{lesson_id:"morning-choice-1",expected_revision:1,status:"APPROVED",human_confirmed:true});
+}
+
+/** Fictional demonstration only. Requires the independently approved morning-choice-1 lesson. */
+export async function seedRoleplayDemo(service,author,reviewer){
+ await service.draftScenario(author,{scenario_id:"morning-conversation-1",lesson_id:"morning-choice-1",title:"朝の声かけ：本人の希望が変わった日",objective:"共感・確認・説明を練習する",reflection_prompt:"相手の希望と施設の手順を両立するため、どのように声をかけますか？",pii_reviewed:true,nodes:[
+ {prompt:"おはようございます。今日はもう少し休みたいのですが……。",choices:[
+ {choice_id:"listen",text:"そうなのですね。今日はどのくらい休みたいですか？",reply:"9時頃までゆっくりしたいです。",coaching:"本人の現在の希望を聞く姿勢を確認しましょう。",next:1},
+ {choice_id:"routine",text:"いつもと同じ時間ですよ。",reply:"今日は少し違う気分なんです。",coaching:"過去の希望を理由に現在の希望を決めつけていないか振り返りましょう。",next:2}]},
+ {prompt:"9時頃まで休めたらうれしいです。",choices:[
+ {choice_id:"explain",text:"ご希望を確認しました。施設の手順を確認して、必要なことは説明しますね。",reply:"わかりました。ありがとう。",coaching:"希望の確認と必要な手順の確認を区別できています。",next:null},
+ {choice_id:"promise",text:"では、確認はすべてなしにしておきますね。",reply:"そうして大丈夫なのですか？",coaching:"必要な確認を独断で取り消すのではなく、施設の手順を確認しましょう。",next:null}]},
+ {prompt:"いつも通りにしないといけませんか？",choices:[
+ {choice_id:"repair",text:"決めつけてすみません。今のご希望を教えてください。",reply:"今日は少し遅く起きたいです。",coaching:"相手の気持ちに応答し、会話を修復することを練習しましょう。",next:null},
+ {choice_id:"dismiss",text:"決まっていることなので、このままにします。",reply:"そうですか……。",coaching:"本人の希望と施設の手順は別々に確認しましょう。",next:null}]}
+ ]});
+ await service.transitionScenario(reviewer,{scenario_id:"morning-conversation-1",expected_revision:1,status:"APPROVED",human_confirmed:true});
 }

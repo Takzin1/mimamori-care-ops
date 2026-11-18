@@ -12,8 +12,8 @@ async function api(path,body){
 function fill(id,items){const root=$(id);root.replaceChildren();for(const text of items){const li=document.createElement("li");li.textContent=text;root.append(li);}}
 function populate(){const q=$("search").value.trim();const root=$("resident");root.replaceChildren();for(const r of residents.filter(r=>(r.display_name+" "+r.room_number).includes(q))){const o=document.createElement("option");o.value=r.resident_id;o.textContent=r.display_name+" / "+r.room_number+"号室";root.append(o);}clearGuide();purge();}
 async function run(fn){if(busy)return;busy=true;message("");try{await fn();}catch(e){message("操作できませんでした（"+e.message+"）。入力・権限を確認し、必要に応じガイドを再取得してください。");}finally{busy=false;}}
-$("connect").onclick=()=>run(async()=>{token=$("token").value;$("token").value="";try{operator=await api("/operator");residents=await api("/residents");}catch(e){token="";operator=null;throw e;}$("login").hidden=true;$("work").hidden=false;populate();$("knowledge-coverage").hidden=!operator.can_review;$("academy-admin").hidden=!operator.can_review;$("storage-mode").textContent=operator.synthetic_persistence?"合成データ保存モード（Case昇格不可）":"合成データ・メモリモード";await refreshFollowups();});
-$("logout").onclick=()=>{clearAcademyAdmin();clearAcademy();clearKnowledge();$("knowledge-query").value="";$("knowledge-coverage-results").replaceChildren();$("knowledge-coverage").hidden=true;sessionEpoch++;token="";operator=null;residents=[];$("followup-items").replaceChildren();$("queue-status").textContent="";$("storage-mode").textContent="";$("choice-category").value="";$("choice-value").value="";clearGuide();purge();$("work").hidden=true;$("login").hidden=false;$("resident").replaceChildren();$("search").value="";message("");};
+$("connect").onclick=()=>run(async()=>{token=$("token").value;$("token").value="";try{operator=await api("/operator");residents=await api("/residents");}catch(e){token="";operator=null;throw e;}$("login").hidden=true;$("work").hidden=false;populate();$("knowledge-coverage").hidden=!operator.can_review;$("academy-admin").hidden=!operator.can_review;$("roleplay-panel").hidden=!operator.synthetic_roleplay;$("storage-mode").textContent=operator.synthetic_persistence?"合成データ保存モード（Case昇格不可）":"合成データ・メモリモード";await refreshFollowups();});
+$("logout").onclick=()=>{clearRoleplay();$("roleplay-panel").hidden=true;clearAcademyAdmin();clearAcademy();clearKnowledge();$("knowledge-query").value="";$("knowledge-coverage-results").replaceChildren();$("knowledge-coverage").hidden=true;sessionEpoch++;token="";operator=null;residents=[];$("followup-items").replaceChildren();$("queue-status").textContent="";$("storage-mode").textContent="";$("choice-category").value="";$("choice-value").value="";clearGuide();purge();$("work").hidden=true;$("login").hidden=false;$("resident").replaceChildren();$("search").value="";message("");};
 function resetChoice(){$("choice-category").value="";$("choice-value").value="";}
 const oldPopulate=populate;$("search").oninput=()=>{resetChoice();oldPopulate();};$("resident").onchange=()=>{resetChoice();clearGuide();purge();};$("category").onchange=$("resident").onchange;
 $("choice-category").onchange=()=>{clearGuide();purge();};$("choice-value").oninput=()=>{clearGuide();purge();};
@@ -147,4 +147,28 @@ $("lesson-save").onclick=()=>run(async()=>{
  lessonDraftId??=crypto.randomUUID();
  await api("/lesson-drafts",{lesson_id:lessonDraftId,category:source.category,title:val("lesson-title"),objective:val("lesson-objective"),scenario:val("lesson-scenario"),options,correct_option_id:val("lesson-answer"),rationale:val("lesson-rationale"),reflection_prompt:val("lesson-reflect"),evidence:{sop_id:source.sop_id,version:source.version,revision:source.revision,field:source.field,index:source.index},pii_reviewed:true});
  if(session!==sessionEpoch||!token)return;resetLessonDraft();clearAcademy();await refreshAcademyAdmin();
+});
+
+let roleplayEpoch=0;
+function clearRoleplay(){roleplayEpoch++;$("roleplay-status").textContent="";$("roleplay-items").replaceChildren();$("roleplay-session").replaceChildren();}
+function renderRoleplay(data,session,gen){
+ if(session!==sessionEpoch||gen!==roleplayEpoch||!token)return;
+ const root=$("roleplay-session");root.replaceChildren();academyText(root,"h3",data.title);
+ for(const t of data.transcript){academyText(root,"blockquote","入居者： "+t.prompt);academyText(root,"p","あなた： "+t.text);academyText(root,"p","入居者： "+t.reply);}
+ if(data.current){
+  academyText(root,"blockquote","入居者： "+data.current.prompt);
+  let pending=null,pendingChoice=null;
+  for(const c of data.current.choices){const b=document.createElement("button");b.className="quiet";b.textContent=c.text;b.onclick=()=>run(async()=>{if(!pending||pendingChoice!==c.choice_id){pending=crypto.randomUUID();pendingChoice=c.choice_id;}const v=await api("/roleplay-turn",{session_id:data.session_id,expected_version:data.version,choice_id:c.choice_id,attempt_id:pending});renderRoleplay(v,session,gen);});root.append(b);}
+ }else if(data.debrief){
+  academyText(root,"h3","会話の振り返り");for(const o of data.debrief.observations){academyText(root,"p","あなた："+o.choice);academyText(root,"p","振り返り："+o.coaching);}
+  academyText(root,"blockquote",data.debrief.evidence.quote);academyText(root,"p","根拠："+data.debrief.evidence.source_reference+" / v"+data.debrief.evidence.version+" / 改訂"+data.debrief.evidence.revision);
+  academyText(root,"p",data.debrief.reflection_prompt);academyText(root,"p","学習の記録です。実務能力を認定するものではありません。");
+ }
+}
+$("roleplay-refresh").onclick=()=>run(async()=>{
+ clearRoleplay();const gen=roleplayEpoch,session=sessionEpoch,data=await api("/roleplays");if(gen!==roleplayEpoch||session!==sessionEpoch||!token)return;
+ $("roleplay-status").textContent=data.items.length+"件の会話教材";
+ for(const s of data.items){const card=document.createElement("div");card.className="knowledge-card";academyText(card,"h3",s.title);academyText(card,"p",s.objective);academyText(card,"p","完了した練習："+s.completed_count+"回");
+  const b=document.createElement("button");b.textContent=s.active_session_id?"練習を再開":"会話を始める";const sid=crypto.randomUUID();
+  b.onclick=()=>run(async()=>{const v=s.active_session_id?await api("/roleplay-sessions/"+encodeURIComponent(s.active_session_id)):await api("/roleplay-start",{scenario_id:s.scenario_id,session_id:sid,expected_revision:s.revision});if(gen!==roleplayEpoch||session!==sessionEpoch||!token)return;$("roleplay-items").replaceChildren();renderRoleplay(v,session,gen);});card.append(b);$("roleplay-items").append(card);}
 });

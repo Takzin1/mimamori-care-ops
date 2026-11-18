@@ -339,3 +339,5 @@ Phase 3-B: experimental isolated PostgreSQL snapshot adapter and reference SQL w
 Phase 4-A: approved SOP lexical search, exact source excerpts, version references and supervisor coverage view. No external AI. Synthetic preview only.
 
 Phase 5-A (education-first): MIMAMORI Academy, version-pinned supervisor-approved lessons, independent review, per-actor spaced practice and evidence feedback. Synthetic only; no certification or personnel ranking.
+
+Phase 5-B: opt-in synthetic conversation simulator, independently approved branching scenarios, actor-scoped resume and evidence-based debrief. Scripted, no external AI or certification.

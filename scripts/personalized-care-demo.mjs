@@ -4,7 +4,7 @@ import { Readable } from "node:stream";
 import { randomBytes } from "node:crypto";
 import { SyntheticSqliteSnapshotRepository } from "../src/personalized-care/synthetic-sqlite.mjs";
 import { readFile } from "node:fs/promises";
-import { PersonalizedCareService, seedDemo, seedAcademyDemo } from "../src/personalized-care/index.mjs";
+import { PersonalizedCareService, seedDemo, seedAcademyDemo, seedRoleplayDemo } from "../src/personalized-care/index.mjs";
 import { PersonalizedCareHttpApi } from "../src/personalized-care/http.mjs";
 import { CaseService } from "../src/application/case-service.ts";
 import { InMemoryCaseRepository } from "../src/persistence/in-memory-case-repository.ts";
@@ -18,12 +18,12 @@ const authenticator={async authenticate(t){const row=t===token?membership:t===re
 const snapshotMode=process.argv.includes("--persist");
 const snapshots=snapshotMode?new SyntheticSqliteSnapshotRepository(".personalized-care-local/synthetic.sqlite"):null;
 const cases=new CaseService(new InMemoryCaseRepository(),memberships);
-const service=new PersonalizedCareService({authenticator,memberships,caseService:cases,snapshotRepository:snapshots,
+const service=new PersonalizedCareService({authenticator,memberships,caseService:cases,snapshotRepository:snapshots,syntheticRoleplay:true,
  facilityGrant:async(t,f,p)=>t==="demo"&&f==="facility-1"&&[membership.principalId,reviewer.principalId].includes(p)?{tenant_id:t,facility_id:f,principal_id:p,roles:["supervisor"],active:true}:null,
  caseBinding:async(t,f)=>t==="demo"&&f==="facility-1"?{tenant_id:t,facility_id:f,facility_exclusive:true}:null});
 const demoScope={tenant_id:"demo",facility_id:"facility-1",accessToken:token};
 // Seed only a new scope; a failed seed is not silently overwritten. Reset synthetic DB manually if needed.
-if(!snapshots?.load("demo","facility-1")){await seedDemo(service,demoScope);await seedAcademyDemo(service,demoScope,{...demoScope,accessToken:reviewerToken});}
+if(!snapshots?.load("demo","facility-1")){await seedDemo(service,demoScope);await seedAcademyDemo(service,demoScope,{...demoScope,accessToken:reviewerToken});await seedRoleplayDemo(service,demoScope,{...demoScope,accessToken:reviewerToken});}
 const api=new PersonalizedCareHttpApi(service);
 const assets=new Map([["/",["index.html","text/html; charset=utf-8"]],["/app.js",["app.js","text/javascript; charset=utf-8"]],["/style.css",["style.css","text/css; charset=utf-8"]]]);
 const security={"cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","x-frame-options":"DENY","content-security-policy":"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"};
