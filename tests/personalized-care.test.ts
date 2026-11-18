@@ -14,4 +14,12 @@ test("personalized care: contract and existing CaseService", async () => {
  assert.equal(rows[0].aggregate.status,"NEW");
  assert.equal(rows[0].aggregate.sourceAdapter,"personalized-care");
  assert.equal(rows[0].events.length,1);
+ const caseId=rows[0].aggregate.id,base={tenantId:"single",caseId,principalId:"supervisor"};
+ await cases.execute({...base,expectedVersion:1,command:{type:"acknowledge"}});
+ await assert.rejects(()=>cases.execute({...base,expectedVersion:1,command:{type:"assign",assigneeId:"supervisor"}}));
+ await cases.execute({...base,expectedVersion:2,command:{type:"assign",assigneeId:"supervisor"}});
+ await cases.execute({...base,expectedVersion:3,command:{type:"start_action"}});
+ await cases.execute({...base,expectedVersion:4,command:{type:"complete",outcome:"other",summary:"synthetic",evidence:[{kind:"note",ref:"synthetic-note"}]}});
+ await cases.execute({...base,expectedVersion:5,command:{type:"close"}});
+ assert.equal((await repository.load("single",caseId))?.aggregate.status,"CLOSED");
 });

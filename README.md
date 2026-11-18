@@ -324,3 +324,8 @@ This repository does **not** copy the legacy application wholesale. Only validat
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Architectural changes should be recorded as ADRs and must preserve the documented operational invariants.
+
+
+## Personalized Care Operations (experimental branch)
+
+**Synthetic-only prototype; not production-ready.** See [scope, local demo, API and security gates](docs/personalized-care.md). Existing monitoring and CareOps behavior are preserved. New migration is reference-only and not applied; production runtime is not connected. Actual Node/Postgres regression tests and browser verification remain pending.
