@@ -84,7 +84,7 @@ export class PersonalizedCareService {
   async #authorize(req,admin=false){
     const t=id(req.tenant_id),f=id(req.facility_id);
     if(typeof req.accessToken!=="string"||!req.accessToken||req.accessToken.length>8192)fail("AUTH_REQUIRED",401);
-    let p;try{p=await this.#auth.authenticate(req.accessToken);}catch{fail("AUTH_REQUIRED",401);}
+    let p;try{p=await this.#auth.authenticate(req.accessToken,{tenant_id:t,facility_id:f});}catch{fail("AUTH_REQUIRED",401);}
     const m=await this.#members.findByPrincipal(t,p.principalId),g=await this.#grant(t,f,p.principalId);
     if(!m?.active||m.tenantId!==t||m.principalId!==p.principalId||!g?.active||g.tenant_id!==t||g.facility_id!==f||g.principal_id!==p.principalId||!Array.isArray(g.roles))fail("NOT_FOUND",404);
     const r=m.roles.filter(x=>roles.includes(x)&&g.roles.includes(x));
