@@ -14,6 +14,8 @@ function str(x,max=500){if(typeof x!=="string"||!x.trim()||x.length>max)fail("IN
 
 function list(x){if(!Array.isArray(x)||x.length>30)fail("INVALID_LIST");return x.map(v=>str(v));}
 
+function categoryList(x){const values=list(x).map(c=>one(c,categories));if(!values.length)fail("INVALID_LIST");return [...new Set(values)].sort(cmp);}
+
 function one(x,allowed){if(!allowed.includes(x))fail("INVALID_ENUM");return x;}
 
 function instant(x){if(typeof x!=="string"||!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(x)||!Number.isFinite(Date.parse(x)))fail("INVALID_TIME");const canonical=new Date(x).toISOString();if(canonical!==x.replace(/Z$/,x.includes(".")?"Z":".000Z"))fail("INVALID_TIME");return canonical;}
@@ -30,20 +32,25 @@ export function resolveGuide({profile,preferences,sops,category,actorRoles,asOf,
   asOf=instant(asOf);one(category,categories);
   if(profile.consent_status!=="granted")fail("NOT_FOUND",404);
   const same=x=>x.tenant_id===profile.tenant_id&&x.facility_id===profile.facility_id;
-  const candidates=sops.filter(s=>same(s)&&s.category===category&&s.approval_status==="APPROVED"&&s.effective_from<=asOf&&s.allowed_roles.some(r=>actorRoles.includes(r))).sort((a,b)=>cmp(a.sop_id,b.sop_id)||b.version-a.version);
-  const active=preferences.filter(p=>same(p)&&p.resident_id===profile.resident_id&&activeAt(p,asOf)).sort((a,b)=>cmp(a.preference_id,b.preference_id));
+  const candidates=sops.filter(s=>same(s)&&s.category===category&&s.approval_status==="APPROVED"&&s.effective_from<=asOf).sort((a,b)=>cmp(a.sop_id,b.sop_id)||b.version-a.version);
+  const active=preferences.filter(p=>same(p)&&p.resident_id===profile.resident_id&&activeAt(p,asOf)&&p.applies_to.includes(category)).sort((a,b)=>cmp(a.preference_id,b.preference_id));
   const wishes=active.filter(p=>p.verification_status==="verified"&&p.source_type==="resident");
   const observations=active.filter(p=>p.verification_status==="verified"&&p.source_type==="staff_observation");
-  const sop=candidates.length===1?candidates[0]:null, conflicts=[], unresolved_questions=[];
+  const sop=candidates.length===1&&candidates[0].allowed_roles.some(r=>actorRoles.includes(r))?candidates[0]:null, conflicts=[], unresolved_questions=[];
   for(const p of wishes){
     if(wishes.some(q=>q.category===p.category&&q.value!==p.value)||currentChoice?.category===p.category&&currentChoice.value!==p.value)conflicts.push({category:p.category,reason:"WISH_CONFLICT"});
   }
-  for(const p of [...wishes,...(currentChoice?[currentChoice]:[])])if(candidates.some(s=>s.prohibited_values.some(v=>v.category===p.category&&v.value===p.value)))conflicts.push({category:p.category,reason:"SOP_CONFLICT"});
+  const constraints=(profile.approved_care_constraints??[]).filter(c=>c.applies_to.includes(category));
+  for(const p of [...wishes,...(currentChoice?[currentChoice]:[])]){
+    if(candidates.some(s=>s.prohibited_values.some(v=>v.category===p.category&&v.value===p.value)))conflicts.push({category:p.category,reason:"SOP_CONFLICT"});
+    if(constraints.some(c=>c.category===p.category&&c.prohibited_value===p.value))conflicts.push({category:p.category,reason:"CARE_CONSTRAINT_CONFLICT"});
+  }
   for(const p of active.filter(p=>p.verification_status==="pending"))unresolved_questions.push("未確認の情報："+p.category);
   if(!wishes.length)unresolved_questions.push("本人の現在の希望を確認してください。");
   if(!sop)unresolved_questions.push(candidates.length?"複数の手順が該当。責任者へ確認。":"承認済み手順なし。責任者へ確認。");
   const blocked=!sop||conflicts.length>0||["emergency","irregular"].includes(category);
-  return {applicable_sop:sop?.sop_id??null,sop_version:sop?.version??null,resident_context_version:profile.profile_version,standard_steps:sop?.steps??[],personalized_considerations:wishes.filter(p=>!conflicts.some(c=>c.category===p.category)).map(p=>({category:p.category,value:p.value,source_reference:p.source_reference})),observed_facts:observations.map(p=>({category:p.category,value:p.value,source_reference:p.source_reference})),required_confirmations:sop?.required_checks??[],escalation_conditions:sop?.escalation_conditions??[],prohibited_actions:sop?.prohibited_actions??[],completion_requirements:sop?.completion_requirements??[],unresolved_questions,evidence_references:[...(sop?[sop.source_reference]:[]),...wishes.map(p=>p.source_reference),...observations.map(p=>p.source_reference)],conflicts,human_review_required:true,blocked};
+  const guide_token=JSON.stringify([profile.profile_version,category,sop?.sop_id??null,sop?.version??null,active.map(p=>p.preference_id),currentChoice,blocked]);
+  return {guide_token,approved_constraints:constraints,applicable_sop:sop?.sop_id??null,sop_version:sop?.version??null,resident_context_version:profile.profile_version,standard_steps:sop?.steps??[],personalized_considerations:wishes.filter(p=>!conflicts.some(c=>c.category===p.category)).map(p=>({category:p.category,value:p.value,source_reference:p.source_reference})),observed_facts:observations.map(p=>({category:p.category,value:p.value,source_reference:p.source_reference})),required_confirmations:sop?.required_checks??[],escalation_conditions:sop?.escalation_conditions??[],prohibited_actions:sop?.prohibited_actions??[],completion_requirements:sop?.completion_requirements??[],unresolved_questions,evidence_references:[...(sop?[sop.source_reference]:[]),...wishes.map(p=>p.source_reference),...observations.map(p=>p.source_reference),...constraints.map(c=>c.source_reference)],conflicts,human_review_required:true,blocked};
 }
 
 export class PersonalizedCareService {
@@ -67,7 +74,10 @@ export class PersonalizedCareService {
   async putResident(req,raw){
     const a=await this.#authorize(req,true),x=obj(raw),r=id(x.resident_id),old=a.store.profiles.get(r);
     if(ver(x.expected_version)!==(old?.profile_version??0))fail("VERSION_CONFLICT",409);
-    const p={resident_id:r,tenant_id:a.t,facility_id:a.f,display_name:str(x.display_name,100),room_number:str(x.room_number,30),preferred_name:str(x.preferred_name,100),consent_status:one(x.consent_status,["granted","pending","withdrawn"]),profile_version:(old?.profile_version??0)+1,updated_at:this.#now(),updated_by:a.actor};
+    const rawConstraints=x.approved_care_constraints??old?.approved_care_constraints??[];
+    if(!Array.isArray(rawConstraints)||rawConstraints.length>30)fail("INVALID_LIST");
+    const approved_care_constraints=rawConstraints.map(c=>({category:id(obj(c).category),prohibited_value:str(c.prohibited_value),applies_to:categoryList(c.applies_to),source_reference:str(c.source_reference)}));
+    const p={approved_care_constraints,resident_id:r,tenant_id:a.t,facility_id:a.f,display_name:str(x.display_name,100),room_number:str(x.room_number,30),preferred_name:str(x.preferred_name,100),consent_status:one(x.consent_status,["granted","pending","withdrawn"]),profile_version:(old?.profile_version??0)+1,updated_at:this.#now(),updated_by:a.actor};
     a.store.profiles.set(r,p);this.#audit(a,"resident_updated",r);return clone(p);
   }
   async deleteResident(req,r,expected){
@@ -86,7 +96,7 @@ export class PersonalizedCareService {
     if(expires_at&&expires_at<=effective_from)fail("INVALID_TIME");
     const source_type=one(x.source_type,["resident","staff_observation","unconfirmed"]),verification_status=one(x.verification_status,["pending","verified","withdrawn"]);
     if(source_type==="unconfirmed"&&verification_status==="verified")fail("UNVERIFIED_SOURCE");
-    const v={preference_id:k,resident_id:p.resident_id,tenant_id:a.t,facility_id:a.f,category:id(x.category),value:str(x.value),source_type,source_reference:str(x.source_reference),verification_status,effective_from,expires_at,approved_by:verification_status==="verified"?a.actor:null,updated_at:this.#now()};
+    const v={preference_id:k,resident_id:p.resident_id,tenant_id:a.t,facility_id:a.f,category:id(x.category),applies_to:categoryList(x.applies_to),value:str(x.value),source_type,source_reference:str(x.source_reference),verification_status,effective_from,expires_at,approved_by:verification_status==="verified"?a.actor:null,updated_at:this.#now()};
     a.store.preferences.set(k,v);a.store.profiles.set(p.resident_id,{...p,profile_version:p.profile_version+1,updated_at:this.#now(),updated_by:a.actor});this.#audit(a,"preference_updated",k);return clone(v);
   }
   async putSop(req,raw){
@@ -124,10 +134,11 @@ export class PersonalizedCareService {
     if((status==="FOLLOWUP")!==x.followup_required)fail("INVALID_FOLLOWUP");
     const choice=x.current_choice==null?null:{category:id(obj(x.current_choice).category),value:str(x.current_choice.value)};
     const expected=ver(x.resident_context_version,1),sv=x.sop_version===null?null:ver(x.sop_version,1),sid=x.sop_id===null?null:id(x.sop_id);
-    const signature=JSON.stringify([r,category,expected,sid,sv,summary,status,checks,choice]),old=a.store.logs.get(iid);
+    const guideToken=str(x.guide_token,16000);
+    const signature=JSON.stringify([r,category,expected,sid,sv,summary,status,checks,choice,guideToken]),old=a.store.logs.get(iid);
     if(old){if(old.signature!==signature||old.actor_id!==a.actor)fail("IDEMPOTENCY_CONFLICT",409);const {signature:_,promotion_priority,...v}=old;return clone(v);}
     const g=this.#guide(a,r,category,choice);
-    if(g.resident_context_version!==expected||g.sop_version!==sv||g.applicable_sop!==sid)fail("STALE_GUIDE",409);
+    if(g.resident_context_version!==expected||g.sop_version!==sv||g.applicable_sop!==sid||g.guide_token!==guideToken)fail("STALE_GUIDE",409);
     if(g.blocked&&!x.followup_required)fail("REVIEW_REQUIRED",409);
     if(!g.blocked&&!g.required_confirmations.every(v=>checks.includes(v)))fail("CHECKS_REQUIRED",409);
     if(!checks.every(v=>g.required_confirmations.includes(v)))fail("UNKNOWN_CHECK");
@@ -167,7 +178,7 @@ export async function seedDemo(service,req){
   const start="2026-01-01T00:00:00.000Z";
   for(const [r,name,room,items] of [["a","Aさん","101",[["wake_time","朝6時頃"],["conversation","会話を楽しみたい"],["independence","自分でできることは自分で行いたい"]]],["b","Bさん","102",[["wake_time","朝8時頃"],["environment","静かな環境"],["visit_contact","訪室前に連絡"]]],["c","Cさん","103",[["wake_time","本人のペース"],["communication","筆談での説明"]]]]){
     await service.putResident(req,{resident_id:r,expected_version:0,display_name:name,room_number:room,preferred_name:name,consent_status:"granted"});let v=1;
-    for(const [category,value] of items)await service.putPreference(req,{resident_id:r,preference_id:r+"-"+category,expected_version:v++,category,value,source_type:"resident",source_reference:"synthetic-"+r+"-"+category,verification_status:"verified",effective_from:start,expires_at:null});
+    for(const [category,value] of items)await service.putPreference(req,{resident_id:r,preference_id:r+"-"+category,expected_version:v++,category,applies_to:["greeting"],value,source_type:"resident",source_reference:"synthetic-"+r+"-"+category,verification_status:"verified",effective_from:start,expires_at:null});
   }
   await service.putSop(req,{sop_id:"morning",expected_version:0,category:"greeting",title:"朝の声かけ",description:"架空施設の共通手順",trigger_conditions:["朝の声かけ"],steps:["本人の都合と希望を確認する。","施設の承認済み手順に沿って対応する。","必要な情報を記録・共有する。"],required_checks:["本人の現在の希望を確認"],allowed_roles:["responder","supervisor","dispatcher"],escalation_conditions:["希望と安全基準が矛盾する場合は責任者へ相談"],prohibited_actions:["希望の無視","無断訪室"],prohibited_values:[],completion_requirements:["必要時のみ記録"],effective_from:start,source_reference:"synthetic-sop-morning-v1"});
   await service.transitionSop(req,{sop_id:"morning",version:1,expected_revision:1,status:"IN_REVIEW"});await service.transitionSop(req,{sop_id:"morning",version:1,expected_revision:2,status:"APPROVED"});

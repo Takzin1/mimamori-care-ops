@@ -16,13 +16,14 @@ create table personalized_care.facility_membership (
 create table personalized_care.resident (
  tenant_id text not null, facility_id text not null, resident_id text not null,
  display_name text not null, room_number text not null, preferred_name text not null,
+ approved_care_constraints jsonb not null default '[]'::jsonb,
  consent_status text not null check(consent_status in ('granted','pending','withdrawn')),
  profile_version bigint not null check(profile_version>0), updated_at timestamptz not null, updated_by text not null,
  primary key(tenant_id,facility_id,resident_id), foreign key(tenant_id,facility_id) references personalized_care.facility
 );
 create table personalized_care.preference (
  tenant_id text not null, facility_id text not null,resident_id text not null,preference_id text not null,
- category text not null,value text not null,source_type text not null check(source_type in ('resident','staff_observation','unconfirmed')),
+ category text not null,applies_to text[] not null check(cardinality(applies_to)>0),value text not null,source_type text not null check(source_type in ('resident','staff_observation','unconfirmed')),
  source_reference text not null,verification_status text not null check(verification_status in ('verified','pending','withdrawn')),
  effective_from timestamptz not null,expires_at timestamptz,approved_by text,updated_at timestamptz not null,
  primary key(tenant_id,facility_id,preference_id), foreign key(tenant_id,facility_id,resident_id) references personalized_care.resident on delete cascade,
