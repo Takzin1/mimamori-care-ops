@@ -9,12 +9,12 @@ do $$ begin
 end $$;
 create table personalized_care.scope_snapshot(
  tenant_id text not null,facility_id text not null,version bigint not null check(version>0 and version<=9007199254740991),
- payload jsonb not null check(jsonb_typeof(payload)='object' and payload->>'format'='1' and jsonb_typeof(payload->'audit')='array' and octet_length(payload::text)<=16777216),
+ payload jsonb not null check((jsonb_typeof(payload)='object' and payload->>'format'='1' and jsonb_typeof(payload->'audit')='array' and octet_length(payload::text)<=16777216) is true),
  primary key(tenant_id,facility_id),foreign key(tenant_id,facility_id) references personalized_care.facility
 );
 create table personalized_care.scope_audit_journal(
  tenant_id text not null,facility_id text not null,snapshot_version bigint not null check(snapshot_version>0),
- actor_id text not null,event jsonb not null check(jsonb_typeof(event)='object' and event->>'actor_id'=actor_id),
+ actor_id text not null,event jsonb not null check((jsonb_typeof(event)='object' and event->>'actor_id'=actor_id) is true),
  occurred_at timestamptz not null default clock_timestamp(),
  primary key(tenant_id,facility_id,snapshot_version),
  foreign key(tenant_id,facility_id) references personalized_care.facility
@@ -36,8 +36,23 @@ create policy pc_snapshot_line on personalized_care.line_staff_binding for selec
 grant select,insert on personalized_care.scope_snapshot to pc_snapshot_runtime;
 grant update(version,payload) on personalized_care.scope_snapshot to pc_snapshot_runtime;
 grant insert(tenant_id,facility_id,snapshot_version,actor_id,event) on personalized_care.scope_audit_journal to pc_snapshot_runtime;
-create policy pc_snapshot_read on personalized_care.scope_snapshot for select to pc_snapshot_runtime using(tenant_id=current_setting('pc.tenant',true) and facility_id=current_setting('pc.facility',true));
-create policy pc_snapshot_insert on personalized_care.scope_snapshot for insert to pc_snapshot_runtime with check(tenant_id=current_setting('pc.tenant',true) and facility_id=current_setting('pc.facility',true));
-create policy pc_snapshot_update on personalized_care.scope_snapshot for update to pc_snapshot_runtime using(tenant_id=current_setting('pc.tenant',true) and facility_id=current_setting('pc.facility',true)) with check(tenant_id=current_setting('pc.tenant',true) and facility_id=current_setting('pc.facility',true));
-create policy pc_snapshot_audit_append on personalized_care.scope_audit_journal for insert to pc_snapshot_runtime with check(tenant_id=current_setting('pc.tenant',true) and facility_id=current_setting('pc.facility',true) and actor_id in(select actor_id from public.care_tenant_memberships where tenant_id=current_setting('pc.tenant',true) and principal_id=current_setting('pc.principal',true) and active));
+create function personalized_care.pc_snapshot_scope_allowed(t text,f text) returns boolean
+language sql stable security invoker set search_path=pg_catalog
+as $
+ select coalesce(t=current_setting('pc.tenant',true) and f=current_setting('pc.facility',true) and exists(
+  select 1 from public.care_tenant_memberships m
+   join personalized_care.facility_membership g on g.tenant_id=m.tenant_id and g.principal_id=m.principal_id
+   join personalized_care.line_staff_binding b on b.tenant_id=m.tenant_id and b.principal_id=m.principal_id
+  where m.tenant_id=t and g.facility_id=f and m.principal_id=current_setting('pc.principal',true)
+   and b.channel_id=current_setting('pc.channel',true) and b.line_subject=current_setting('pc.subject',true)
+   and m.active and g.active and b.active
+   and exists(select 1 from unnest(m.roles) as rr(r) where r=any(g.roles) and r=any(array['dispatcher','responder','supervisor']::text[]))
+ ),false)
+$;
+revoke all on function personalized_care.pc_snapshot_scope_allowed(text,text) from public,anon,authenticated,service_role;
+grant execute on function personalized_care.pc_snapshot_scope_allowed(text,text) to pc_snapshot_runtime;
+create policy pc_snapshot_read on personalized_care.scope_snapshot for select to pc_snapshot_runtime using(personalized_care.pc_snapshot_scope_allowed(tenant_id,facility_id));
+create policy pc_snapshot_insert on personalized_care.scope_snapshot for insert to pc_snapshot_runtime with check(personalized_care.pc_snapshot_scope_allowed(tenant_id,facility_id));
+create policy pc_snapshot_update on personalized_care.scope_snapshot for update to pc_snapshot_runtime using(personalized_care.pc_snapshot_scope_allowed(tenant_id,facility_id)) with check(personalized_care.pc_snapshot_scope_allowed(tenant_id,facility_id));
+create policy pc_snapshot_audit_append on personalized_care.scope_audit_journal for insert to pc_snapshot_runtime with check(personalized_care.pc_snapshot_scope_allowed(tenant_id,facility_id) and actor_id in(select actor_id from public.care_tenant_memberships where tenant_id=current_setting('pc.tenant',true) and principal_id=current_setting('pc.principal',true) and active));
 commit;

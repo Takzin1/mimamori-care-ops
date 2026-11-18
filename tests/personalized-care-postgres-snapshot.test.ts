@@ -9,7 +9,7 @@ async function pgContract(PostgresSnapshotRepository,check){
  const repo=new PostgresSnapshotRepository({pool});
  async function test(name,fn){calls=[];try{await fn();result.push([name,"PASS"]);}catch(e){result.push([name,"FAIL",String(e)]);}}
  async function reject(fn,code){let e;try{await fn();}catch(err){e=err;}check(e?.message===code,"expected "+code+" got "+e?.message);}
- await test("initial load and SET LOCAL scope",async()=>{check(await repo.load(t,f,c)===null);check(calls[0][0].includes("SERIALIZABLE")&&calls.some(([q,a])=>q.includes("set_config")&&a.join(",")==="demo,f1,staff")&&calls.at(-1)[0]==="COMMIT");});
+ await test("initial load and SET LOCAL scope",async()=>{check(await repo.load(t,f,c)===null);check(calls[0][0].includes("SERIALIZABLE")&&calls.some(([q,a])=>q.includes("set_config")&&a.join(",")==="demo,f1,staff,123,"+c.lineBinding.line_subject)&&calls.at(-1)[0]==="COMMIT");});
  await test("write and audit journal atomic contract",async()=>{check(await repo.save(t,f,0,p,c)===1);check(calls.some(([q,a])=>q.includes("scope_audit_journal")&&a[2]===1&&a[3]==="actor"));check(calls.at(-1)[0]==="COMMIT"&&release.at(-1)===false);});
  await test("restore stored version",async()=>{const got=await repo.load(t,f,c);check(got.version===1&&got.payload===p);});
  await test("denied revoked membership or changed roles",async()=>{active=false;await reject(()=>repo.load(t,f,c),"SNAPSHOT_ACCESS_DENIED");check(calls.at(-1)[0]==="ROLLBACK");active=true;roles=["supervisor"];await reject(()=>repo.save(t,f,1,p,c),"SNAPSHOT_ACCESS_DENIED");roles=["responder"];});
@@ -18,6 +18,8 @@ async function pgContract(PostgresSnapshotRepository,check){
  await test("audit failure prevents commit",async()=>{journalError=true;await reject(()=>repo.save(t,f,1,p,c),"SNAPSHOT_UNAVAILABLE");check(snapshot.version==="1"&&calls.at(-1)[0]==="ROLLBACK"&&release.at(-1)===true);journalError=false;});
  await test("serialization error never reports success",async()=>{commitError=true;await reject(()=>repo.save(t,f,1,p,c),"SNAPSHOT_VERSION_CONFLICT");check(snapshot.version==="1"&&calls.at(-1)[0]==="ROLLBACK");commitError=false;});
  await test("forged audit actor denied",async()=>reject(()=>repo.save(t,f,1,p.replace('"actor"','"other"'),c),"SNAPSHOT_CORRUPT"));
+ await test("pool outage is sanitized",async()=>{const unavailable=new PostgresSnapshotRepository({pool:{async connect(){throw Error("internal connection detail");}}});await reject(()=>unavailable.load(t,f,c),"SNAPSHOT_UNAVAILABLE");});
+ await test("malformed audit payload rejected",async()=>reject(()=>repo.save(t,f,1,'{"format":1,"audit":{}}',c),"SNAPSHOT_CORRUPT"));
  return result;
 }
 test("staging PostgreSQL repository contract (mock pool)",async()=>{for(const [name,status,error] of await pgContract(PostgresSnapshotRepository,(v,m)=>assert.ok(v,m)))assert.equal(status,"PASS",name+": "+(error??""));});

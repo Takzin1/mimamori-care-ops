@@ -40,7 +40,7 @@ export class PersonalizedCareHttpApi {
       const body=request.method==="POST"?await readBoundedJson(request,32768):null;
       return json(await dispatchPersonalized(this.#service,m[1],request.method,new URL(request.url).pathname,body));
     }catch(e){
-      const status=[400,401,403,404,405,409,413,415].includes(e?.status)?e.status:500;
+      const status=[400,401,403,404,405,409,413,415,503].includes(e?.status)?e.status:500;
       const code=status===500?"INTERNAL_ERROR":(/^[A-Z_]{1,80}$/.test(e?.code??"")?e.code:/^[A-Z_]{1,80}$/.test(e?.message??"")?e.message:"REQUEST_REJECTED");
       return json({error:{code}},status);
     }
