@@ -1,12 +1,12 @@
 import { PersonalizedCareService, validateClassification, offlineCategory, seedDemo } from '../src/personalized-care/index.mjs';
 
-export function makeFixture(caseService=null){
+export function makeFixture(caseService=null,options={}){
   const records=new Map(),req={tenant_id:"single",facility_id:"f1",accessToken:"supervisor"};
   const auth={async authenticate(t){if(!["supervisor","staff","second"].includes(t))throw Error("invalid");return {principalId:t,provider:"synthetic"};}};
   const members={async findByPrincipal(t,p){if(!["single","multi"].includes(t))return null;return {tenantId:t,principalId:p,actorId:p,roles:[p==="staff"?"responder":"supervisor"],active:true};},async findByActorId(t,p){return this.findByPrincipal(t,p);}};
   const grant=async(t,f,p)=>((t==="single"&&f==="f1"&&p!=="second")||(t==="multi"&&((f==="f1"&&p!=="second")||(f==="f2"&&p==="second"))))?{tenant_id:t,facility_id:f,principal_id:p,roles:[p==="staff"?"responder":"supervisor"],active:true}:null;
   const mock={async openFromSignal(s,c){if(!records.has(s.id))records.set(s.id,{aggregate:{id:c,tenantId:s.tenantId,sourceSignalId:s.id,sourceAdapter:s.sourceAdapter,priority:s.priority,subjectId:s.subjectId}});return records.get(s.id);}};
-  const service=new PersonalizedCareService({authenticator:auth,memberships:members,facilityGrant:grant,caseService:caseService??mock,caseBinding:async(t,f)=>({tenant_id:t,facility_id:f,facility_exclusive:t==="single"&&f==="f1"}),clock:()=>"2026-11-18T00:00:00.000Z"});
+  const service=new PersonalizedCareService({authenticator:auth,memberships:members,facilityGrant:grant,caseService:caseService??mock,caseBinding:async(t,f)=>({tenant_id:t,facility_id:f,facility_exclusive:t==="single"&&f==="f1"}),clock:()=>"2026-11-18T00:00:00.000Z",...options});
   return {service,req,multi:{...req,tenant_id:"multi"},other:{tenant_id:"multi",facility_id:"f2",accessToken:"second"},records};
 }
 

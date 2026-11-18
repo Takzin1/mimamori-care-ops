@@ -329,3 +329,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Architectural changes should be recorded
 ## Personalized Care Operations (experimental branch)
 
 **Synthetic-only prototype; not production-ready.** See [scope, local demo, API and security gates](docs/personalized-care.md). Existing monitoring and CareOps behavior are preserved. New migration is reference-only and not applied; production runtime is not connected. Actual Node/Postgres regression tests and browser verification remain pending.
+
+Phase 2 synthetic persistence: `node scripts/personalized-care-demo.mjs --persist`. Local SQLite only; Case promotion disabled in this mode. Supervisor follow-up review API added. See the Phase 2 section of the experimental documentation.

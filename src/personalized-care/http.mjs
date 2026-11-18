@@ -9,6 +9,7 @@ export async function dispatchPersonalized(service,accessToken,method,path,body=
   if(method==="GET"&&p.length===8&&r==="residents")return service.residents(req);
   if(method==="GET"&&key&&r==="residents")return service.resident(req,key);
   if(method==="GET"&&key&&r==="sops")return service.sopHistory(req,key);
+  if(method==="GET"&&p.length===8&&r==="followups")return service.followups(req);
   if(method==="GET"&&p.length===8&&r==="audit")return service.audit(req);
   if(method==="POST"&&p.length===8){
     switch(r){
@@ -21,6 +22,7 @@ export async function dispatchPersonalized(service,accessToken,method,path,body=
       case "interactions":return service.record(req,body);
     }
   }
+  if(method==="POST"&&p.length===10&&r==="interactions"&&p[9]==="review")return service.reviewFollowup(req,decode(p[8]),body);
   if(method==="POST"&&p.length===10&&r==="interactions"&&p[9]==="promote")return service.promote(req,decode(p[8]),body.expected_version,body.priority);
   routeError("NOT_FOUND",404);
 }
