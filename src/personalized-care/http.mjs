@@ -10,6 +10,7 @@ export async function dispatchPersonalized(service,accessToken,method,path,body=
   if(method==="GET"&&key&&r==="residents")return service.resident(req,key);
   if(method==="GET"&&key&&r==="sops")return service.sopHistory(req,key);
   if(method==="GET"&&p.length===8&&r==="academy")return service.academy(req);
+  if(method==="GET"&&p.length===8&&r==="lesson-sources")return service.lessonSources(req);
   if(method==="GET"&&p.length===8&&r==="lesson-admin")return service.lessonAdmin(req);
   if(method==="GET"&&p.length===8&&r==="knowledge-coverage")return service.knowledgeCoverage(req);
   if(method==="GET"&&p.length===8&&r==="operator")return service.operator(req);

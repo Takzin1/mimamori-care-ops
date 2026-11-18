@@ -12,8 +12,8 @@ async function api(path,body){
 function fill(id,items){const root=$(id);root.replaceChildren();for(const text of items){const li=document.createElement("li");li.textContent=text;root.append(li);}}
 function populate(){const q=$("search").value.trim();const root=$("resident");root.replaceChildren();for(const r of residents.filter(r=>(r.display_name+" "+r.room_number).includes(q))){const o=document.createElement("option");o.value=r.resident_id;o.textContent=r.display_name+" / "+r.room_number+"号室";root.append(o);}clearGuide();purge();}
 async function run(fn){if(busy)return;busy=true;message("");try{await fn();}catch(e){message("操作できませんでした（"+e.message+"）。入力・権限を確認し、必要に応じガイドを再取得してください。");}finally{busy=false;}}
-$("connect").onclick=()=>run(async()=>{token=$("token").value;$("token").value="";try{operator=await api("/operator");residents=await api("/residents");}catch(e){token="";operator=null;throw e;}$("login").hidden=true;$("work").hidden=false;populate();$("knowledge-coverage").hidden=!operator.can_review;$("storage-mode").textContent=operator.synthetic_persistence?"合成データ保存モード（Case昇格不可）":"合成データ・メモリモード";await refreshFollowups();});
-$("logout").onclick=()=>{clearAcademy();clearKnowledge();$("knowledge-query").value="";$("knowledge-coverage-results").replaceChildren();$("knowledge-coverage").hidden=true;sessionEpoch++;token="";operator=null;residents=[];$("followup-items").replaceChildren();$("queue-status").textContent="";$("storage-mode").textContent="";$("choice-category").value="";$("choice-value").value="";clearGuide();purge();$("work").hidden=true;$("login").hidden=false;$("resident").replaceChildren();$("search").value="";message("");};
+$("connect").onclick=()=>run(async()=>{token=$("token").value;$("token").value="";try{operator=await api("/operator");residents=await api("/residents");}catch(e){token="";operator=null;throw e;}$("login").hidden=true;$("work").hidden=false;populate();$("knowledge-coverage").hidden=!operator.can_review;$("academy-admin").hidden=!operator.can_review;$("storage-mode").textContent=operator.synthetic_persistence?"合成データ保存モード（Case昇格不可）":"合成データ・メモリモード";await refreshFollowups();});
+$("logout").onclick=()=>{clearAcademyAdmin();clearAcademy();clearKnowledge();$("knowledge-query").value="";$("knowledge-coverage-results").replaceChildren();$("knowledge-coverage").hidden=true;sessionEpoch++;token="";operator=null;residents=[];$("followup-items").replaceChildren();$("queue-status").textContent="";$("storage-mode").textContent="";$("choice-category").value="";$("choice-value").value="";clearGuide();purge();$("work").hidden=true;$("login").hidden=false;$("resident").replaceChildren();$("search").value="";message("");};
 function resetChoice(){$("choice-category").value="";$("choice-value").value="";}
 const oldPopulate=populate;$("search").oninput=()=>{resetChoice();oldPopulate();};$("resident").onchange=()=>{resetChoice();clearGuide();purge();};$("category").onchange=$("resident").onchange;
 $("choice-category").onchange=()=>{clearGuide();purge();};$("choice-value").oninput=()=>{clearGuide();purge();};
@@ -107,3 +107,44 @@ async function refreshAcademy(){
  }
 }
 $("academy-refresh").onclick=()=>run(refreshAcademy);
+
+let academySources=[],adminEpoch=0,lessonDraftId=null;
+const lessonInputIds=["lesson-title","lesson-objective","lesson-scenario","lesson-a","lesson-b","lesson-c","lesson-answer","lesson-rationale","lesson-reflect"];
+function resetLessonDraft(){for(const id of lessonInputIds)$(id).value="";$("lesson-pii").checked=false;lessonDraftId=null;}
+function clearAcademyAdmin(){adminEpoch++;academySources=[];resetLessonDraft();$("lesson-source").replaceChildren();$("lesson-admin-items").replaceChildren();$("academy-admin-status").textContent="";$("academy-admin").hidden=true;$("academy-admin").open=false;}
+async function refreshAcademyAdmin(){
+ const gen=++adminEpoch,session=sessionEpoch;
+ // Fetch serially: each read is audited and may commit a scoped CAS.
+ const sources=await api("/lesson-sources");if(gen!==adminEpoch||session!==sessionEpoch||!token)return;
+ const lessons=await api("/lesson-admin");if(gen!==adminEpoch||session!==sessionEpoch||!token)return;
+ academySources=sources.flatMap(s=>s.excerpts.map(e=>({...s,...e,excerpts:undefined})));
+ const root=$("lesson-source");root.replaceChildren();const empty=document.createElement("option");empty.value="";empty.textContent="根拠を選択";root.append(empty);
+ for(const [i,s] of academySources.entries()){const o=document.createElement("option");o.value=String(i);o.textContent=s.title+" v"+s.version+" / "+s.quote;root.append(o);}
+ $("academy-admin-status").textContent=academySources.length+"件の根拠 / "+lessons.length+"件の教材";
+ const items=$("lesson-admin-items");items.replaceChildren();
+ for(const l of lessons){
+  const card=document.createElement("div");card.className="knowledge-card";academyText(card,"h4",l.title+" / "+({DRAFT:"下書き",APPROVED:"承認済み",ARCHIVED:"廃止"}[l.status]??l.status));
+  academyText(card,"p","目標： "+l.objective);academyText(card,"p",l.scenario);for(const option of l.options)academyText(card,"p",(option.option_id===l.correct_option_id?"正答： ":"選択肢： ")+option.text);
+  academyText(card,"p","解説： "+l.rationale);academyText(card,"p","振り返り： "+l.reflection_prompt);academyText(card,"blockquote",l.evidence.quote);academyText(card,"p","出典："+l.evidence.source_reference+" / v"+l.evidence.version+" / 改訂"+l.evidence.revision);academyText(card,"p",l.source_current?"根拠は現行版":"根拠の再確認が必要");
+  if(l.status!=="ARCHIVED"){
+   const check=document.createElement("input");check.type="checkbox";const label=document.createElement("label");label.append(check,document.createTextNode(" 内容と根拠を確認した"));
+   for(const [status,text] of [["APPROVED","承認して公開"],["ARCHIVED","教材を廃止"]]){
+    if(status==="APPROVED"&&!l.can_approve)continue;
+    const b=document.createElement("button");b.className="quiet";b.textContent=text;b.onclick=()=>run(async()=>{if(!check.checked)throw Error("内容の確認が必要です");await api("/lesson-transitions",{lesson_id:l.lesson_id,expected_revision:l.revision,status,human_confirmed:true});if(session!==sessionEpoch||!token)return;clearAcademy();await refreshAcademyAdmin();});card.append(b);
+   }
+   card.append(label);
+  }
+  items.append(card);
+ }
+}
+$("academy-admin-refresh").onclick=()=>run(refreshAcademyAdmin);
+for(const id of [...lessonInputIds,"lesson-source","lesson-pii"])$(id).onchange=()=>{lessonDraftId=null;};
+$("lesson-save").onclick=()=>run(async()=>{
+ const session=sessionEpoch,selected=$("lesson-source").value,source=selected===""?null:academySources[Number(selected)];
+ if(!source||!$("lesson-pii").checked)throw Error("根拠と個人情報の確認が必要です");
+ const val=id=>$(id).value.trim(),options=["a","b","c"].map(option_id=>({option_id,text:val("lesson-"+option_id)})).filter(o=>o.text);
+ if(!val("lesson-a")||!val("lesson-b")||!val("lesson-title")||!val("lesson-objective")||!val("lesson-scenario")||!val("lesson-rationale")||!val("lesson-reflect")||!options.some(o=>o.option_id===val("lesson-answer")))throw Error("すべての必須項目と正答を確認してください");
+ lessonDraftId??=crypto.randomUUID();
+ await api("/lesson-drafts",{lesson_id:lessonDraftId,category:source.category,title:val("lesson-title"),objective:val("lesson-objective"),scenario:val("lesson-scenario"),options,correct_option_id:val("lesson-answer"),rationale:val("lesson-rationale"),reflection_prompt:val("lesson-reflect"),evidence:{sop_id:source.sop_id,version:source.version,revision:source.revision,field:source.field,index:source.index},pii_reviewed:true});
+ if(session!==sessionEpoch||!token)return;resetLessonDraft();clearAcademy();await refreshAcademyAdmin();
+});

@@ -238,8 +238,19 @@ export class PersonalizedCareService {
     const lesson={...old,status:next,revision:old.revision+1,approved_by:next==="APPROVED"?a.actor:old.approved_by,updated_at:this.#now()};
     a.store.lessons.set(lid,lesson);await this.#audit(a,"lesson_"+next.toLowerCase(),lid);return clone(lesson);
   }
+  async lessonSources(req){
+    const a=await this.#authorize(req,true),now=this.#now(),sops=[...a.store.sops.values()].flat(),items=[];
+    for(const category of categories.filter(c=>!["emergency","irregular"].includes(c))){
+      const active=sops.filter(s=>s.tenant_id===a.t&&s.facility_id===a.f&&s.category===category&&s.approval_status==="APPROVED"&&s.effective_from<=now);
+      if(active.length!==1||!active[0].allowed_roles.some(r=>a.roles.includes(r)))continue;
+      const s=active[0],excerpts=[];
+      for(const field of educationFields)for(const [index,quote] of s[field].entries())excerpts.push({field,index,quote});
+      items.push({category,sop_id:s.sop_id,title:s.title,version:s.version,revision:s.revision,source_reference:s.source_reference,excerpts});
+    }
+    await this.#audit(a,"lesson_sources_read","scope");return clone(items);
+  }
   async lessonAdmin(req){
-    const a=await this.#authorize(req,true),items=[...a.store.lessons.values()].map(l=>({...l,source_current:!!this.#lessonSource(a,l)}));
+    const a=await this.#authorize(req,true),items=[...a.store.lessons.values()].map(l=>({...l,source_current:!!this.#lessonSource(a,l),can_approve:l.status==="DRAFT"&&l.author_id!==a.actor&&!!this.#lessonSource(a,l)}));
     await this.#audit(a,"lesson_admin_read","scope");return clone(items);
   }
   async academy(req){
