@@ -333,3 +333,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Architectural changes should be recorded
 Phase 2 synthetic persistence: `node scripts/personalized-care-demo.mjs --persist`. Local SQLite only; Case promotion disabled in this mode. Supervisor follow-up review API added. See the Phase 2 section of the experimental documentation.
 
 Phase 3-A: opt-in LINE staff verification and parameterized PostgreSQL identity directory code added. Reference SQL and LIFF helper are not deployed; see experimental documentation.
+
+Phase 3-B: experimental isolated PostgreSQL snapshot adapter and reference SQL with CAS + append-only audit journal. Synthetic staging only; no production activation.

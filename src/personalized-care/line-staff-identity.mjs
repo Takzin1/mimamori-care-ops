@@ -37,7 +37,7 @@ export class LineStaffAuthenticator{
    const binding=await this.#directory.findLineBinding({tenant_id:scope.tenant_id,facility_id:scope.facility_id,channel_id:this.#channel,line_subject:claims.sub});
    if(binding?.active!==true||binding.tenant_id!==scope.tenant_id||binding.facility_id!==scope.facility_id||binding.channel_id!==this.#channel||binding.line_subject!==claims.sub||!validPrincipal(binding.principal_id))throw authFailure();
    if(claims.exp<=Math.floor(this.#clock()/1000))throw authFailure();
-   return {principalId:binding.principal_id,provider:"line-staff"};
+   return {principalId:binding.principal_id,provider:"line-staff",lineBinding:{channel_id:this.#channel,line_subject:claims.sub}};
   }catch{throw authFailure();}
  }
 }

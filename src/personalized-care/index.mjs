@@ -91,14 +91,14 @@ export class PersonalizedCareService {
     if(!r.length||admin&&!r.includes("supervisor"))fail("FORBIDDEN",403);
     const key=JSON.stringify([t,f]);
     const fresh=()=>({profiles:new Map(),preferences:new Map(),sops:new Map(),logs:new Map(),audit:[]});
-    if(this.#snapshots){const raw=this.#snapshots.load(t,f);const store=raw?decodeSnapshot(raw.payload,t,f):fresh();return {t,f,key,actor:id(m.actorId),roles:r,store,snapshotVersion:raw?.version??0};}
+    if(this.#snapshots){const context={principalId:p.principalId,actorId:id(m.actorId),roles:[...r],provider:p.provider,lineBinding:p.lineBinding??null};const raw=await this.#snapshots.load(t,f,context);const store=raw?decodeSnapshot(raw.payload,t,f):fresh();return {t,f,key,actor:context.actorId,roles:r,store,context,snapshotVersion:raw?.version??0};}
     if(!this.#scopes.has(key))this.#scopes.set(key,fresh());
     return {t,f,key,actor:id(m.actorId),roles:r,store:this.#scopes.get(key)};
   }
-  #audit(a,action,ref){
+  async #audit(a,action,ref){
     a.store.audit.push({action,ref,actor_id:a.actor,at:this.#now()});
-    // All snapshot-mode operations are synchronous after authorization; compare-and-swap commits data and audit together.
-    if(this.#snapshots)a.snapshotVersion=this.#snapshots.save(a.t,a.f,a.snapshotVersion,encodeSnapshot(a.store));
+    // A snapshot adapter may be asynchronous. Do not return data or success before commit.
+    if(this.#snapshots)a.snapshotVersion=await this.#snapshots.save(a.t,a.f,a.snapshotVersion,encodeSnapshot(a.store),a.context);
   }
   #profile(a,r,usable=true){const p=a.store.profiles.get(id(r));if(!p||usable&&p.consent_status!=="granted")fail("NOT_FOUND",404);return p;}
   async putResident(req,raw){
@@ -110,16 +110,16 @@ export class PersonalizedCareService {
     const p={approved_care_constraints,resident_id:r,tenant_id:a.t,facility_id:a.f,display_name:str(x.display_name,100),room_number:str(x.room_number,30),preferred_name:str(x.preferred_name,100),consent_status:one(x.consent_status,["granted","pending","withdrawn"]),profile_version:(old?.profile_version??0)+1,updated_at:this.#now(),updated_by:a.actor};
     a.store.profiles.set(r,p);
     if(old?.consent_status==="granted"&&p.consent_status!=="granted")for(const [k,v] of a.store.preferences)if(v.resident_id===r)a.store.preferences.set(k,{...v,verification_status:"withdrawn",updated_at:p.updated_at});
-    this.#audit(a,"resident_updated",r);return clone(p);
+    await this.#audit(a,"resident_updated",r);return clone(p);
   }
   async deleteResident(req,r,expected){
     const a=await this.#authorize(req,true),p=this.#profile(a,r,false);
     if(ver(expected)!==p.profile_version)fail("VERSION_CONFLICT",409);
     if([...a.store.logs.values()].some(x=>x.resident_id===r))fail("RETENTION_REVIEW_REQUIRED",409);
-    a.store.profiles.delete(r);for(const [k,v] of a.store.preferences)if(v.resident_id===r)a.store.preferences.delete(k);this.#audit(a,"resident_deleted",r);
+    a.store.profiles.delete(r);for(const [k,v] of a.store.preferences)if(v.resident_id===r)a.store.preferences.delete(k);await this.#audit(a,"resident_deleted",r);
   }
-  async residents(req){const a=await this.#authorize(req);this.#audit(a,"resident_list","scope");return clone([...a.store.profiles.values()].filter(p=>p.consent_status==="granted").map(p=>({resident_id:p.resident_id,display_name:p.display_name,room_number:p.room_number,profile_version:p.profile_version})));}
-  async resident(req,r){const a=await this.#authorize(req),p=this.#profile(a,r),now=this.#now();this.#audit(a,"resident_read",r);return clone({profile:p,preferences:[...a.store.preferences.values()].filter(v=>v.resident_id===r&&v.verification_status==="verified"&&activeAt(v,now)),interactions:[...a.store.logs.values()].filter(v=>v.resident_id===r).map(({signature,promotion_priority,...v})=>v)});}
+  async residents(req){const a=await this.#authorize(req);await this.#audit(a,"resident_list","scope");return clone([...a.store.profiles.values()].filter(p=>p.consent_status==="granted").map(p=>({resident_id:p.resident_id,display_name:p.display_name,room_number:p.room_number,profile_version:p.profile_version})));}
+  async resident(req,r){const a=await this.#authorize(req),p=this.#profile(a,r),now=this.#now();await this.#audit(a,"resident_read",r);return clone({profile:p,preferences:[...a.store.preferences.values()].filter(v=>v.resident_id===r&&v.verification_status==="verified"&&activeAt(v,now)),interactions:[...a.store.logs.values()].filter(v=>v.resident_id===r).map(({signature,promotion_priority,...v})=>v)});}
   async putPreference(req,raw){
     const a=await this.#authorize(req,true),x=obj(raw),p=this.#profile(a,x.resident_id),k=id(x.preference_id),old=a.store.preferences.get(k);
     if(old&&old.resident_id!==p.resident_id)fail("NOT_FOUND",404);
@@ -129,7 +129,7 @@ export class PersonalizedCareService {
     const source_type=one(x.source_type,["resident","staff_observation","unconfirmed"]),verification_status=one(x.verification_status,["pending","verified","withdrawn"]);
     if(source_type==="unconfirmed"&&verification_status==="verified")fail("UNVERIFIED_SOURCE");
     const v={preference_id:k,resident_id:p.resident_id,tenant_id:a.t,facility_id:a.f,category:id(x.category),applies_to:categoryList(x.applies_to),value:str(x.value),source_type,source_reference:str(x.source_reference),verification_status,effective_from,expires_at,approved_by:verification_status==="verified"?a.actor:null,updated_at:this.#now()};
-    a.store.preferences.set(k,v);a.store.profiles.set(p.resident_id,{...p,profile_version:p.profile_version+1,updated_at:this.#now(),updated_by:a.actor});this.#audit(a,"preference_updated",k);return clone(v);
+    a.store.preferences.set(k,v);a.store.profiles.set(p.resident_id,{...p,profile_version:p.profile_version+1,updated_at:this.#now(),updated_by:a.actor});await this.#audit(a,"preference_updated",k);return clone(v);
   }
   async putSop(req,raw){
     const a=await this.#authorize(req,true),x=obj(raw),sid=id(x.sop_id),h=a.store.sops.get(sid)??[],old=h.at(-1);
@@ -138,7 +138,7 @@ export class PersonalizedCareService {
     if(!steps.length||!required_checks.length||!allowed_roles.length||new Set(required_checks).size!==required_checks.length)fail("INVALID_SOP");
     const pv=x.prohibited_values??[];if(!Array.isArray(pv)||pv.length>30)fail("INVALID_LIST");
     const s={sop_id:sid,tenant_id:a.t,facility_id:a.f,category:one(x.category,categories),title:str(x.title,100),description:str(x.description),trigger_conditions:list(x.trigger_conditions),steps,required_checks,allowed_roles,escalation_conditions:list(x.escalation_conditions),prohibited_actions:list(x.prohibited_actions),prohibited_values:pv.map(v=>({category:id(obj(v).category),value:str(v.value)})),completion_requirements:list(x.completion_requirements),version:(old?.version??0)+1,revision:1,approval_status:"DRAFT",approved_by:null,effective_from:instant(x.effective_from),source_reference:str(x.source_reference)};
-    a.store.sops.set(sid,[...h,s]);this.#audit(a,"sop_drafted",sid);return clone(s);
+    a.store.sops.set(sid,[...h,s]);await this.#audit(a,"sop_drafted",sid);return clone(s);
   }
   async transitionSop(req,raw){
     const a=await this.#authorize(req,true),x=obj(raw),sid=id(x.sop_id),h=a.store.sops.get(sid)??[],s=h.at(-1);
@@ -149,15 +149,15 @@ export class PersonalizedCareService {
     if(next==="APPROVED"&&s.effective_from>this.#now())fail("FUTURE_APPROVAL_UNSUPPORTED");
     const updated={...s,revision:s.revision+1,approval_status:next,approved_by:next==="APPROVED"?a.actor:s.approved_by};
     const retained=h.slice(0,-1).map(v=>next==="APPROVED"&&v.approval_status==="APPROVED"?{...v,approval_status:"ARCHIVED",archived_at:this.#now()}:v);
-    a.store.sops.set(sid,[...retained,updated]);this.#audit(a,"sop_"+next.toLowerCase(),sid);return clone(updated);
+    a.store.sops.set(sid,[...retained,updated]);await this.#audit(a,"sop_"+next.toLowerCase(),sid);return clone(updated);
   }
-  async sopHistory(req,sid){const a=await this.#authorize(req,true);const history=a.store.sops.get(id(sid))??[];this.#audit(a,"sop_history_read",sid);return clone(history);}
+  async sopHistory(req,sid){const a=await this.#authorize(req,true);const history=a.store.sops.get(id(sid))??[];await this.#audit(a,"sop_history_read",sid);return clone(history);}
   #guide(a,r,c,choice=null){
     const p=this.#profile(a,r);
     if(choice!==null)choice={category:id(obj(choice).category),value:str(choice.value)};
     return resolveGuide({profile:p,preferences:[...a.store.preferences.values()],sops:[...a.store.sops.values()].flat(),category:c,actorRoles:a.roles,asOf:this.#now(),currentChoice:choice});
   }
-  async guide(req,r,c,choice=null){const a=await this.#authorize(req),g=this.#guide(a,r,c,choice);this.#audit(a,"guide_read",r);return clone(g);}
+  async guide(req,r,c,choice=null){const a=await this.#authorize(req),g=this.#guide(a,r,c,choice);await this.#audit(a,"guide_read",r);return clone(g);}
   async record(req,raw){
     const a=await this.#authorize(req),x=obj(raw),iid=id(x.interaction_id),r=id(x.resident_id),category=one(x.interaction_type,categories);this.#profile(a,r);
     if(typeof x.followup_required!=="boolean")fail("INVALID_FOLLOWUP");
@@ -168,7 +168,7 @@ export class PersonalizedCareService {
     const expected=ver(x.resident_context_version,1),sv=x.sop_version===null?null:ver(x.sop_version,1),sid=x.sop_id===null?null:id(x.sop_id);
     const guideToken=str(x.guide_token,16000);
     const signature=JSON.stringify([r,category,expected,sid,sv,summary,status,checks,choice,guideToken]),old=a.store.logs.get(iid);
-    if(old){if(old.signature!==signature||old.actor_id!==a.actor)fail("IDEMPOTENCY_CONFLICT",409);const {signature:_,promotion_priority,...v}=old;return clone(v);}
+    if(old){if(old.signature!==signature||old.actor_id!==a.actor)fail("IDEMPOTENCY_CONFLICT",409);const {signature:_,promotion_priority,...v}=old;await this.#audit(a,"interaction_replayed",iid);return clone(v);}
     const g=this.#guide(a,r,category,choice);
     if(g.resident_context_version!==expected||g.sop_version!==sv||g.applicable_sop!==sid||g.guide_token!==guideToken)fail("STALE_GUIDE",409);
     if(g.blocked&&!x.followup_required)fail("REVIEW_REQUIRED",409);
@@ -176,7 +176,7 @@ export class PersonalizedCareService {
     if(!checks.every(v=>g.required_confirmations.includes(v)))fail("UNKNOWN_CHECK");
     // Record the actual guide evidence and checks; no model can change Case status.
     const log={interaction_id:iid,tenant_id:a.t,facility_id:a.f,resident_id:r,actor_id:a.actor,interaction_type:category,sop_id:sid,sop_version:sv,resident_context_version:expected,action_summary:summary,status,followup_required:x.followup_required,related_case_id:null,version:1,created_at:this.#now(),confirmed_checks:checks,guide_snapshot:clone(g)};
-    a.store.logs.set(iid,{...log,signature});this.#audit(a,"interaction_recorded",iid);return clone(log);
+    a.store.logs.set(iid,{...log,signature});await this.#audit(a,"interaction_recorded",iid);return clone(log);
   }
   async promote(req,iid,expected,priority){
     const a=await this.#authorize(req),key=id(iid),log=a.store.logs.get(key);if(!log)fail("NOT_FOUND",404);this.#profile(a,log.resident_id);
@@ -195,12 +195,12 @@ export class PersonalizedCareService {
       if(latest?.related_case_id){if(latest.promotion_priority!==priority)fail("IDEMPOTENCY_CONFLICT",409);return {case_id:latest.related_case_id,version:latest.version};}
       const checked=await this.#authorize(req);if(checked.actor!==a.actor||!checked.roles.some(r=>r==="supervisor"||r==="dispatcher"))fail("FORBIDDEN",403);
       const current=checked.store.logs.get(key);if(!current||current.version!==log.version||current.review?.decision==="NO_FURTHER_ACTION")fail("VERSION_CONFLICT",409);
-      this.#profile(a,log.resident_id);this.#audit(a,"promotion_requested",key);
+      this.#profile(a,log.resident_id);await this.#audit(a,"promotion_requested",key);
       const signalId="pc:"+key,subjectId="interaction:"+key;
       const opened=await this.#case.openFromSignal({id:signalId,tenantId:a.t,sourceAdapter:"personalized-care",subjectId,type:"manual",priority},signalId);
       const c=opened.aggregate;if(c.tenantId!==a.t||c.sourceSignalId!==signalId||c.priority!==priority||c.subjectId!==subjectId||c.sourceAdapter!=="personalized-care")fail("CASE_LINK_MISMATCH",409);
       const updated={...log,related_case_id:c.id,promotion_priority:priority,version:log.version+1};
-      a.store.logs.set(key,updated);this.#audit(a,"interaction_promoted",key);return {case_id:c.id,version:updated.version};
+      a.store.logs.set(key,updated);await this.#audit(a,"interaction_promoted",key);return {case_id:c.id,version:updated.version};
     }finally{this.#pending.delete(lock);}
   }
   async operator(req){
@@ -210,7 +210,7 @@ export class PersonalizedCareService {
   async followups(req){
     const a=await this.#authorize(req);
     const items=[...a.store.logs.values()].filter(x=>x.followup_required&&a.store.profiles.get(x.resident_id)?.consent_status==="granted"&&x.review?.decision!=="NO_FURTHER_ACTION").sort((x,y)=>cmp(x.created_at,y.created_at)||cmp(x.interaction_id,y.interaction_id));
-    this.#audit(a,"followups_read","scope");
+    await this.#audit(a,"followups_read","scope");
     return clone(items.map(x=>({interaction_id:x.interaction_id,resident_id:x.resident_id,interaction_type:x.interaction_type,created_at:x.created_at,version:x.version,case_linked:!!x.related_case_id,blocked:x.guide_snapshot.blocked,review:x.review??null,requires_review:!x.review||x.guide_snapshot.blocked,action_summary:x.action_summary})));
   }
   async reviewFollowup(req,iid,raw){
@@ -225,10 +225,10 @@ export class PersonalizedCareService {
     if(decision==="NO_FURTHER_ACTION"&&log.guide_snapshot.blocked)fail("REVIEW_REQUIRED",409);
     const review={decision,reason:str(x.reason,500),reviewed_by:a.actor,reviewed_at:this.#now()};
     const updated={...log,review,review_history:[...(log.review_history??[]),review],version:log.version+1};
-    a.store.logs.set(key,updated);this.#audit(a,"followup_reviewed",key);
+    a.store.logs.set(key,updated);await this.#audit(a,"followup_reviewed",key);
     return clone({interaction_id:key,version:updated.version,review});
   }
-  async audit(req){const a=await this.#authorize(req,true);this.#audit(a,"audit_read","scope");return clone(a.store.audit);}
+  async audit(req){const a=await this.#authorize(req,true);await this.#audit(a,"audit_read","scope");return clone(a.store.audit);}
 }
 
 export function validateClassification(raw){const x=obj(raw);if(Object.keys(x).sort().join(",")!=="category,source_reference")fail("INVALID_AI_OUTPUT");return {category:one(x.category,categories),source_reference:str(x.source_reference,200)};}
