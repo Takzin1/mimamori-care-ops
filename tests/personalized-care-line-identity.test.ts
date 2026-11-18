@@ -6,10 +6,10 @@ import {createLiffStaffClient} from "../src/personalized-care/liff-staff-client.
 async function identityContract(LineStaffAuthenticator,PostgresStaffIdentityDirectory,makeFixture,check){
  const now=1760000000000,sub="U"+"a".repeat(32),scope={tenant_id:"single",facility_id:"f1"},channel="1234567890",token="abc.def.ghi";
  const claims={iss:"https://access.line.me",aud:channel,sub,iat:now/1000-60,exp:now/1000+600};
- let body={...claims},binding=true,grant=true,last=null,code=200,net=false;
+ let body={...claims},binding=true,grant=true,last=null,code=200,net=false,media="application/json",declared=null,cancelled=false;
  const directory={async findLineBinding(x){return binding?{...x,principal_id:"staff",active:true}:null;}};
- const fetchImpl=async(url,init)=>{last={url,init};if(net)throw Error("network");return {ok:code===200,json:async()=>body};};
- const auth=new LineStaffAuthenticator({channelId:channel,directory,fetchImpl,clock:()=>now,timeoutSignal:()=>undefined});
+ const fetchImpl=async(url,init)=>{last={url,init};if(net)throw Error("network");const bytes=Uint8Array.from(JSON.stringify(body),c=>c.charCodeAt(0));let sent=false;return {ok:code===200,headers:{get:k=>k==="content-type"?media:k==="content-length"?declared:null},body:{getReader:()=>({async read(){if(sent)return {done:true};sent=true;return {done:false,value:bytes};},async cancel(){cancelled=true;},releaseLock(){}})}};};
+ const auth=new LineStaffAuthenticator({channelId:channel,directory,fetchImpl,clock:()=>now,timeoutSignal:()=>undefined,decodeUtf8:bytes=>String.fromCharCode(...bytes)});
  let results=[];
  async function test(n,fn){try{await fn();results.push([n,"PASS"]);}catch(e){results.push([n,"FAIL",String(e)]);}}
  async function denies(fn,expected="AUTHENTICATION_FAILED"){let e;try{await fn();}catch(err){e=err;}check(e?.message===expected,"expected "+expected+" got "+e?.message);}
@@ -19,6 +19,7 @@ async function identityContract(LineStaffAuthenticator,PostgresStaffIdentityDire
  await test("expired and future-issued tokens denied",async()=>{for(const patch of [{exp:now/1000},{iat:now/1000+100}]){body={...claims,...patch};await denies(()=>auth.authenticate(token,scope));}body={...claims};});
  await test("unbound or revoked user denied",async()=>{binding=false;await denies(()=>auth.authenticate(token,scope));binding=true;});
  await test("LINE outage fails closed",async()=>{net=true;await denies(()=>auth.authenticate(token,scope));net=false;code=400;await denies(()=>auth.authenticate(token,scope));code=200;});
+ await test("oversized and wrong media responses rejected",async()=>{body={...claims,extra:"x".repeat(17000)};cancelled=false;await denies(()=>auth.authenticate(token,scope));check(cancelled);body={...claims};declared="20000";await denies(()=>auth.authenticate(token,scope));declared=null;media="text/html";await denies(()=>auth.authenticate(token,scope));media="application/json";});
  await test("existing tenant/facility roles remain mandatory",async()=>{const {service}=makeFixture(null,{authenticator:auth,facilityGrant:async(t,f,p)=>grant&&t==="single"&&f==="f1"&&p==="staff"?{tenant_id:t,facility_id:f,principal_id:p,roles:["supervisor","responder"],active:true}:null});const req={...scope,accessToken:token};check((await service.operator(req)).can_review===false);await denies(()=>service.operator({...req,facility_id:"f2"}),"NOT_FOUND");grant=false;await denies(()=>service.operator(req),"NOT_FOUND");grant=true;});
  let params,rows=[];
  const db=new PostgresStaffIdentityDirectory({query:async(q,p)=>{params={q,p};return {rows};}});
@@ -28,12 +29,15 @@ async function identityContract(LineStaffAuthenticator,PostgresStaffIdentityDire
 }
 test("LINE identity and facility authorization",async()=>{for(const [name,status,error] of await identityContract(LineStaffAuthenticator,PostgresStaffIdentityDirectory,makeFixture,(v,m)=>assert.ok(v,m)))assert.equal(status,"PASS",name+": "+(error??""));});
 test("LIFF client uses raw token and relative same-origin endpoint",async()=>{
- let last,loggedIn=true;
+ let last,loggedIn=true,status=200;
  const liff={async init(x){assert.equal(x.liffId,"synthetic");},isLoggedIn:()=>loggedIn,getIDToken:()=>"abc.def.ghi"};
- const client=createLiffStaffClient({liff,liffId:"synthetic",origin:"https://example.test",tenantId:"t",facilityId:"f",fetchImpl:async(url,init)=>{last={url,init};return {ok:true,json:async()=>({ok:true})};}});
+ const client=createLiffStaffClient({liff,liffId:"synthetic",origin:"https://example.test",tenantId:"t",facilityId:"f",fetchImpl:async(url,init)=>{last={url,init};return {ok:status===200,status,json:async()=>({ok:true})};}});
  await assert.rejects(()=>client.request("/operator"),/LINE_LOGIN_REQUIRED/);
  await client.initialize();assert.deepEqual(await client.request("/operator"),{ok:true});assert.equal(last.url,"/api/personalized-care/tenants/t/facilities/f/operator");assert.equal(last.init.headers.authorization,"Bearer abc.def.ghi");assert.equal(last.init.redirect,"error");
  await assert.rejects(()=>client.request("/../operator"),/INVALID_REQUEST/);
  await assert.rejects(()=>client.request("https://evil.test"),/INVALID_REQUEST/);
+ status=401;await assert.rejects(()=>client.request("/operator"),/LINE_LOGIN_REQUIRED/);status=200;await assert.rejects(()=>client.request("/operator"),/LINE_LOGIN_REQUIRED/);await client.initialize();assert.deepEqual(await client.request("/operator"),{ok:true});client.invalidate();await assert.rejects(()=>client.request("/operator"),/LINE_LOGIN_REQUIRED/);await client.initialize();
  loggedIn=false;await assert.rejects(()=>client.request("/operator"),/LINE_LOGIN_REQUIRED/);
 });
+
+test("LIFF discards in-flight response after user invalidation",async()=>{let finish;const liff={async init(){},getIDToken:()=>"abc.def.ghi",isLoggedIn:()=>true};const c=createLiffStaffClient({liff,liffId:"synthetic",origin:"https://example.test",tenantId:"t",facilityId:"f",fetchImpl:()=>new Promise(r=>{finish=r;})});await c.initialize();const pending=c.request("/operator");const rejected=assert.rejects(pending,/LINE_LOGIN_REQUIRED/);c.invalidate();finish({ok:true,status:200,json:async()=>({ok:true})});await rejected;});
