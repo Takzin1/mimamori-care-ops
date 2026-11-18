@@ -2,3 +2,5 @@
 .followup-card{padding:14px;border:1px solid #dbe7e5;border-radius:10px;margin:12px 0;overflow-wrap:anywhere}.followup-card textarea{margin-top:10px}details{margin:15px 0}summary{cursor:pointer;font-weight:600}#storage-mode,#queue-status{font-size:.9rem}
 
 .knowledge-card{padding:12px;margin:10px 0;border:1px solid #dbe7e5;border-radius:10px;overflow-wrap:anywhere}.knowledge-card blockquote{border-left:3px solid #168575;margin:8px 0;padding-left:12px;white-space:pre-wrap}.knowledge-card p{font-size:.85rem}
+
+#academy-panel{border-top:3px solid #168575}#academy-feedback:not(:empty){padding:12px;border:1px solid #dbe7e5;border-radius:10px;overflow-wrap:anywhere}#academy-feedback blockquote{border-left:3px solid #168575;padding-left:12px;margin:8px 0}

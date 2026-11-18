@@ -337,3 +337,5 @@ Phase 3-A: opt-in LINE staff verification and parameterized PostgreSQL identity 
 Phase 3-B: experimental isolated PostgreSQL snapshot adapter and reference SQL with CAS + append-only audit journal. Synthetic staging only; no production activation.
 
 Phase 4-A: approved SOP lexical search, exact source excerpts, version references and supervisor coverage view. No external AI. Synthetic preview only.
+
+Phase 5-A (education-first): MIMAMORI Academy, version-pinned supervisor-approved lessons, independent review, per-actor spaced practice and evidence feedback. Synthetic only; no certification or personnel ranking.

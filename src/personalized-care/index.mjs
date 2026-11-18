@@ -1,5 +1,6 @@
 // Isolated P0 slice: memory or explicitly supplied synthetic snapshot repository.
 import { retrieveSopEvidence, knowledgeCoverage } from "./knowledge.mjs";
+import { educationFields, lessonEvidence, reviewSchedule, learnerView } from "./academy.mjs";
 
 export const categories=["hospitality","greeting","request","life_consultation","room_visit","outing","family","equipment","complaint","report","handover","checkin","irregular","emergency"];
 
@@ -56,15 +57,15 @@ export function resolveGuide({profile,preferences,sops,category,actorRoles,asOf,
 
 // Synthetic snapshot format v1; scope rows are validated on load before use.
 export function encodeSnapshot(store){
-  return JSON.stringify({format:1,profiles:[...store.profiles],preferences:[...store.preferences],sops:[...store.sops],logs:[...store.logs],audit:store.audit});
+  return JSON.stringify({format:1,profiles:[...store.profiles],preferences:[...store.preferences],sops:[...store.sops],logs:[...store.logs],lessons:[...(store.lessons??new Map())],learning:[...(store.learning??new Map())],audit:store.audit});
 }
 export function decodeSnapshot(payload,t,f){
   let raw;try{raw=JSON.parse(payload);}catch{fail("SNAPSHOT_CORRUPT",500);}
   if(!raw||raw.format!==1||!Array.isArray(raw.audit))fail("SNAPSHOT_CORRUPT",500);
   const scope=x=>x&&x.tenant_id===t&&x.facility_id===f;
   const result={audit:raw.audit};
-  for(const [name,key] of [["profiles","resident_id"],["preferences","preference_id"],["sops","sop_id"],["logs","interaction_id"]]){
-    const rows=raw[name];if(!Array.isArray(rows))fail("SNAPSHOT_CORRUPT",500);
+  for(const [name,key] of [["profiles","resident_id"],["preferences","preference_id"],["sops","sop_id"],["logs","interaction_id"],["lessons","lesson_id"],["learning","progress_key"]]){
+    const rows=Object.hasOwn(raw,name)?raw[name]:["lessons","learning"].includes(name)?[]:undefined;if(!Array.isArray(rows))fail("SNAPSHOT_CORRUPT",500);
     const map=new Map();
     for(const entry of rows){
       if(!Array.isArray(entry)||entry.length!==2||typeof entry[0]!=="string"||map.has(entry[0]))fail("SNAPSHOT_CORRUPT",500);
@@ -75,6 +76,7 @@ export function decodeSnapshot(payload,t,f){
     result[name]=map;
   }
   for(const v of [...result.preferences.values(),...result.logs.values()])if(!result.profiles.has(v.resident_id))fail("SNAPSHOT_CORRUPT",500);
+  for(const p of result.learning.values())if(p.progress_key!==JSON.stringify([p.actor_id,p.lesson_id])||!result.lessons.has(p.lesson_id))fail("SNAPSHOT_CORRUPT",500);
   return result;
 }
 
@@ -91,7 +93,7 @@ export class PersonalizedCareService {
     const r=m.roles.filter(x=>roles.includes(x)&&g.roles.includes(x));
     if(!r.length||admin&&!r.includes("supervisor"))fail("FORBIDDEN",403);
     const key=JSON.stringify([t,f]);
-    const fresh=()=>({profiles:new Map(),preferences:new Map(),sops:new Map(),logs:new Map(),audit:[]});
+    const fresh=()=>({profiles:new Map(),preferences:new Map(),sops:new Map(),logs:new Map(),lessons:new Map(),learning:new Map(),audit:[]});
     if(this.#snapshots){const context={principalId:p.principalId,actorId:id(m.actorId),roles:[...r],provider:p.provider,lineBinding:p.lineBinding??null};const raw=await this.#snapshots.load(t,f,context);const store=raw?decodeSnapshot(raw.payload,t,f):fresh();return {t,f,key,actor:context.actorId,roles:r,store,context,snapshotVersion:raw?.version??0};}
     if(!this.#scopes.has(key))this.#scopes.set(key,fresh());
     return {t,f,key,actor:id(m.actorId),roles:r,store:this.#scopes.get(key)};
@@ -204,6 +206,67 @@ export class PersonalizedCareService {
       a.store.logs.set(key,updated);await this.#audit(a,"interaction_promoted",key);return {case_id:c.id,version:updated.version};
     }finally{this.#pending.delete(lock);}
   }
+  #lessonSource(a,lesson){
+    return lessonEvidence({sops:[...a.store.sops.values()].flat(),lesson,tenantId:a.t,facilityId:a.f,roles:a.roles,asOf:this.#now()});
+  }
+  async draftLesson(req,raw){
+    const a=await this.#authorize(req,true),x=obj(raw),lid=id(x.lesson_id);
+    if(Object.keys(x).sort().join(",")!=="category,correct_option_id,evidence,lesson_id,objective,options,pii_reviewed,rationale,reflection_prompt,scenario,title"||x.pii_reviewed!==true)fail("INVALID_LESSON");
+    if(a.store.lessons.has(lid))fail("VERSION_CONFLICT",409);
+    if(a.store.lessons.size>=200)fail("ACADEMY_LIMIT",413);
+    const category=one(x.category,categories.filter(c=>!["emergency","irregular"].includes(c)));
+    const e=obj(x.evidence),sid=id(e.sop_id),version=ver(e.version,1),revision=ver(e.revision,1),field=one(e.field,educationFields),index=ver(e.index);
+    if(Object.keys(e).sort().join(",")!=="field,index,revision,sop_id,version")fail("INVALID_LESSON_EVIDENCE");
+    const source=(a.store.sops.get(sid)??[]).find(s=>s.version===version&&s.revision===revision);
+    const quote=source?.[field]?.[index];
+    if(typeof quote!=="string"||!quote)fail("LESSON_SOURCE_UNAVAILABLE",409);
+    if(!Array.isArray(x.options)||x.options.length<2||x.options.length>4)fail("INVALID_LESSON_OPTIONS");
+    const options=x.options.map(o=>{obj(o);if(Object.keys(o).sort().join(",")!=="option_id,text")fail("INVALID_LESSON_OPTIONS");return {option_id:id(o.option_id),text:str(o.text,250)};});
+    if(new Set(options.map(o=>o.option_id)).size!==options.length||new Set(options.map(o=>o.text)).size!==options.length||!options.some(o=>o.option_id===x.correct_option_id))fail("INVALID_LESSON_OPTIONS");
+    const lesson={lesson_id:lid,tenant_id:a.t,facility_id:a.f,category,title:str(x.title,100),objective:str(x.objective,250),scenario:str(x.scenario,1000),options,correct_option_id:x.correct_option_id,rationale:str(x.rationale,500),reflection_prompt:str(x.reflection_prompt,250),evidence:{sop_id:sid,version,revision,field,index,quote,source_reference:source.source_reference},status:"DRAFT",revision:1,author_id:a.actor,approved_by:null,created_at:this.#now(),training_only:true};
+    if(!this.#lessonSource(a,lesson))fail("LESSON_SOURCE_UNAVAILABLE",409);
+    a.store.lessons.set(lid,lesson);await this.#audit(a,"lesson_drafted",lid);return clone(lesson);
+  }
+  async transitionLesson(req,raw){
+    const a=await this.#authorize(req,true),x=obj(raw),lid=id(x.lesson_id),old=a.store.lessons.get(lid);
+    if(!old)fail("NOT_FOUND",404);
+    const next=one(x.status,["APPROVED","ARCHIVED"]);
+    if(Object.keys(x).sort().join(",")!=="expected_revision,human_confirmed,lesson_id,status"||x.human_confirmed!==true)fail("HUMAN_CONFIRMATION_REQUIRED");
+    if(ver(x.expected_revision,1)!==old.revision)fail("VERSION_CONFLICT",409);
+    if(old.status==="ARCHIVED"||next==="APPROVED"&&old.status!=="DRAFT")fail("INVALID_TRANSITION",409);
+    if(next==="APPROVED"){if(old.author_id===a.actor)fail("INDEPENDENT_REVIEW_REQUIRED",403);if(!this.#lessonSource(a,old))fail("LESSON_SOURCE_UNAVAILABLE",409);}
+    const lesson={...old,status:next,revision:old.revision+1,approved_by:next==="APPROVED"?a.actor:old.approved_by,updated_at:this.#now()};
+    a.store.lessons.set(lid,lesson);await this.#audit(a,"lesson_"+next.toLowerCase(),lid);return clone(lesson);
+  }
+  async lessonAdmin(req){
+    const a=await this.#authorize(req,true),items=[...a.store.lessons.values()].map(l=>({...l,source_current:!!this.#lessonSource(a,l)}));
+    await this.#audit(a,"lesson_admin_read","scope");return clone(items);
+  }
+  async academy(req){
+    const a=await this.#authorize(req),now=this.#now(),items=[...a.store.lessons.values()].filter(l=>l.status==="APPROVED"&&this.#lessonSource(a,l)).map(l=>learnerView(l,a.store.learning.get(JSON.stringify([a.actor,l.lesson_id])),now)).sort((x,y)=>Number(y.due)-Number(x.due)||cmp(x.lesson_id,y.lesson_id));
+    await this.#audit(a,"academy_read","scope");return clone({lessons:items,due_count:items.filter(l=>l.due).length,training_only:true,certification:false});
+  }
+  async practiceLesson(req,raw){
+    const a=await this.#authorize(req),x=obj(raw),lid=id(x.lesson_id),attempt=id(x.attempt_id),choice=id(x.option_id);
+    if(Object.keys(x).sort().join(",")!=="attempt_id,expected_progress_version,expected_revision,lesson_id,option_id")fail("INVALID_LEARNING_REQUEST");
+    const l=a.store.lessons.get(lid),now=this.#now();
+    if(!l||l.status!=="APPROVED")fail("NOT_FOUND",404);
+    const evidence=this.#lessonSource(a,l);if(!evidence)fail("LESSON_SOURCE_UNAVAILABLE",409);
+    if(ver(x.expected_revision,1)!==l.revision)fail("VERSION_CONFLICT",409);
+    if(!l.options.some(o=>o.option_id===choice))fail("INVALID_LESSON_OPTION");
+    const key=JSON.stringify([a.actor,lid]),old=a.store.learning.get(key),pv=ver(x.expected_progress_version);
+    if(old?.last_attempt_id===attempt){
+      if(old.last_option_id!==choice||pv!==old.version-1)fail("IDEMPOTENCY_CONFLICT",409);
+      await this.#audit(a,"lesson_attempt_replayed",lid);return clone(old.feedback);
+    }
+    if(pv!==(old?.version??0))fail("VERSION_CONFLICT",409);
+    if(old&&old.due_at>now)fail("REVIEW_NOT_DUE",409);
+    if(!old&&a.store.learning.size>=5000)fail("ACADEMY_LIMIT",413);
+    const correct=choice===l.correct_option_id,plan=reviewSchedule({correct,streak:old?.streak??0,asOf:now});
+    const feedback={lesson_id:lid,correct,correct_option_id:l.correct_option_id,rationale:l.rationale,reflection_prompt:l.reflection_prompt,evidence,due_at:plan.due_at,review_interval_days:plan.days,progress_version:pv+1,training_only:true,certification:false};
+    a.store.learning.set(key,{progress_key:key,actor_id:a.actor,lesson_id:lid,tenant_id:a.t,facility_id:a.f,version:pv+1,practice_count:(old?.practice_count??0)+1,streak:plan.streak,due_at:plan.due_at,last_attempt_id:attempt,last_option_id:choice,feedback});
+    await this.#audit(a,"lesson_practiced",lid);return clone(feedback);
+  }
   async searchKnowledge(req,raw){
     const a=await this.#authorize(req),x=obj(raw);
     if(Object.keys(x).sort().join(",")!=="category,query")fail("INVALID_KNOWLEDGE_REQUEST");
@@ -258,4 +321,10 @@ export async function seedDemo(service,req){
   }
   await service.putSop(req,{sop_id:"morning",expected_version:0,category:"greeting",title:"朝の声かけ",description:"架空施設の共通手順",trigger_conditions:["朝の声かけ"],steps:["本人の都合と希望を確認する。","施設の承認済み手順に沿って対応する。","必要な情報を記録・共有する。"],required_checks:["本人の現在の希望を確認"],allowed_roles:["responder","supervisor","dispatcher"],escalation_conditions:["希望と安全基準が矛盾する場合は責任者へ相談"],prohibited_actions:["希望の無視","無断訪室"],prohibited_values:[],completion_requirements:["必要時のみ記録"],effective_from:start,source_reference:"synthetic-sop-morning-v1"});
   await service.transitionSop(req,{sop_id:"morning",version:1,expected_revision:1,status:"IN_REVIEW"});await service.transitionSop(req,{sop_id:"morning",version:1,expected_revision:2,status:"APPROVED"});
+}
+
+/** Synthetic fixture only: requires independently authenticated supervisor accounts. */
+export async function seedAcademyDemo(service,author,reviewer){
+ await service.draftLesson(author,{lesson_id:"morning-choice-1",category:"greeting",title:"本人の希望を尊重する",objective:"登録済みの希望と現在の意思を区別する",scenario:"架空の入居者が、普段の起床時刻とは違う時間まで休みたいと話しました。最初に何を確認しますか？",options:[{option_id:"a",text:"登録された時刻だけで対応を決める"},{option_id:"b",text:"現在の本人の希望を確認し、施設の承認済み手順を確認する"},{option_id:"c",text:"必要な確認を自動的に取り消す"}],correct_option_id:"b",rationale:"本人が今伝えた希望を確認することが第一歩です。安全基準との矛盾や不明点は責任者に相談します。",reflection_prompt:"自分の施設では、本人の希望が変わったとき誰に確認しますか？",evidence:{sop_id:"morning",version:1,revision:3,field:"steps",index:0},pii_reviewed:true});
+ await service.transitionLesson(reviewer,{lesson_id:"morning-choice-1",expected_revision:1,status:"APPROVED",human_confirmed:true});
 }

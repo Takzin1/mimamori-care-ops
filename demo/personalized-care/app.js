@@ -13,7 +13,7 @@ function fill(id,items){const root=$(id);root.replaceChildren();for(const text o
 function populate(){const q=$("search").value.trim();const root=$("resident");root.replaceChildren();for(const r of residents.filter(r=>(r.display_name+" "+r.room_number).includes(q))){const o=document.createElement("option");o.value=r.resident_id;o.textContent=r.display_name+" / "+r.room_number+"号室";root.append(o);}clearGuide();purge();}
 async function run(fn){if(busy)return;busy=true;message("");try{await fn();}catch(e){message("操作できませんでした（"+e.message+"）。入力・権限を確認し、必要に応じガイドを再取得してください。");}finally{busy=false;}}
 $("connect").onclick=()=>run(async()=>{token=$("token").value;$("token").value="";try{operator=await api("/operator");residents=await api("/residents");}catch(e){token="";operator=null;throw e;}$("login").hidden=true;$("work").hidden=false;populate();$("knowledge-coverage").hidden=!operator.can_review;$("storage-mode").textContent=operator.synthetic_persistence?"合成データ保存モード（Case昇格不可）":"合成データ・メモリモード";await refreshFollowups();});
-$("logout").onclick=()=>{clearKnowledge();$("knowledge-query").value="";$("knowledge-coverage-results").replaceChildren();$("knowledge-coverage").hidden=true;sessionEpoch++;token="";operator=null;residents=[];$("followup-items").replaceChildren();$("queue-status").textContent="";$("storage-mode").textContent="";$("choice-category").value="";$("choice-value").value="";clearGuide();purge();$("work").hidden=true;$("login").hidden=false;$("resident").replaceChildren();$("search").value="";message("");};
+$("logout").onclick=()=>{clearAcademy();clearKnowledge();$("knowledge-query").value="";$("knowledge-coverage-results").replaceChildren();$("knowledge-coverage").hidden=true;sessionEpoch++;token="";operator=null;residents=[];$("followup-items").replaceChildren();$("queue-status").textContent="";$("storage-mode").textContent="";$("choice-category").value="";$("choice-value").value="";clearGuide();purge();$("work").hidden=true;$("login").hidden=false;$("resident").replaceChildren();$("search").value="";message("");};
 function resetChoice(){$("choice-category").value="";$("choice-value").value="";}
 const oldPopulate=populate;$("search").oninput=()=>{resetChoice();oldPopulate();};$("resident").onchange=()=>{resetChoice();clearGuide();purge();};$("category").onchange=$("resident").onchange;
 $("choice-category").onchange=()=>{clearGuide();purge();};$("choice-value").oninput=()=>{clearGuide();purge();};
@@ -88,3 +88,22 @@ $("knowledge-coverage").onclick=()=>run(async()=>{
  const labels={AVAILABLE:"承認済み・閲覧可",UNAVAILABLE:"利用可能な手順なし",AMBIGUOUS:"複数の承認済み手順・要確認"};
  fill("knowledge-coverage-results",data.map(x=>{const option=[...$("knowledge-category").options].find(o=>o.value===x.category);return (option?.textContent??x.category)+"： "+labels[x.state]+(x.version?" (v"+x.version+")":"");}));
 });
+
+let academyEpoch=0;
+function clearAcademy(){academyEpoch++;$("academy-status").textContent="";$("academy-items").replaceChildren();$("academy-feedback").replaceChildren();}
+function academyText(parent,tag,value){const node=document.createElement(tag);node.textContent=value;parent.append(node);return node;}
+async function refreshAcademy(){
+ clearAcademy();const e=academyEpoch,s=sessionEpoch,data=await api("/academy");if(e!==academyEpoch||s!==sessionEpoch||!token)return;
+ $("academy-status").textContent="復習対象 "+data.due_count+"件 / 教材 "+data.lessons.length+"件";
+ for(const l of data.lessons){
+  const card=document.createElement("div");card.className="knowledge-card";academyText(card,"h3",l.title);academyText(card,"p","学習目標： "+l.objective);
+  if(!l.due){academyText(card,"p","次の復習："+new Date(l.due_at).toLocaleString("ja-JP"));$("academy-items").append(card);continue;}
+  academyText(card,"p",l.scenario);const select=document.createElement("select");select.setAttribute("aria-label","回答選択");const first=document.createElement("option");first.value="";first.textContent="回答を選んでください";select.append(first);
+  for(const o of l.options){const node=document.createElement("option");node.value=o.option_id;node.textContent=o.text;select.append(node);}
+  const submit=document.createElement("button");submit.textContent="回答して解説を見る";let pendingAttempt=null,submittedChoice=null;
+  submit.onclick=()=>run(async()=>{if(!select.value)throw Error("回答を選択してください");if(!pendingAttempt||submittedChoice!==select.value){pendingAttempt=crypto.randomUUID();submittedChoice=select.value;}const data=await api("/lesson-practice",{lesson_id:l.lesson_id,expected_revision:l.revision,expected_progress_version:l.progress_version,option_id:select.value,attempt_id:pendingAttempt});if(e!==academyEpoch||s!==sessionEpoch||!token)return;
+   await refreshAcademy();if(s!==sessionEpoch||!token)return;const box=$("academy-feedback");box.replaceChildren();academyText(box,"h3",data.correct?"確認できました":"解説を確認してみましょう");academyText(box,"p",data.rationale);academyText(box,"blockquote",data.evidence.quote);academyText(box,"p","根拠： "+data.evidence.source_reference+" / v"+data.evidence.version+" / 改訂"+data.evidence.revision);academyText(box,"p","振り返り： "+data.reflection_prompt);academyText(box,"p","次回復習： "+data.review_interval_days+"日後。学習結果は実務能力を認定するものではありません。");
+  });card.append(select,submit);$("academy-items").append(card);
+ }
+}
+$("academy-refresh").onclick=()=>run(refreshAcademy);
