@@ -1,4 +1,5 @@
 // Isolated P0 slice: memory or explicitly supplied synthetic snapshot repository.
+import { retrieveSopEvidence, knowledgeCoverage } from "./knowledge.mjs";
 
 export const categories=["hospitality","greeting","request","life_consultation","room_visit","outing","family","equipment","complaint","report","handover","checkin","irregular","emergency"];
 
@@ -202,6 +203,20 @@ export class PersonalizedCareService {
       const updated={...log,related_case_id:c.id,promotion_priority:priority,version:log.version+1};
       a.store.logs.set(key,updated);await this.#audit(a,"interaction_promoted",key);return {case_id:c.id,version:updated.version};
     }finally{this.#pending.delete(lock);}
+  }
+  async searchKnowledge(req,raw){
+    const a=await this.#authorize(req),x=obj(raw);
+    if(Object.keys(x).sort().join(",")!=="category,query")fail("INVALID_KNOWLEDGE_REQUEST");
+    const category=one(x.category,categories),query=str(x.query,120);
+    const result=retrieveSopEvidence({query,category,sops:[...a.store.sops.values()].flat(),tenantId:a.t,facilityId:a.f,roles:a.roles,asOf:this.#now()});
+    await this.#audit(a,"knowledge_search",category);
+    return clone(result);
+  }
+  async knowledgeCoverage(req){
+    const a=await this.#authorize(req,true);
+    const result=knowledgeCoverage({categories,sops:[...a.store.sops.values()].flat(),tenantId:a.t,facilityId:a.f,roles:a.roles,asOf:this.#now()});
+    await this.#audit(a,"knowledge_coverage_read","scope");
+    return clone(result);
   }
   async operator(req){
     const a=await this.#authorize(req);

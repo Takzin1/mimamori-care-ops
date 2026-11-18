@@ -12,8 +12,8 @@ async function api(path,body){
 function fill(id,items){const root=$(id);root.replaceChildren();for(const text of items){const li=document.createElement("li");li.textContent=text;root.append(li);}}
 function populate(){const q=$("search").value.trim();const root=$("resident");root.replaceChildren();for(const r of residents.filter(r=>(r.display_name+" "+r.room_number).includes(q))){const o=document.createElement("option");o.value=r.resident_id;o.textContent=r.display_name+" / "+r.room_number+"号室";root.append(o);}clearGuide();purge();}
 async function run(fn){if(busy)return;busy=true;message("");try{await fn();}catch(e){message("操作できませんでした（"+e.message+"）。入力・権限を確認し、必要に応じガイドを再取得してください。");}finally{busy=false;}}
-$("connect").onclick=()=>run(async()=>{token=$("token").value;$("token").value="";try{operator=await api("/operator");residents=await api("/residents");}catch(e){token="";operator=null;throw e;}$("login").hidden=true;$("work").hidden=false;populate();$("storage-mode").textContent=operator.synthetic_persistence?"合成データ保存モード（Case昇格不可）":"合成データ・メモリモード";await refreshFollowups();});
-$("logout").onclick=()=>{sessionEpoch++;token="";operator=null;residents=[];$("followup-items").replaceChildren();$("queue-status").textContent="";$("storage-mode").textContent="";$("choice-category").value="";$("choice-value").value="";clearGuide();purge();$("work").hidden=true;$("login").hidden=false;$("resident").replaceChildren();$("search").value="";message("");};
+$("connect").onclick=()=>run(async()=>{token=$("token").value;$("token").value="";try{operator=await api("/operator");residents=await api("/residents");}catch(e){token="";operator=null;throw e;}$("login").hidden=true;$("work").hidden=false;populate();$("knowledge-coverage").hidden=!operator.can_review;$("storage-mode").textContent=operator.synthetic_persistence?"合成データ保存モード（Case昇格不可）":"合成データ・メモリモード";await refreshFollowups();});
+$("logout").onclick=()=>{clearKnowledge();$("knowledge-query").value="";$("knowledge-coverage-results").replaceChildren();$("knowledge-coverage").hidden=true;sessionEpoch++;token="";operator=null;residents=[];$("followup-items").replaceChildren();$("queue-status").textContent="";$("storage-mode").textContent="";$("choice-category").value="";$("choice-value").value="";clearGuide();purge();$("work").hidden=true;$("login").hidden=false;$("resident").replaceChildren();$("search").value="";message("");};
 function resetChoice(){$("choice-category").value="";$("choice-value").value="";}
 const oldPopulate=populate;$("search").oninput=()=>{resetChoice();oldPopulate();};$("resident").onchange=()=>{resetChoice();clearGuide();purge();};$("category").onchange=$("resident").onchange;
 $("choice-category").onchange=()=>{clearGuide();purge();};$("choice-value").oninput=()=>{clearGuide();purge();};
@@ -65,3 +65,26 @@ async function refreshFollowups(){
  renderFollowups(items);
 }
 $("refresh-followups").onclick=()=>run(refreshFollowups);
+
+let knowledgeEpoch=0;
+function clearKnowledge(){knowledgeEpoch++;$("knowledge-results").replaceChildren();$("knowledge-status").textContent="";}
+$("knowledge-query").oninput=clearKnowledge;$("knowledge-category").onchange=clearKnowledge;
+$("knowledge-search").onclick=()=>run(async()=>{
+ clearKnowledge();const gen=knowledgeEpoch,session=sessionEpoch;
+ const query=$("knowledge-query").value.trim(),category=$("knowledge-category").value;
+ if(!query)throw Error("キーワードを入力してください");
+ const data=await api("/knowledge-search",{category,query});
+ if(gen!==knowledgeEpoch||session!==sessionEpoch||!token)return;
+ const messages={EVIDENCE_FOUND:"承認済み原文です。本人の希望と施設の最新手順を確認してください。",NO_MATCH:"該当なし。別のキーワードまたは責任者に確認してください。",QUERY_TOO_SHORT:"2文字以上のキーワードを入力してください。",CONSULT_REQUIRED:"検索結果で判断せず、施設の既定手順・責任者に確認してください。",UNAVAILABLE:"利用可能な承認済み手順書がありません。"};
+ $("knowledge-status").textContent=messages[data.state]??"確認が必要です。";
+ for(const hit of data.results){const card=document.createElement("div");card.className="knowledge-card";
+  const title=document.createElement("h3");title.textContent=hit.title+" / "+hit.label+" / "+(hit.match_type==="EXACT"?"語句一致":"部分一致");
+  const quote=document.createElement("blockquote");quote.textContent=hit.quote;
+  const source=document.createElement("p");source.textContent="出典: "+hit.source_reference+" / v"+hit.version+"・改訂"+hit.revision+" / "+hit.evidence_id;
+  card.append(title,quote,source);$("knowledge-results").append(card);}
+});
+$("knowledge-coverage").onclick=()=>run(async()=>{
+ const gen=sessionEpoch,data=await api("/knowledge-coverage");if(gen!==sessionEpoch||!token)return;
+ const labels={AVAILABLE:"承認済み・閲覧可",UNAVAILABLE:"利用可能な手順なし",AMBIGUOUS:"複数の承認済み手順・要確認"};
+ fill("knowledge-coverage-results",data.map(x=>{const option=[...$("knowledge-category").options].find(o=>o.value===x.category);return (option?.textContent??x.category)+"： "+labels[x.state]+(x.version?" (v"+x.version+")":"");}));
+});

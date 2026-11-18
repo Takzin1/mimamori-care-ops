@@ -9,6 +9,7 @@ export async function dispatchPersonalized(service,accessToken,method,path,body=
   if(method==="GET"&&p.length===8&&r==="residents")return service.residents(req);
   if(method==="GET"&&key&&r==="residents")return service.resident(req,key);
   if(method==="GET"&&key&&r==="sops")return service.sopHistory(req,key);
+  if(method==="GET"&&p.length===8&&r==="knowledge-coverage")return service.knowledgeCoverage(req);
   if(method==="GET"&&p.length===8&&r==="operator")return service.operator(req);
   if(method==="GET"&&p.length===8&&r==="followups")return service.followups(req);
   if(method==="GET"&&p.length===8&&r==="audit")return service.audit(req);
@@ -19,6 +20,7 @@ export async function dispatchPersonalized(service,accessToken,method,path,body=
       case "sops":return service.putSop(req,body);
       case "sop-transitions":return service.transitionSop(req,body);
       case "resident-deletions":await service.deleteResident(req,body.resident_id,body.expected_version);return {deleted:true};
+      case "knowledge-search":return service.searchKnowledge(req,body);
       case "guides":return service.guide(req,body.resident_id,body.category,body.current_choice??null);
       case "interactions":return service.record(req,body);
     }
