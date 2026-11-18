@@ -203,15 +203,20 @@ export class PersonalizedCareService {
       a.store.logs.set(key,updated);this.#audit(a,"interaction_promoted",key);return {case_id:c.id,version:updated.version};
     }finally{this.#pending.delete(lock);}
   }
+  async operator(req){
+    const a=await this.#authorize(req);
+    return {roles:[...a.roles].sort(cmp),can_review:a.roles.includes("supervisor"),can_attempt_promotion:!this.#snapshots&&!!this.#case&&a.roles.some(r=>r==="supervisor"||r==="dispatcher"),synthetic_persistence:!!this.#snapshots};
+  }
   async followups(req){
     const a=await this.#authorize(req);
     const items=[...a.store.logs.values()].filter(x=>x.followup_required&&a.store.profiles.get(x.resident_id)?.consent_status==="granted"&&x.review?.decision!=="NO_FURTHER_ACTION").sort((x,y)=>cmp(x.created_at,y.created_at)||cmp(x.interaction_id,y.interaction_id));
     this.#audit(a,"followups_read","scope");
-    return clone(items.map(x=>({interaction_id:x.interaction_id,resident_id:x.resident_id,interaction_type:x.interaction_type,created_at:x.created_at,version:x.version,case_linked:!!x.related_case_id,review:x.review??null,requires_review:!x.review||x.guide_snapshot.blocked,action_summary:x.action_summary})));
+    return clone(items.map(x=>({interaction_id:x.interaction_id,resident_id:x.resident_id,interaction_type:x.interaction_type,created_at:x.created_at,version:x.version,case_linked:!!x.related_case_id,blocked:x.guide_snapshot.blocked,review:x.review??null,requires_review:!x.review||x.guide_snapshot.blocked,action_summary:x.action_summary})));
   }
   async reviewFollowup(req,iid,raw){
     const a=await this.#authorize(req,true),x=obj(raw),key=id(iid),log=a.store.logs.get(key);
     if(!log||!log.followup_required)fail("NOT_FOUND",404);
+    if(this.#pending.has(JSON.stringify([a.key,key])))fail("PROMOTION_IN_PROGRESS",409);
     this.#profile(a,log.resident_id);
     if(ver(x.expected_version,1)!==log.version)fail("VERSION_CONFLICT",409);
     if(log.related_case_id||log.review?.decision==="NO_FURTHER_ACTION")fail("VERSION_CONFLICT",409);

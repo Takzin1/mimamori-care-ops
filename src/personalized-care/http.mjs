@@ -9,6 +9,7 @@ export async function dispatchPersonalized(service,accessToken,method,path,body=
   if(method==="GET"&&p.length===8&&r==="residents")return service.residents(req);
   if(method==="GET"&&key&&r==="residents")return service.resident(req,key);
   if(method==="GET"&&key&&r==="sops")return service.sopHistory(req,key);
+  if(method==="GET"&&p.length===8&&r==="operator")return service.operator(req);
   if(method==="GET"&&p.length===8&&r==="followups")return service.followups(req);
   if(method==="GET"&&p.length===8&&r==="audit")return service.audit(req);
   if(method==="POST"&&p.length===8){
