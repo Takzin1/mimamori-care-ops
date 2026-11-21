@@ -25,7 +25,7 @@ import type {
 import {
   projectConsoleWebModel,
 } from "./view-model.ts";
-import { explainCaseStage, explainNextStep } from "./next-step.ts";
+import { explainCaseStage, explainNextStep, selectPrimaryCoreAction, explainPriority, explainOutcome, explainEvidenceKind, explainCaseEvent } from "./next-step.ts";
 
 function node<K extends keyof HTMLElementTagNameMap>(
   doc: Document,
@@ -154,7 +154,9 @@ function selectField(
   for (const value of values) {
     const option = node(doc, "option");
     option.value = value;
-    option.textContent = value;
+    option.textContent = name === "priority" ? explainPriority(value)
+      : name === "outcome" ? explainOutcome(value)
+      : name === "evidenceKind" ? explainEvidenceKind(value) : value;
     select.append(option);
   }
 
@@ -203,7 +205,7 @@ function actionFields(
           selectField(
             doc,
             "priority",
-            "Priority",
+            "優先度",
             CASE_PRIORITIES,
           ),
         );
@@ -213,7 +215,7 @@ function actionFields(
         const input = actionInput(
           doc,
           "assigneeId",
-          "Assignee actor ID",
+          "担当者ID",
           128,
         );
         fields.push(fieldWrapper(input));
@@ -224,7 +226,7 @@ function actionFields(
         const input = actionInput(
           doc,
           "targetAssigneeId",
-          "Handoff target actor ID",
+          "引き継ぎ先の担当者ID",
           128,
         );
         fields.push(fieldWrapper(input));
@@ -236,7 +238,7 @@ function actionFields(
           selectField(
             doc,
             "outcome",
-            "Outcome",
+            "対応結果",
             COMPLETION_OUTCOMES,
           ),
         );
@@ -247,7 +249,7 @@ function actionFields(
           textArea(
             doc,
             "summary",
-            "Completion summary",
+            "対応内容・結果の説明",
             4000,
           ),
         );
@@ -257,14 +259,14 @@ function actionFields(
         const ref = actionInput(
           doc,
           "evidenceRef",
-          "Evidence reference",
+          "証跡の参照先（記録IDなど）",
           1000,
         );
         fields.push(
           selectField(
             doc,
             "evidenceKind",
-            "Evidence kind",
+            "証跡の種類",
             EVIDENCE_KINDS,
           ),
           fieldWrapper(ref),
@@ -277,7 +279,7 @@ function actionFields(
           textArea(
             doc,
             "reason",
-            "Reopen reason",
+            "再開する理由",
             1000,
           ),
         );
@@ -297,6 +299,9 @@ implements LiveConsoleWebRendererHandle {
   #started = false;
   #disposed = false;
   #localError: string | null = null;
+  #lastSelectedCaseId: string | null = null;
+  #detailExpanded = false;
+  #secondaryExpanded = false;
 
   constructor(
     options: LiveConsoleWebRendererOptions,
@@ -358,7 +363,7 @@ implements LiveConsoleWebRendererHandle {
         doc,
         "h1",
         "mco-title",
-        "Mimamori Care Ops",
+        "見守りくん",
       ),
       node(
         doc,
@@ -464,14 +469,7 @@ implements LiveConsoleWebRendererHandle {
       },
     );
 
-    const state = node(
-      doc,
-      "span",
-      "mco-subtle",
-      `Session: ${snapshot.session.state}`,
-    );
-
-    bar.append(refresh, signOut, state);
+    bar.append(refresh, signOut);
     return bar;
   }
 
@@ -488,13 +486,9 @@ implements LiveConsoleWebRendererHandle {
     );
 
     const values = [
-      ["対応待ち", model.queue.total],
+      ["未完了の対応", model.queue.total],
+      ["引き継ぎ待ち", model.queue.handoffPending],
       ["期限超過", model.queue.breached],
-      ["担当未決定", model.queue.unassigned],
-      [
-        "引継ぎ待ち",
-        model.queue.handoffPending,
-      ],
     ] as const;
 
     for (const [label, value] of values) {
@@ -568,8 +562,8 @@ implements LiveConsoleWebRendererHandle {
           "div",
           "mco-empty",
           model.queue.loading
-            ? "Queueを読み込み中…"
-            : "Active Caseはありません。",
+            ? "対応一覧を読み込み中…"
+            : "未完了の対応はありません。",
         ),
       );
       return panel;
@@ -620,7 +614,7 @@ implements LiveConsoleWebRendererHandle {
           doc,
           "span",
           "mco-tag",
-          card.priority.toUpperCase(),
+          explainPriority(card.priority),
         ),
       );
 
@@ -751,191 +745,74 @@ implements LiveConsoleWebRendererHandle {
           "mco-empty",
           snapshot.detail.state ===
             "loading"
-            ? "Caseを読み込み中…"
-            : "QueueからCaseを選択してください。",
+            ? "対応内容を読み込み中…"
+            : "対応一覧から案件を選択してください。",
         ),
       );
       return panel;
     }
 
-    const facts = node(
-      doc,
-      "div",
-      "mco-facts",
-    );
+    const facts = node(doc, "div", "mco-facts");
     facts.style.margin = "16px";
-
-    appendTextPair(
-      doc,
-      facts,
-      "Status",
-      model.selected.status,
-    );
-    appendTextPair(
-      doc,
-      facts,
-      "Priority",
-      model.selected.priority,
-    );
-    appendTextPair(
-      doc,
-      facts,
-      "Version",
-      String(
-        model.selected.version,
-      ),
-    );
-    appendTextPair(
-      doc,
-      facts,
-      "Subject",
-      model.selected.subjectId,
-    );
-    appendTextPair(
-      doc,
-      facts,
-      "Owner",
-      display(
-        model.selected.owner,
-      ),
-    );
-    appendTextPair(
-      doc,
-      facts,
-      "Handoff",
-      display(
-        model.selected
-          .handoffTarget,
-      ),
-    );
-    appendTextPair(
-      doc,
-      facts,
-      "Source",
-      model.selected.sourceType,
-    );
-    appendTextPair(
-      doc,
-      facts,
-      "Evidence",
-      String(
-        model.selected
-          .evidenceCount,
-      ),
-    );
-
+    appendTextPair(doc, facts, "状況", explainCaseStage(model.selected.status));
+    appendTextPair(doc, facts, "対象ID", model.selected.subjectId);
+    appendTextPair(doc, facts, "現在の担当", display(model.selected.owner));
+    if (model.selected.status === "HANDOFF_PENDING") {
+      appendTextPair(doc, facts, "引き継ぎ先", display(model.selected.handoffTarget));
+    }
+    const completion = snapshot.detail.data?.aggregate.completion;
+    if (completion) {
+      appendTextPair(doc, facts, "対応結果", explainOutcome(completion.outcome));
+      appendTextPair(doc, facts, "対応内容", completion.summary);
+      appendTextPair(doc, facts, "証跡", `${completion.evidence.length}件`);
+    }
     panel.append(facts);
 
-    if (
-      model.selected.active === false
-    ) {
-      panel.append(
-        this.#banner(
-          doc,
-          "このCaseはActive Queue外です。履歴・証跡として表示しています。",
-          "warn",
-        ),
-      );
+    if (model.selected.active === false) {
+      panel.append(this.#banner(
+        doc, "この案件は未完了一覧にありません。完了後の記録として表示しています。",
+      ));
     }
+
+    // History/diagnostics remain accessible but do not dominate the main workflow.
+    const disclosure = node(doc, "details", "mco-disclosure");
+    disclosure.open = this.#detailExpanded;
+    disclosure.addEventListener("toggle", () => {
+      if (!this.#disposed) this.#detailExpanded = disclosure.open;
+    });
+    disclosure.append(node(doc, "summary", "", "対応履歴・詳細を見る"));
+    const extra = node(doc, "div", "mco-disclosure-body");
+    const diagnostics = node(doc, "div", "mco-facts");
+    appendTextPair(doc, diagnostics, "優先度", explainPriority(model.selected.priority));
+    appendTextPair(doc, diagnostics, "状態バージョン", String(model.selected.version));
+    appendTextPair(doc, diagnostics, "受付の種類", model.selected.sourceType);
+    appendTextPair(doc, diagnostics, "証跡の件数", String(model.selected.evidenceCount));
+    extra.append(diagnostics);
 
     if (model.metrics) {
-      const metrics = node(
-        doc,
-        "div",
-        "mco-facts",
-      );
-      metrics.style.margin = "16px";
-
-      appendTextPair(
-        doc,
-        metrics,
-        "TTA",
-        minutesLabel(
-          model.metrics.ttaMinutes,
-        ),
-      );
-      appendTextPair(
-        doc,
-        metrics,
-        "Assignment",
-        minutesLabel(
-          model.metrics
-            .assignmentMinutes,
-        ),
-      );
-      appendTextPair(
-        doc,
-        metrics,
-        "First Action",
-        minutesLabel(
-          model.metrics
-            .firstActionMinutes,
-        ),
-      );
-      appendTextPair(
-        doc,
-        metrics,
-        "TTC",
-        minutesLabel(
-          model.metrics.ttcMinutes,
-        ),
-      );
-
-      panel.append(metrics);
+      const metrics = node(doc, "div", "mco-facts");
+      appendTextPair(doc, metrics, "受諾まで", minutesLabel(model.metrics.ttaMinutes));
+      appendTextPair(doc, metrics, "担当決定まで", minutesLabel(model.metrics.assignmentMinutes));
+      appendTextPair(doc, metrics, "対応開始まで", minutesLabel(model.metrics.firstActionMinutes));
+      appendTextPair(doc, metrics, "完了まで", minutesLabel(model.metrics.ttcMinutes));
+      extra.append(metrics);
     }
 
-    const stored =
-      snapshot.detail.data;
-
+    const stored = snapshot.detail.data;
     if (stored) {
-      const timelineTitle = node(
-        doc,
-        "div",
-        "mco-panel-head",
-      );
-      timelineTitle.append(
-        node(
-          doc,
-          "h2",
-          "",
-          "責任の履歴",
-        ),
-      );
-      panel.append(timelineTitle);
-
-      const timeline = node(
-        doc,
-        "ol",
-        "mco-timeline",
-      );
-
-      for (
-        const event of
-        [...stored.events].reverse()
-      ) {
-        const item = node(
-          doc,
-          "li",
-        );
+      const timeline = node(doc, "ol", "mco-timeline");
+      for (const event of [...stored.events].reverse()) {
+        const item = node(doc, "li");
         item.append(
-          node(
-            doc,
-            "strong",
-            "",
-            event.type,
-          ),
-          node(
-            doc,
-            "small",
-            "",
-            `${dateLabel(event.at)} · ${display(event.actorId)}`,
-          ),
+          node(doc, "strong", "", explainCaseEvent(event.type)),
+          node(doc, "small", "", `${dateLabel(event.at)} · ${display(event.actorId)}`),
         );
         timeline.append(item);
       }
-
-      panel.append(timeline);
+      extra.append(timeline);
     }
+    disclosure.append(extra);
+    panel.append(disclosure);
 
     return panel;
   }
@@ -1108,7 +985,7 @@ implements LiveConsoleWebRendererHandle {
           doc,
           "div",
           "mco-empty",
-          "Caseを選択すると許可された操作が表示されます。",
+          "対応一覧から案件を選んでください。",
         ),
       );
       return panel;
@@ -1123,29 +1000,28 @@ implements LiveConsoleWebRendererHandle {
           snapshot.capabilities.state ===
             "loading"
             ? "操作権限を確認中…"
-            : "現在このCaseで実行できる操作はありません。",
+            : "現在できる操作はありません。状態・権限を確認してください。",
         ),
       );
       return panel;
     }
 
-    const actions = node(
-      doc,
-      "div",
-      "mco-actions",
-    );
+    const actions = node(doc, "div", "mco-actions");
+    const primary = selectPrimaryCoreAction(model.selected.status, model.actions);
+    if (primary) actions.append(this.#actionForm(doc, primary, snapshot));
 
-    for (
-      const action of
-      model.actions
-    ) {
-      actions.append(
-        this.#actionForm(
-          doc,
-          action,
-          snapshot,
-        ),
-      );
+    const secondary = model.actions.filter((item) => item !== primary);
+    if (secondary.length > 0) {
+      const disclosure = node(doc, "details", "mco-disclosure mco-secondary-actions");
+      disclosure.open = this.#secondaryExpanded;
+      disclosure.addEventListener("toggle", () => {
+        if (!this.#disposed) this.#secondaryExpanded = disclosure.open;
+      });
+      disclosure.append(node(doc, "summary", "", "引き継ぎ・その他の操作"));
+      const extra = node(doc, "div", "mco-disclosure-body");
+      for (const item of secondary) extra.append(this.#actionForm(doc, item, snapshot));
+      disclosure.append(extra);
+      actions.append(disclosure);
     }
 
     panel.append(actions);
@@ -1157,6 +1033,11 @@ implements LiveConsoleWebRendererHandle {
       LiveConsoleWorkspaceSnapshot,
   ): void {
     if (this.#disposed) return;
+    if (snapshot.selectedCaseId !== this.#lastSelectedCaseId) {
+      this.#lastSelectedCaseId = snapshot.selectedCaseId;
+      this.#detailExpanded = false;
+      this.#secondaryExpanded = false;
+    }
 
     const doc =
       this.#root.ownerDocument;
@@ -1219,14 +1100,10 @@ implements LiveConsoleWebRendererHandle {
     const grid = node(
       doc,
       "main",
-      "mco-grid",
+      snapshot.selectedCaseId ? "mco-grid mco-has-selection" : "mco-grid",
     );
     grid.append(
       this.#queuePanel(
-        doc,
-        snapshot,
-      ),
-      this.#detailPanel(
         doc,
         snapshot,
       ),
@@ -1234,7 +1111,16 @@ implements LiveConsoleWebRendererHandle {
         doc,
         snapshot,
       ),
+      this.#detailPanel(
+        doc,
+        snapshot,
+      ),
     );
+    if (projectConsoleWebModel(snapshot).queue.unassigned > 0) {
+      shell.append(this.#banner(doc,
+        "担当が決まっていない案件があります。対応一覧から確認してください。",
+        "warn"));
+    }
     shell.append(grid);
 
     this.#root.replaceChildren(
