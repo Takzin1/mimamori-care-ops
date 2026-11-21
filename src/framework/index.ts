@@ -13,3 +13,5 @@ export * from "./store/in-memory-framework-store.ts";
 export * from "./framework-service.ts";
 export * from "./http/framework-http-api.ts";
 export * from "./store/postgrest-framework-store.ts";
+export * from "./training-engine.ts";
+export * from "./records-service.ts";

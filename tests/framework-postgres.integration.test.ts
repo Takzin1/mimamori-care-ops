@@ -72,13 +72,15 @@ test("Framework records persist in PostgreSQL through the real adapters, with go
   psql(["-f", "db/case_store.sql"]);
   psql(["-f", "db/framework_store.sql"]);
   psql(["-f", "db/framework_store.sql"]); // re-runnable
-  sql("truncate public.framework_case_links, public.framework_manual_versions, public.framework_manuals, public.framework_tenant_profiles, public.care_outbox, public.care_case_events, public.care_cases;");
+  psql(["-f", "db/framework_records.sql"]);
+  psql(["-f", "db/framework_records.sql"]); // re-runnable
+  sql("truncate public.framework_case_step_checks, public.framework_training_attempts, public.framework_case_links, public.framework_manual_versions, public.framework_manuals, public.framework_tenant_profiles, public.care_outbox, public.care_case_events, public.care_cases;");
 
   const rest = psqlPostgrest(databaseUrl!);
   const clock = new Clock();
   const store = new PostgrestFrameworkStore({ baseUrl: "http://postgrest.test", serviceRoleKey: "test-service-role", fetchImpl: rest.fetch });
   const repository = new PostgrestCaseRepository({ baseUrl: "http://postgrest.test", serviceRoleKey: "test-service-role", fetchImpl: rest.fetch });
-  const { framework } = world({ store, repository, clock });
+  const { framework, records, caseService } = world({ store, repository, clock });
 
   await provision(framework);
   assert.equal(sql("select count(*) from public.framework_manual_versions where status = 'approved'"), "4");
@@ -118,7 +120,40 @@ test("Framework records persist in PostgreSQL through the real adapters, with go
     (e: unknown) => e instanceof FrameworkConflictError && e.reason === "manual_version_stale",
   );
 
+  // P2: training records, step checks and evidence persist through the same adapters.
+  const quiz = await records.submitQuiz("p-resp-a", "facility-a", "care-fall-response-drill", { attemptId: "pg-quiz-0001", answers: { q1: "a", q2: "b" } });
+  assert.equal(quiz.recorded, true);
+  assert.equal(quiz.attempt.passed, false);
+  assert.equal((await records.submitQuiz("p-resp-a", "facility-a", "care-fall-response-drill", { attemptId: "pg-quiz-0001", answers: { q1: "b", q2: "b" } })).recorded, false);
+  const scenarioCourse = (await records.courseDetail("p-resp-a", "facility-a", "care-fall-response-drill"));
+  assert.equal(scenarioCourse.manual.version, 2, "training binds to the currently approved version");
+  const { INDUSTRY_PACKS } = await import("../src/framework/index.ts");
+  const drillSteps = INDUSTRY_PACKS.care.trainings.find((t) => t.key === "fall-response-drill")!.scenario;
+  const drill = await records.scenario("p-resp-a", "facility-a", "care-fall-response-drill", {
+    attemptId: "pg-drill-0001", answers: drillSteps.map((st) => ({ stepId: st.id, choiceId: st.correctChoiceId })), final: true,
+  });
+  assert.equal(drill.recorded, true);
+  assert.equal(sql("select count(*) || '/' || bool_and(simulated) from public.framework_training_attempts"), "2/true");
+  assert.equal(sql("select count(*) from public.care_cases"), "1", "training created no real Case");
+
+  let version = (await caseService.get({ tenantId: "facility-a", caseId: aggregate.id, principalId: "p-disp-a" }))!.aggregate.version;
+  for (const [principalId, command] of [["p-disp-a", { type: "acknowledge" }], ["p-disp-a", { type: "assign", assigneeId: "resp-a" }], ["p-resp-a", { type: "start_action" }]] as const) {
+    version = (await caseService.execute({ tenantId: "facility-a", caseId: aggregate.id, principalId, expectedVersion: version, command: command as never })).aggregate.version;
+  }
+  assert.equal((await records.checkStep("p-resp-a", "facility-a", aggregate.id, "care-fall-1")).created, true);
+  assert.equal((await records.checkStep("p-resp-a", "facility-a", aggregate.id, "care-fall-1")).created, false);
+  await assert.rejects(records.checkStep("p-resp-a", "facility-a", aggregate.id, "care-fall-9"));
+  const evidence = await records.evidence("p-sup-a1", "facility-a", aggregate.id);
+  assert.equal(evidence.manual?.version, 1);
+  assert.deepEqual(evidence.steps?.checked.map((c) => c.stepId), ["care-fall-1"]);
+  assert.deepEqual(evidence.timeline.map((t) => t.type), ["case_created", "acknowledged", "assigned", "action_started"]);
+  assert.equal(sql(`select count(*) from public.framework_case_step_checks where case_id = '${aggregate.id}'`), "1");
+
   // Database-level invariants, independent of the application.
+  assert.ok(denied("update public.framework_training_attempts set simulated = false", "postgres"), "training records are always simulated");
+  assert.ok(denied("insert into public.framework_case_step_checks values ('facility-a','case-without-link','care-fall-1','x',now())", "postgres"), "step checks need a manual-linked Case");
+  assert.ok(denied("delete from public.framework_training_attempts", "service_role"), "training records are append-only for the runtime");
+  assert.equal(sql("select count(*) from information_schema.columns where table_name = 'framework_training_attempts' and column_name like '%case%'"), "0", "training records cannot reference a Case");
   assert.ok(denied("update public.framework_manual_versions set steps = '[]'::jsonb where version = 1", "postgres"), "reviewed content is immutable even for the owner");
   assert.ok(denied("update public.framework_manual_versions set reviewed_by = created_by where status = 'approved'", "postgres"), "four-eyes check constraint");
   assert.ok(denied("insert into public.framework_case_links values ('facility-a','case-x','care-fall-response',1,'s','r','a',now())", "service_role"), "service_role cannot write tables directly");
@@ -132,7 +167,7 @@ test("Framework records persist in PostgreSQL through the real adapters, with go
 });
 
 test("search latency on 5,000 approved manuals per tenant (measured, reported)", { skip: !baseUrl }, () => {
-  sql("delete from public.framework_case_links; delete from public.framework_manual_versions; delete from public.framework_manuals; delete from public.framework_tenant_profiles;");
+  sql("delete from public.framework_case_step_checks; delete from public.framework_training_attempts; delete from public.framework_case_links; delete from public.framework_manual_versions; delete from public.framework_manuals; delete from public.framework_tenant_profiles;");
   sql("insert into public.framework_tenant_profiles values ('bench-a','care','x','A','b',now()), ('bench-b','care','x','B','b',now());");
   sql(`insert into public.framework_manuals
          select t, 'm' || g, 'care', 'incident', 'てすと手順' || g || case when g % 50 = 0 then ' 転倒' else '' end,

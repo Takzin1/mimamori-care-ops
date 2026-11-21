@@ -1,5 +1,7 @@
 import type {
   CaseManualLink,
+  CaseStepCheck,
+  TrainingAttempt,
   FrameworkManual,
   FrameworkManualVersion,
   ManualSearchHit,
@@ -57,4 +59,18 @@ export interface FrameworkStore {
   getCaseLink(tenantId: string, caseId: string): Promise<CaseManualLink | null>;
   /** Signal IDs are unique per tenant across Framework links (retry detection). */
   getCaseLinkBySignal(tenantId: string, signalId: string): Promise<CaseManualLink | null>;
+
+  /** Append-only; the same attemptId with identical identity is an idempotent replay. */
+  recordTrainingAttempt(attempt: TrainingAttempt): Promise<{ created: boolean; attempt: TrainingAttempt }>;
+  listTrainingAttempts(tenantId: string, filter: TrainingAttemptFilter): Promise<TrainingAttempt[]>;
+
+  /** Idempotent per tenant + case + step; returns the first check. */
+  recordStepCheck(check: CaseStepCheck): Promise<{ created: boolean; check: CaseStepCheck }>;
+  listStepChecks(tenantId: string, caseId: string): Promise<CaseStepCheck[]>;
+}
+
+export interface TrainingAttemptFilter {
+  actorIds?: string[];
+  manualId?: string;
+  limit: number;
 }

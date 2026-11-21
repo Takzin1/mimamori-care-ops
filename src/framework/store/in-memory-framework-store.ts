@@ -3,12 +3,15 @@ import { isFieldVisible } from "../manual-rules.ts";
 import { scoreDocument, type SearchDocument } from "../text.ts";
 import type {
   CaseManualLink,
+  CaseStepCheck,
   FrameworkManual,
   FrameworkManualVersion,
   ManualSearchHit,
   TenantProfile,
+  TrainingAttempt,
 } from "../types.ts";
 import type {
+  TrainingAttemptFilter,
   FieldSearchQuery,
   FrameworkStore,
   ManualVersionWrite,
@@ -38,6 +41,8 @@ export class InMemoryFrameworkStore implements FrameworkStore {
   private readonly manuals = new Map<string, ManualWrite>();
   private readonly versions = new Map<string, ManualVersionWrite>();
   private readonly links = new Map<string, CaseManualLink>();
+  private readonly attempts = new Map<string, TrainingAttempt>();
+  private readonly stepChecks = new Map<string, CaseStepCheck>();
 
   async getTenantProfile(tenantId: string) {
     const profile = this.profiles.get(tenantId);
@@ -188,5 +193,47 @@ export class InMemoryFrameworkStore implements FrameworkStore {
   async getCaseLink(tenantId: string, caseId: string) {
     const link = this.links.get(key(tenantId, caseId));
     return link ? clone(link) : null;
+  }
+
+  async recordTrainingAttempt(attempt: TrainingAttempt) {
+    const attemptKey = key(attempt.tenantId, attempt.attemptId);
+    const existing = this.attempts.get(attemptKey);
+    if (existing) {
+      if (existing.actorId !== attempt.actorId || existing.courseId !== attempt.courseId || existing.mode !== attempt.mode) {
+        throw new FrameworkConflictError("training_attempt_exists");
+      }
+      return { created: false, attempt: clone(existing) };
+    }
+    if (!this.versions.has(key(attempt.tenantId, attempt.manualId, attempt.manualVersion))) {
+      throw new FrameworkConflictError("manual_version_stale");
+    }
+    this.attempts.set(attemptKey, clone(attempt));
+    return { created: true, attempt: clone(attempt) };
+  }
+
+  async listTrainingAttempts(tenantId: string, filter: TrainingAttemptFilter) {
+    return [...this.attempts.values()]
+      .filter((a) => a.tenantId === tenantId)
+      .filter((a) => !filter.actorIds || filter.actorIds.includes(a.actorId))
+      .filter((a) => !filter.manualId || a.manualId === filter.manualId)
+      .sort((a, b) => b.completedAt.localeCompare(a.completedAt) || b.attemptId.localeCompare(a.attemptId))
+      .slice(0, filter.limit)
+      .map(clone);
+  }
+
+  async recordStepCheck(check: CaseStepCheck) {
+    if (!this.links.has(key(check.tenantId, check.caseId))) throw new FrameworkConflictError("case_link_mismatch");
+    const checkKey = key(check.tenantId, check.caseId, check.stepId);
+    const existing = this.stepChecks.get(checkKey);
+    if (existing) return { created: false, check: clone(existing) };
+    this.stepChecks.set(checkKey, clone(check));
+    return { created: true, check: clone(check) };
+  }
+
+  async listStepChecks(tenantId: string, caseId: string) {
+    return [...this.stepChecks.values()]
+      .filter((c) => c.tenantId === tenantId && c.caseId === caseId)
+      .sort((a, b) => a.checkedAt.localeCompare(b.checkedAt) || a.stepId.localeCompare(b.stepId))
+      .map(clone);
   }
 }
