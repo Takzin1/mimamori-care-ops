@@ -1,5 +1,6 @@
 import {
   assertCanReadCase,
+  assertMatchingPrincipalMembership,
   queueVisibilityForMembership,
 } from "../access/policy.ts";
 import type {
@@ -62,6 +63,7 @@ export class CaseQueueService {
       input.tenantId,
       input.principalId,
     );
+    assertMatchingPrincipalMembership(membership, input.tenantId, input.principalId);
     assertCanReadCase(membership);
 
     const policy = await this.policies.findByTenant(input.tenantId);

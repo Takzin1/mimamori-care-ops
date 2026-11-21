@@ -9,11 +9,11 @@ import type {
   CaseMetrics,
 } from "../core/index.ts";
 import {
-  assertActiveMembership,
-  assertAssignableTarget,
   assertCanExecuteCommand,
   assertCanReadCase,
   assertCanReadCaseAggregate,
+  assertMatchingPrincipalMembership,
+  assertMatchingTargetMembership,
 } from "../access/policy.ts";
 import type {
   TenantMembership,
@@ -91,6 +91,28 @@ function bindActor(
   }
 }
 
+/**
+ * Do not trust a repository response merely because the query used tenantId.
+ * It must return the *requested* Case, with matching event-stream provenance.
+ */
+function assertRequestedCase(
+  stored: StoredCase,
+  tenantId: string,
+  caseId: string,
+): void {
+  const origin = stored.events?.[0];
+  if (
+    stored.aggregate?.tenantId !== tenantId ||
+    stored.aggregate?.id !== caseId ||
+    !origin ||
+    origin.type !== "case_created" ||
+    origin.data.tenantId !== tenantId ||
+    origin.data.caseId !== caseId
+  ) {
+    throw new CaseNotFoundError(tenantId, caseId);
+  }
+}
+
 export class CaseService {
   private readonly repository: CaseRepository;
   private readonly memberships: TenantMembershipDirectory;
@@ -133,8 +155,10 @@ export class CaseService {
   private async membershipFor(
     tenantId: string,
     principalId: string,
-  ): Promise<TenantMembership | null> {
-    return this.memberships.findByPrincipal(tenantId, principalId);
+  ): Promise<TenantMembership> {
+    const membership = await this.memberships.findByPrincipal(tenantId, principalId);
+    assertMatchingPrincipalMembership(membership, tenantId, principalId);
+    return membership;
   }
 
   private async assertTargetAssignable(
@@ -145,7 +169,7 @@ export class CaseService {
       tenantId,
       actorId,
     );
-    assertAssignableTarget(target);
+    assertMatchingTargetMembership(target, tenantId, actorId);
   }
 
   async execute(
@@ -180,6 +204,8 @@ export class CaseService {
       throw new CaseNotFoundError(input.tenantId, input.caseId);
     }
 
+    assertRequestedCase(stored, input.tenantId, input.caseId);
+
     assertCanReadCaseAggregate(
       membership,
       stored.aggregate,
@@ -199,6 +225,15 @@ export class CaseService {
       event: transition.event,
     });
 
+    // Catch a broken adapter returning a different tenant or Case after write.
+    if (
+      aggregate.tenantId !== input.tenantId ||
+      aggregate.id !== input.caseId ||
+      aggregate.version !== input.expectedVersion + 1
+    ) {
+      throw new CaseNotFoundError(input.tenantId, input.caseId);
+    }
+
     return {
       aggregate,
       event: transition.event,
@@ -213,8 +248,6 @@ export class CaseService {
       input.tenantId,
       input.principalId,
     );
-    assertActiveMembership(membership);
-
     return projectOperatorContext(
       membership,
     );
@@ -240,6 +273,8 @@ export class CaseService {
         input.caseId,
       );
     }
+
+    assertRequestedCase(stored, input.tenantId, input.caseId);
 
     assertCanReadCaseAggregate(
       membership,
@@ -268,6 +303,8 @@ export class CaseService {
       return null;
     }
 
+    assertRequestedCase(stored, input.tenantId, input.caseId);
+
     assertCanReadCaseAggregate(
       membership,
       stored.aggregate,
@@ -292,6 +329,8 @@ export class CaseService {
       throw new CaseNotFoundError(input.tenantId, input.caseId);
     }
 
+    assertRequestedCase(stored, input.tenantId, input.caseId);
+
     assertCanReadCaseAggregate(
       membership,
       stored.aggregate,
@@ -315,6 +354,8 @@ export class CaseService {
     if (!stored) {
       throw new CaseNotFoundError(input.tenantId, input.caseId);
     }
+
+    assertRequestedCase(stored, input.tenantId, input.caseId);
 
     assertCanReadCaseAggregate(
       membership,
