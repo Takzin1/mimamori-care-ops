@@ -60,3 +60,76 @@ export function explainNextStep(
   }
   return "対応は終了しています。必要に応じて履歴を確認してください。";
 }
+
+
+/**
+ * One prominent action per Case. All actions MUST originate from server
+ * capabilities; this function never creates permission or silently mutates.
+ * Handoff is optional, and alternate authorized commands remain available
+ * in the secondary disclosure.
+ */
+export function selectPrimaryCoreAction(
+  status: CaseStatus,
+  permitted: readonly ConsoleWebAction[],
+): ConsoleWebAction | null {
+  const preferences: Record<CaseStatus, readonly ConsoleWebAction["type"][]> = {
+    NEW: ["acknowledge"],
+    ACKNOWLEDGED: ["assign"],
+    ASSIGNED: ["start_action"],
+    IN_PROGRESS: ["complete", "request_handoff"],
+    HANDOFF_PENDING: ["accept_handoff"],
+    COMPLETED: ["close"],
+    CLOSED: [],
+  };
+  for (const type of preferences[status]) {
+    const action = permitted.find((item) => item.type === type);
+    if (action) return action;
+  }
+  return null;
+}
+
+export function explainPriority(value: string): string {
+  const labels: Record<string, string> = {
+    critical: "緊急", high: "高", normal: "通常", low: "低",
+  };
+  return labels[value] ?? value;
+}
+
+export function explainOutcome(value: string): string {
+  const labels: Record<string, string> = {
+    confirmed_safe: "安全を確認",
+    family_confirmed: "家族への確認完了",
+    visit_completed: "訪問完了",
+    support_connected: "支援につながった",
+    supplies_delivered: "物資の提供完了",
+    emergency_handoff_completed: "緊急対応への引き継ぎ完了",
+    false_alarm: "誤報",
+    declined: "支援を辞退",
+    other: "その他",
+  };
+  return labels[value] ?? value;
+}
+
+export function explainEvidenceKind(value: string): string {
+  const labels: Record<string, string> = {
+    note: "記録", call: "電話", visit: "訪問",
+    message: "メッセージ", external_ref: "外部資料",
+  };
+  return labels[value] ?? value;
+}
+
+export function explainCaseEvent(value: string): string {
+  const labels: Record<string, string> = {
+    case_created: "受付",
+    acknowledged: "受付内容を確認",
+    priority_changed: "優先度の変更",
+    assigned: "担当の割り当て",
+    action_started: "対応を開始",
+    handoff_requested: "引き継ぎを依頼",
+    handoff_accepted: "引き継ぎを受諾",
+    completed: "対応結果を記録",
+    closed: "終了確認",
+    reopened: "対応を再開",
+  };
+  return labels[value] ?? value;
+}
