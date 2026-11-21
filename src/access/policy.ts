@@ -8,8 +8,8 @@ import { isOperationalActorId } from "./actor-id.ts";
 import type {
   StaffRole,
   TenantMembership,
-  STAFF_ROLES,
 } from "./types.ts";
+import { STAFF_ROLES } from "./types.ts";
 
 const TENANT_WIDE_QUEUE_ROLES: readonly StaffRole[] = [
   "dispatcher",
