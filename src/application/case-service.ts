@@ -248,8 +248,6 @@ export class CaseService {
       input.tenantId,
       input.principalId,
     );
-    assertActiveMembership(membership);
-
     return projectOperatorContext(
       membership,
     );
