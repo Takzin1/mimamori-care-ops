@@ -110,7 +110,7 @@ export const LIVE_CONSOLE_CSS = `
 .mco-disclosure-body { display: grid; gap: 12px; padding: 12px; }
 .mco-secondary-actions { margin: 0; }
 .mco-secondary-actions .mco-action { padding: 12px; }
-.mco-timeline { list-style: none; margin: 0; padding: 8px 14px; }
+.mco-evidence-list { margin: 0; padding-left: 20px; overflow-wrap: anywhere; }\n.mco-timeline { list-style: none; margin: 0; padding: 8px 14px; }
 .mco-timeline li { border-left: 2px solid #b5dcd5; padding: 4px 0 12px 12px; }
 .mco-timeline strong, .mco-timeline small { display: block; }
 .mco-timeline small { color: var(--mco-muted); margin-top: 3px; }
