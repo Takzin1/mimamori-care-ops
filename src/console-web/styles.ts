@@ -232,4 +232,21 @@ export const LIVE_CONSOLE_CSS = `
   .mco-operator { text-align: left; }
   .mco-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mco-facts { grid-template-columns: 1fr; }
-}`;
+}
+/* Core-first UX: prioritize readable actions and large touch targets. */
+.mco-shell { color: #f3f7fa; background: #091a2b; }
+.mco-topbar { background: #10263c; border-bottom-color: #29485d; }
+.mco-metric, .mco-card, .mco-action, .mco-fact { background: #132b41; border-color: #305067; }
+.mco-panel, .mco-panel-head, .mco-grid { border-color: #305067; }
+.mco-card-selected { border-color: #19b5a5; background: #153d4b; }
+.mco-button-primary { background: #117e75; border-color: #19b5a5; }
+.mco-button { min-height: 44px; color: #f3f7fa; }
+.mco-field input, .mco-field select, .mco-field textarea {
+  min-height: 44px; color: #f3f7fa; background: #0b1b2b; border-color: #4d7086;
+}
+.mco-card { min-height: 88px; padding: 16px; }
+.mco-next-step { margin: 14px; padding: 15px; border: 1px solid #218d83; border-radius: 12px; background: #143741; line-height: 1.6; }
+.mco-next-step strong { display: block; font-size: 15px; }
+.mco-next-step p { margin: 6px 0 0; font-size: 14px; }
+.mco-card:focus-visible, .mco-button:focus-visible, .mco-field input:focus-visible, .mco-field select:focus-visible { outline: 3px solid #61ddce; outline-offset: 2px; }
+`;
