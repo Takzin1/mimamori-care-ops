@@ -31,6 +31,17 @@ const COMMAND_ROLES: Record<CaseCommandIntent["type"], readonly StaffRole[]> = {
   reopen: ["supervisor"],
 };
 
+/**
+ * Staff who may report an attention signal by hand (e.g. a fall found on a
+ * night round). Reporting only opens a NEW Case; it grants no lifecycle
+ * command. Auditors are read-only and cannot report.
+ */
+const MANUAL_SIGNAL_ROLES: readonly StaffRole[] = [
+  "dispatcher",
+  "responder",
+  "supervisor",
+];
+
 function hasAnyRole(
   membership: TenantMembership,
   allowed: readonly StaffRole[],
@@ -108,6 +119,29 @@ export function assertCanExecuteCommand(
       command.type,
     )
   ) {
+    throw new CaseAccessDeniedError("command_forbidden");
+  }
+}
+
+export function canReportManualSignal(
+  membership: TenantMembership | null,
+): membership is TenantMembership {
+  return Boolean(
+    membership &&
+    membership.active &&
+    hasAnyRole(
+      membership,
+      MANUAL_SIGNAL_ROLES,
+    ),
+  );
+}
+
+export function assertCanReportManualSignal(
+  membership: TenantMembership | null,
+): asserts membership is TenantMembership {
+  assertActiveMembership(membership);
+
+  if (!canReportManualSignal(membership)) {
     throw new CaseAccessDeniedError("command_forbidden");
   }
 }

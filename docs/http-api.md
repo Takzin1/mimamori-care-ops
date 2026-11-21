@@ -46,6 +46,29 @@ Authorization: Bearer <access-token>
 
 Returns TTC and supporting Case metrics.
 
+### Report a manual signal (staff)
+
+```http
+POST /api/care-ops/tenants/{tenantId}/manual-signals
+Authorization: Bearer <access-token>
+Content-Type: application/json
+```
+
+```json
+{ "signalId": "8b0c1f0e-6a51-4c1e-9d4c-2b0f7a1e5c01", "subjectId": "2F-203", "priority": "high" }
+```
+
+Opens a `NEW` Case from a signal reported by an authenticated tenant member with
+`dispatcher`, `responder` or `supervisor`. The server fixes the source adapter
+(`staff_manual`) and signal type (`manual`); unknown fields are rejected.
+`subjectId` must match `^[A-Za-z0-9._:-]{1,64}$` (pseudonymous key, no names).
+
+- `201` `{ "aggregate": …, "created": true }` on first report
+- `200` `{ "aggregate": …, "created": false }` on an identical retry
+- `409 SIGNAL_REPLAY_MISMATCH` when the same `signalId` is replayed with different content
+
+Reporting grants no lifecycle command. See ADR 0019.
+
 ### Execute Case command
 
 ```http
@@ -76,6 +99,10 @@ The HTTP layer only extracts a syntactically valid Bearer token.
 It never creates a principal ID.
 
 The token is passed to `AuthenticatedCareOpsGateway`, which invokes the configured `PrincipalAuthenticator`.
+
+`LineAccessTokenAuthenticator` (ADR 0019) verifies LINE Login access tokens
+(channel ID, expiry, profile) and yields `line:<userId>` principals for staff who
+use the LINE MINI App.
 
 The reference production identity path is:
 
@@ -137,7 +164,7 @@ Representative mappings:
 | 401 | missing, malformed, invalid, or expired identity |
 | 403 | tenant membership or command authorization denied |
 | 404 | authorized tenant, Case or route absent |
-| 409 | stale optimistic Case version |
+| 409 | stale optimistic Case version, or a manual signal replayed with different content |
 | 413 | command body exceeded byte limit |
 | 415 | command request is not JSON |
 | 422 | syntactically valid but forbidden Case lifecycle transition |

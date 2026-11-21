@@ -6,6 +6,20 @@ import type {
   SignalType,
 } from "../core/types.ts";
 
+/**
+ * A signal reported by an authenticated tenant staff member.
+ * The source adapter is fixed by the server; callers cannot choose it.
+ */
+export interface ManualSignalInput {
+  tenantId: string;
+  principalId: string;
+  signalId: string;
+  subjectId: string;
+  priority: CasePriority;
+}
+
+export const MANUAL_SIGNAL_SOURCE_ADAPTER = "staff_manual";
+
 export interface AttentionSignal {
   id: string;
   tenantId: string;
