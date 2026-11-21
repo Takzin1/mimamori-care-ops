@@ -10,6 +10,10 @@ import type {
   CaseOperationResult,
 } from "../application/types.ts";
 import type {
+  CaseAggregate,
+  CasePriority,
+} from "../core/types.ts";
+import type {
   CaseQueueProjection,
 } from "../operations/queue.ts";
 import type {
@@ -25,7 +29,30 @@ export interface CareOpsHttpClientOptions {
   fetchImpl?: typeof fetch;
 }
 
+export interface ManualSignalReport {
+  signalId: string;
+  subjectId: string;
+  priority: CasePriority;
+}
+
+export interface ManualSignalResult {
+  aggregate: CaseAggregate;
+  created: boolean;
+}
+
+/**
+ * Reporting is separate from the Console read/command client: upstream field
+ * apps report signals, while the live Console only works existing Cases.
+ */
+export interface CareOpsSignalReporter {
+  openManualSignal(
+    tenantId: string,
+    report: ManualSignalReport,
+  ): Promise<ManualSignalResult>;
+}
+
 export interface CareOpsClient {
+
   operatorContext(
     tenantId: string,
   ): Promise<OperatorContextProjection>;

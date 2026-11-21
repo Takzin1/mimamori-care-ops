@@ -18,11 +18,15 @@ import {
   CaseNotFoundError,
   CaseStoreCorruptionError,
   CaseStoreTransportError,
+  SignalReplayMismatchError,
 } from "../persistence/errors.ts";
 import { readBoundedJson } from "./body.ts";
 import {
   parseCaseCommandRequest,
 } from "./command-parser.ts";
+import {
+  parseManualSignalRequest,
+} from "./manual-signal-parser.ts";
 import {
   HttpRequestError,
 } from "./errors.ts";
@@ -44,6 +48,10 @@ type Route =
     }
   | {
       kind: "queue";
+      tenantId: string;
+    }
+  | {
+      kind: "manual_signals";
       tenantId: string;
     }
   | {
@@ -132,6 +140,23 @@ function routeFor(request: Request): Route {
   ) {
     return {
       kind: "queue",
+      tenantId: safeIdentifier(
+        parts[4]!,
+        "tenantId",
+      ),
+    };
+  }
+
+  if (
+    parts.length === 6 &&
+    parts[0] === "" &&
+    parts[1] === "api" &&
+    parts[2] === "care-ops" &&
+    parts[3] === "tenants" &&
+    parts[5] === "manual-signals"
+  ) {
+    return {
+      kind: "manual_signals",
       tenantId: safeIdentifier(
         parts[4]!,
         "tenantId",
@@ -244,6 +269,7 @@ function allowedMethods(
     case "capabilities":
       return ["GET"];
     case "commands":
+    case "manual_signals":
       return ["POST"];
   }
 }
@@ -405,6 +431,18 @@ function errorResponse(
     );
   }
 
+  if (error instanceof SignalReplayMismatchError) {
+    return json(
+      errorBody(
+        error.code,
+        "Signal was already reported with different content",
+        requestId,
+      ),
+      409,
+      requestId,
+    );
+  }
+
   if (error instanceof InvalidTransitionError) {
     return json(
       errorBody(
@@ -511,6 +549,41 @@ export class CareOpsHttpApi {
     );
   }
 
+  private async manualSignal(
+    request: Request,
+    route: Extract<Route, { kind: "manual_signals" }>,
+    token: string,
+    requestId: string,
+  ): Promise<Response> {
+    const parsed = parseManualSignalRequest(
+      await readBoundedJson(
+        request,
+        this.maxCommandBodyBytes,
+      ),
+    );
+
+    const result = await this.gateway.openManualSignal({
+      accessToken: token,
+      tenantId: route.tenantId,
+      signalId: parsed.signalId,
+      subjectId: parsed.subjectId,
+      priority: parsed.priority,
+    });
+
+    return json(
+      {
+        aggregate: result.aggregate,
+        created: result.created,
+      },
+      result.created ? 201 : 200,
+      requestId,
+      {
+        "x-case-version":
+          String(result.aggregate.version),
+      },
+    );
+  }
+
   async handle(
     request: Request,
   ): Promise<Response> {
@@ -605,6 +678,14 @@ export class CareOpsHttpApi {
 
         case "commands":
           return await this.command(
+            request,
+            route,
+            token,
+            requestId,
+          );
+
+        case "manual_signals":
+          return await this.manualSignal(
             request,
             route,
             token,
