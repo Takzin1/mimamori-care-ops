@@ -16,3 +16,5 @@ export * from "./console/index.ts";
 export * from "./console-web/index.ts";
 export * from "./ops/index.ts";
 export * from "./outbound.ts";
+
+export * from "./framework/docking.ts";
