@@ -89,6 +89,21 @@ test("dock fails closed on wrong tenant result and invalid identifier before com
   ]);
 });
 
+test("dock rejects a cross-tenant queue item even when the envelope matches", async () => {
+  const calls: string[] = [];
+  const client = mockClient(calls);
+  const originalQueue = client.queue.bind(client);
+  client.queue = async (requestedTenant) => {
+    const result = await originalQueue(requestedTenant);
+    return { ...result, items: [{ tenantId: "tenant-b" } as any] };
+  };
+  const registry = new DockRegistry(client, tenant);
+  registry.register({ id: "report-dock", version: "1.0.0", title: "Report",
+    operations: ["case.queue"] });
+  await assert.rejects(registry.connect("report-dock").queue(), DockContractError);
+  assert.deepEqual(calls, ["queue:tenant-a"]);
+});
+
 test("next step is descriptive and never invents a command when not permitted", () => {
   assert.equal(explainCaseStage("HANDOFF_PENDING"), "引き継ぎ先の受諾待ち");
   const accepted = explainNextStep("HANDOFF_PENDING", "receiver", "sender", "receiver",
