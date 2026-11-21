@@ -9,6 +9,24 @@ async function sql(): Promise<string> {
   );
 }
 
+test("Case event rows have an explicit append-only DML guard", async () => {
+  const source = await sql();
+  assert.ok(source.includes(
+    "create or replace function public.reject_care_case_event_rewrite()",
+  ));
+  assert.ok(source.includes(
+    "before update or delete on public.care_case_events",
+  ));
+  assert.ok(source.includes(
+    "execute function public.reject_care_case_event_rewrite()",
+  ));
+  assert.ok(source.includes("Case event history is append-only"));
+  assert.ok(source.includes("set search_path = pg_catalog"));
+  assert.ok(source.includes(
+    "revoke execute on function public.reject_care_case_event_rewrite()",
+  ));
+});
+
 test("Postgres Case Store uses tenant-scoped composite identities", async () => {
   const source = await sql();
 
@@ -320,8 +338,8 @@ test("PLpgSQL function delimiters remain balanced", async () => {
   );
   assert.equal(
     source.match(/\nas \$\$\n/g)?.length ?? 0,
-    7,
-    "all seven persistence RPCs must open with double-dollar delimiters",
+    8,
+    "all eight persistence functions must open with double-dollar delimiters",
   );
   assert.equal(
     source.match(/\n\$;\n/g)?.length ?? 0,
@@ -330,8 +348,8 @@ test("PLpgSQL function delimiters remain balanced", async () => {
   );
   assert.equal(
     source.match(/\n\$\$;\n/g)?.length ?? 0,
-    7,
-    "all seven persistence RPCs must close with double-dollar delimiters",
+    8,
+    "all eight persistence functions must close with double-dollar delimiters",
   );
 });
 

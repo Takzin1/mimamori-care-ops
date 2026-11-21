@@ -34,6 +34,10 @@ tenant_id + case_id + sequence
 
 The full event is retained in `event`, with event type, actor, time, and data duplicated into queryable columns.
 
+## P2-A: append-only event history
+
+The `care_case_events` table rejects direct row-level `UPDATE` and `DELETE` using `care_case_events_append_only_guard`. It remains writable by the existing atomic `INSERT` RPC path, and its normal read/replay behavior is unchanged. The check is defense in depth beyond the service-role read-only grants. It does **not** prevent a schema owner/superuser from disabling the trigger, privileged TRUNCATE/DROP, or tampering with backups. For validation and migration constraints see [Security P2](security-p2-event-immutability.md).
+
 ## Atomic write path
 
 Application code does not perform:

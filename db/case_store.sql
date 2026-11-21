@@ -152,6 +152,34 @@ grant select on table public.care_outbox to service_role;
 revoke usage, select on sequence public.care_outbox_id_seq
   from service_role;
 
+-- P2-A: Case event history is append-only even if a privileged maintenance
+-- query accidentally attempts direct UPDATE/DELETE. The trusted RPCs only INSERT
+-- events; this does not modify their normal write path.
+-- Important: a table owner/superuser can disable triggers or TRUNCATE the table.
+-- Durable off-database audit anchors and protected backups remain separate work.
+create or replace function public.reject_care_case_event_rewrite()
+returns trigger
+language plpgsql
+security invoker
+set search_path = pg_catalog
+as $$
+begin
+  raise exception 'Case event history is append-only'
+    using errcode = '55000';
+end;
+$$;
+
+revoke execute on function public.reject_care_case_event_rewrite()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists care_case_events_append_only_guard
+  on public.care_case_events;
+
+create trigger care_case_events_append_only_guard
+  before update or delete on public.care_case_events
+  for each row
+  execute function public.reject_care_case_event_rewrite();
+
 create or replace function public.create_care_case(
   p_snapshot jsonb,
   p_event jsonb

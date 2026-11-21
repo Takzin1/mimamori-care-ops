@@ -1,5 +1,8 @@
 do $$
 begin
+  -- Serialize role initialization across parallel real-Postgres test suites.
+  perform pg_catalog.pg_advisory_xact_lock(246801753);
+
   if not exists (
     select 1 from pg_roles where rolname = 'anon'
   ) then
