@@ -25,6 +25,7 @@ import type {
 import {
   projectConsoleWebModel,
 } from "./view-model.ts";
+import { explainCaseStage, explainNextStep } from "./next-step.ts";
 
 function node<K extends keyof HTMLElementTagNameMap>(
   doc: Document,
@@ -363,7 +364,7 @@ implements LiveConsoleWebRendererHandle {
         doc,
         "div",
         "mco-subtle",
-        "Responder Console · Last-mile GK",
+        "対応を、最後までつなぐ。",
       ),
     );
 
@@ -487,11 +488,11 @@ implements LiveConsoleWebRendererHandle {
     );
 
     const values = [
-      ["ACTIVE", model.queue.total],
-      ["SLA BREACH", model.queue.breached],
-      ["UNASSIGNED", model.queue.unassigned],
+      ["対応待ち", model.queue.total],
+      ["期限超過", model.queue.breached],
+      ["担当未決定", model.queue.unassigned],
       [
-        "HANDOFF",
+        "引継ぎ待ち",
         model.queue.handoffPending,
       ],
     ] as const;
@@ -627,7 +628,7 @@ implements LiveConsoleWebRendererHandle {
         doc,
         "div",
         "mco-subtle",
-        `${card.status} · ${card.attentionReason}`,
+        explainCaseStage(card.status),
       );
       meta.style.marginTop = "6px";
 
@@ -635,7 +636,7 @@ implements LiveConsoleWebRendererHandle {
         doc,
         "div",
         "mco-subtle",
-        `owner: ${display(card.owner)}`,
+        `担当: ${display(card.owner)}`,
       );
       owner.style.marginTop = "5px";
 
@@ -645,7 +646,7 @@ implements LiveConsoleWebRendererHandle {
             doc,
             "span",
             "mco-tag mco-tag-breach",
-            ` ${card.overdueMinutes}m overdue`,
+            ` 期限超過 ${card.overdueMinutes}分`,
           ),
         );
       }
@@ -705,7 +706,7 @@ implements LiveConsoleWebRendererHandle {
       "",
       model.selected
         ? model.selected.caseId
-        : "Case Detail",
+        : "対応の詳細",
     );
     head.append(title);
 
@@ -1033,10 +1034,25 @@ implements LiveConsoleWebRendererHandle {
         doc,
         "h2",
         "",
-        "Next Actions",
+        "次にすること",
       ),
     );
     panel.append(head);
+
+    if (model.selected) {
+      const next = node(doc, "div", "mco-next-step");
+      next.append(
+        node(doc, "strong", "", "この対応の次の一手"),
+        node(doc, "p", "", explainNextStep(
+          model.selected.status,
+          model.operator?.actorId ?? null,
+          model.selected.owner,
+          model.selected.handoffTarget,
+          model.actions,
+        )),
+      );
+      panel.append(next);
+    }
 
     if (this.#localError) {
       panel.append(
