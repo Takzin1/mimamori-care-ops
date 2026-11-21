@@ -155,7 +155,7 @@ export class CaseService {
   private async membershipFor(
     tenantId: string,
     principalId: string,
-  ): Promise<TenantMembership | null> {
+  ): Promise<TenantMembership> {
     const membership = await this.memberships.findByPrincipal(tenantId, principalId);
     assertMatchingPrincipalMembership(membership, tenantId, principalId);
     return membership;
