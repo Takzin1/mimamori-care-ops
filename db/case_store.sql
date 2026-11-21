@@ -162,12 +162,12 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = pg_catalog
-as $
+as $$
 begin
   raise exception 'Case event history is append-only'
     using errcode = '55000';
 end;
-$;
+$$;
 
 revoke execute on function public.reject_care_case_event_rewrite()
   from public, anon, authenticated, service_role;
