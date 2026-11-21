@@ -789,6 +789,16 @@ implements LiveConsoleWebRendererHandle {
     appendTextPair(doc, diagnostics, "証跡の件数", String(model.selected.evidenceCount));
     extra.append(diagnostics);
 
+    if (completion?.evidence.length) {
+      const evidenceList = node(doc, "ul", "mco-evidence-list");
+      for (const evidence of completion.evidence) {
+        evidenceList.append(node(doc, "li", "",
+          `${explainEvidenceKind(evidence.kind)}：${evidence.ref}`));
+      }
+      extra.append(node(doc, "strong", "", "完了の根拠"));
+      extra.append(evidenceList);
+    }
+
     if (model.metrics) {
       const metrics = node(doc, "div", "mco-facts");
       appendTextPair(doc, metrics, "受諾まで", minutesLabel(model.metrics.ttaMinutes));
