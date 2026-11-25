@@ -464,3 +464,24 @@ test("command builder rejects unsafe actor identifier syntax", () => {
     ConsoleWebInputError,
   );
 });
+
+test("projected commands fail closed when Case, tenant, actor, state or version is stale", () => {
+  const baseline = snapshot();
+  assert.equal(projectConsoleWebModel(baseline).actions.length, 1);
+
+  const modifications: Array<(value: LiveConsoleWorkspaceSnapshot) => void> = [
+    (value) => { value.selectedCaseId = "other-case"; },
+    (value) => { value.capabilities.data!.caseId = "other-case"; },
+    (value) => { value.capabilities.data!.version += 1; },
+    (value) => { value.capabilities.data!.status = "HANDOFF_PENDING"; },
+    (value) => { value.capabilities.data!.tenantId = "other-tenant"; },
+    (value) => { value.capabilities.data!.operator.actorId = "other-user"; },
+  ];
+
+  for (const modify of modifications) {
+    const value = snapshot();
+    modify(value);
+    const model = projectConsoleWebModel(value);
+    assert.deepEqual(model.actions, [], "stale permissions must never reach DOM renderer");
+  }
+});

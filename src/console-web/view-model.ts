@@ -37,11 +37,25 @@ export function projectConsoleWebModel(
   snapshot: LiveConsoleWorkspaceSnapshot,
 ): ConsoleWebModel {
   const queue = snapshot.queue.data;
-  const detail = snapshot.detail.data;
+  const rawDetail = snapshot.detail.data;
+  const detail = rawDetail?.aggregate.id === snapshot.selectedCaseId &&
+    rawDetail.aggregate.tenantId === snapshot.tenantId
+    ? rawDetail
+    : null;
   const metrics = snapshot.metrics.data;
-  const capabilities =
-    snapshot.capabilities.data;
   const operator = snapshot.operator.data;
+  // Never show commands from a previous Case, operator, or stale version.
+  // Server policy is still authoritative; this protects the UX during fetch races.
+  const candidate = snapshot.capabilities.data;
+  const capabilities = detail && operator &&
+    candidate?.caseId === detail.aggregate.id &&
+    candidate.tenantId === snapshot.tenantId &&
+    candidate.version === detail.aggregate.version &&
+    candidate.status === detail.aggregate.status &&
+    candidate.operator.actorId === operator.actorId &&
+    candidate.operator.tenantId === snapshot.tenantId
+    ? candidate
+    : null;
 
   const actions: ConsoleWebAction[] =
     capabilities?.commands.map(
