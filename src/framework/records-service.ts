@@ -4,7 +4,7 @@ import { calculateCaseMetrics } from "../core/metrics.ts";
 import { FrameworkConflictError, FrameworkNotFoundError, FrameworkValidationError } from "./errors.ts";
 import { isFieldVisible } from "./manual-rules.ts";
 import { industryPack } from "./packs/index.ts";
-import { assertFrameworkPermission, hasFrameworkPermission } from "./policy.ts";
+import { assertFrameworkPermission, boundMembership, hasFrameworkPermission } from "./policy.ts";
 import type { FrameworkStore } from "./store/types.ts";
 import { evaluateScenario, publicQuestions, scoreQuiz } from "./training-engine.ts";
 import type {
@@ -51,7 +51,7 @@ export class FrameworkRecordsService {
   }
 
   private async member(tenantId: string, principalId: string, permission: Parameters<typeof assertFrameworkPermission>[1]): Promise<TenantMembership> {
-    const membership = await this.memberships.findByPrincipal(tenantId, principalId);
+    const membership = boundMembership(await this.memberships.findByPrincipal(tenantId, principalId), tenantId, principalId);
     assertFrameworkPermission(membership, permission);
     return membership;
   }
