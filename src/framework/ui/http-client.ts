@@ -29,6 +29,11 @@ export interface HttpFrameworkClientOptions {
   accessTokenProvider: AccessTokenProvider;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  /**
+   * Staff of the tenant that may be chosen for assign / handoff, supplied by the host app
+   * (Care Ops stores no display names). Without it the UI asks for an actor ID.
+   */
+  staffDirectory?: () => Promise<StaffOption[]>;
 }
 
 const SAFE = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -46,6 +51,7 @@ export class HttpFrameworkClient implements FrameworkClient {
   readonly #fetch: typeof fetch;
   readonly #timeoutMs: number;
   readonly #careOps: CareOpsHttpClient;
+  readonly #staffDirectory: (() => Promise<StaffOption[]>) | null;
 
   constructor(options: HttpFrameworkClientOptions) {
     this.#base = new URL(options.baseUrl).origin;
@@ -54,6 +60,7 @@ export class HttpFrameworkClient implements FrameworkClient {
     this.#token = options.accessTokenProvider;
     this.#fetch = options.fetchImpl ?? fetch.bind(globalThis);
     this.#timeoutMs = options.timeoutMs ?? 15_000;
+    this.#staffDirectory = options.staffDirectory ?? null;
     this.#careOps = new CareOpsHttpClient({ baseUrl: this.#base, accessTokenProvider: options.accessTokenProvider, fetchImpl: this.#fetch });
   }
 
@@ -195,9 +202,11 @@ export class HttpFrameworkClient implements FrameworkClient {
     return null;
   }
 
-  /** No staff directory API is exposed yet; the UI falls back to entering an actor ID. */
+  /** Host-supplied staff list (labels are display-only; Care Ops validates every assignee). */
   async staffOptions(): Promise<StaffOption[]> {
-    return [];
+    if (!this.#staffDirectory) return [];
+    const list = await this.#staffDirectory();
+    return list.filter((s) => SAFE.test(s.actorId) && typeof s.label === "string").map((s) => ({ actorId: s.actorId, label: s.label.slice(0, 60) }));
   }
 
   async whoAmI() {

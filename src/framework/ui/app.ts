@@ -60,6 +60,8 @@ interface Ctx {
   profile: ProfileView;
   me: { actorId: string; label: string; roles: string[] };
   route: Route;
+  /** actorId → display label from the host's staff list (set by screens that load it). */
+  labels?: Map<string, string>;
   notify(message: string): void;
   alert(message: string): void;
   rerender(): void;
@@ -398,7 +400,7 @@ async function casesView(ctx: Ctx): Promise<HTMLElement> {
 
 function actorName(ctx: Ctx, actorId: string | null): string {
   if (!actorId) return "—";
-  return ctx.demo?.personaForActor(actorId)?.label ?? actorId;
+  return ctx.labels?.get(actorId) ?? ctx.demo?.personaForActor(actorId)?.label ?? actorId;
 }
 
 function eventDetail(ctx: Ctx, event: CaseEvent): string {
@@ -418,13 +420,14 @@ function eventDetail(ctx: Ctx, event: CaseEvent): string {
   }
 }
 
-function staffControl(options: StaffOption[], exclude: string | null): HTMLSelectElement | HTMLInputElement {
-  const choices = options.filter((o) => o.actorId !== exclude);
+function staffControl(options: StaffOption[] | null, exclude: string | null): HTMLSelectElement | HTMLInputElement {
+  const choices = (options ?? []).filter((o) => o.actorId !== exclude);
   if (choices.length) return select(choices.map((o) => ({ value: o.actorId, label: o.label })), undefined, "選んでください");
   return h("input", { class: "fw-input", attrs: { maxlength: 128, autocomplete: "off", spellcheck: "false", placeholder: "職員ID" } });
 }
 
-function commandForm(ctx: Ctx, detail: CaseDetailView, capability: CaseCommandCapability, staff: StaffOption[]): HTMLElement {
+/** `staff` is null when the host's staff list could not be loaded (the form then asks for an ID). */
+function commandForm(ctx: Ctx, detail: CaseDetailView, capability: CaseCommandCapability, staff: StaffOption[] | null): HTMLElement {
   const type = capability.type;
   const values: Record<string, () => string> = {};
   const fields: HTMLElement[] = [];
@@ -437,7 +440,7 @@ function commandForm(ctx: Ctx, detail: CaseDetailView, capability: CaseCommandCa
     } else if (requirement === "assigneeId" || requirement === "targetAssigneeId") {
       const control = staffControl(staff, requirement === "targetAssigneeId" ? a.assigneeId : null);
       values[requirement] = () => control.value;
-      fields.push(field(FIELD_LABEL[requirement]!, control));
+      fields.push(field(FIELD_LABEL[requirement]!, control, staff === null ? "職員一覧を読み込めませんでした。職員IDを入力してください。" : undefined));
     } else if (requirement === "outcome") {
       const control = select(COMPLETION_OUTCOMES.map((o) => ({ value: o, label: OUTCOME_LABEL[o] })), undefined, "選んでください");
       values.outcome = () => control.value;
@@ -555,13 +558,15 @@ async function caseView(ctx: Ctx): Promise<HTMLElement> {
   const caseId = ctx.route.param ?? "";
   const justOpened = ctx.wasJustOpened(caseId);
   let detail: CaseDetailView;
-  let staff: StaffOption[];
+  let staff: StaffOption[] | null;
   try {
-    [detail, staff] = await Promise.all([ctx.client.caseDetail(caseId), ctx.client.staffOptions()]);
+    // A missing staff list only degrades the assign/handoff inputs; it never blocks the Case screen.
+    [detail, staff] = await Promise.all([ctx.client.caseDetail(caseId), ctx.client.staffOptions().catch(() => null)]);
   } catch (failure) {
     if (classifyFailure(failure).kind === "forbidden") return restrictedCaseView(ctx, caseId, justOpened);
     throw failure;
   }
+  ctx.labels = new Map((staff ?? []).map((s) => [s.actorId, s.label]));
   const a = detail.stored.aggregate;
   const wording = HOME_WORDING[ctx.profile.sector];
   const closed = a.status === "COMPLETED" || a.status === "CLOSED";
