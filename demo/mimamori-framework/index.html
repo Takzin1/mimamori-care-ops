@@ -1,72 +1,21 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#10263d">
-<title>Mimamori Framework Lab | 業務を、最後までつなぐ</title>
-<style>
-:root{--navy:#10263d;--teal:#087f78;--gold:#d0ad69;--ink:#1a3045;--muted:#587082;--line:#dce5e9;--paper:#f4f7f8;--white:#fff}*{box-sizing:border-box}
-body{margin:0;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--paper);line-height:1.55}button,input{font:inherit}
-header{background:var(--navy);color:white;padding:23px max(18px,calc((100vw - 1160px)/2)) 34px}header .brand{font-size:14px;letter-spacing:.18em;color:#b8d8d8;font-weight:700}h1{font-size:clamp(25px,4vw,38px);margin:10px 0 6px;letter-spacing:-.03em}header p{max-width:700px;color:#d2dedf;margin:0;font-size:14px}
-.notice{background:#fff6df;color:#694e19;border-left:4px solid var(--gold);padding:10px 15px;font-size:13px;border-radius:6px;margin:18px 0}
-main{max-width:1160px;margin:auto;padding:0 18px 58px}.layout{display:grid;grid-template-columns:1.15fr .85fr;gap:18px}
-.panel{background:#fff;border:1px solid var(--line);border-radius:15px;padding:19px;box-shadow:0 4px 24px #12304708}.panel h2{font-size:17px;margin:0 0 13px}.intro{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:20px 0}.intro p{color:var(--muted);font-size:13px;margin:3px 0}
-.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.tab{background:#fff;border:1px solid #b9c8cf;color:var(--navy);padding:9px 14px;border-radius:30px;cursor:pointer}.tab[aria-pressed=true]{background:var(--navy);color:#fff;border-color:var(--navy)}
-.statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}.stat{background:white;border:1px solid var(--line);padding:12px 15px;border-radius:12px}.stat strong{font-size:23px;display:block}.stat span{font-size:12px;color:var(--muted)}
-input[type=search]{width:100%;border:1px solid #b4c7cf;border-radius:9px;padding:12px;background:#fff;outline-offset:2px}
-.manual{border:1px solid var(--line);border-radius:11px;padding:13px;margin-top:10px;background:#fff}.manual h3{font-size:15px;margin:0 0 3px}.manual p{font-size:12px;margin:0;color:var(--muted)}.manual .meta{margin:8px 0}.pill{font-size:11px;background:#e8f5f2;color:#006f67;border-radius:22px;padding:3px 8px;display:inline-block}
-button.primary{background:var(--teal);color:#fff;border:0;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer}button.secondary{background:white;color:var(--navy);border:1px solid #9aaeb7;border-radius:9px;padding:8px 12px;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
-.detail{min-height:235px}.detail h3{margin:0 0 7px}.detail p{font-size:13px;color:var(--muted)}.detail ol{padding-left:21px}.detail li{margin-bottom:11px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
-hr{border:0;border-top:1px solid var(--line);margin:18px 0}
-.case{border-left:3px solid var(--teal);border-radius:5px;padding:8px 10px;margin:8px 0;background:#f5f9fa}.case strong{font-size:13px}.case small{font-size:11px;color:var(--muted);display:block}.case button{margin-top:7px;font-size:12px}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.quiz{margin-top:9px;background:#f3f7f9;border-radius:10px;padding:12px}.quiz label{display:block;font-size:13px;margin:9px 0}.quiz input{margin-right:6px}.results{font-size:13px;margin-top:12px;font-weight:700;color:#07675c}
-pre{max-height:190px;overflow:auto;white-space:pre-wrap;font-size:11px;background:#f4f6f7;padding:10px;border-radius:7px;color:#435567}
-footer{font-size:12px;color:var(--muted);text-align:center;margin-top:26px}
-@media(max-width:800px){.layout{grid-template-columns:1fr}.intro{align-items:flex-start;flex-direction:column}.statrow{grid-template-columns:repeat(3,minmax(0,1fr))}header{padding:24px 18px 30px}.stat{padding:10px}.stat strong{font-size:19px}}
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0b2545">
+<meta name="description" content="Synthetic demo only. 架空データだけで動く、見守りフレームワーク（マニュアル・研修・対応記録）の公開デモ。本番運用不可。">
+<title>見守りフレームワーク デモ（架空データ）</title>
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="engine/framework/ui/demo-entry.js"></script>
 </head>
 <body>
-<header><div class="brand">MIMAMORI / FRAMEWORK LAB</div><h1>知るだけで、終わらせない。</h1><p>マニュアル検索 → 研修 → 対応Case → 記録。介護・学校・医療施設・自治体の共通フローを試せる、合成データだけの技術デモ。</p></header>
-<main>
-<div class="notice"><strong>公開デモ / 本番運用不可：</strong>架空の手順・事案のみ。実際の医療・緊急時対応には使用しないでください。入力や操作履歴はこのブラウザ内のみで保存されます。実データ、氏名、個人情報を入力しないでください。</div>
-<div class="intro"><div><strong>業種別テンプレート</strong><p>同じCaseフローを業種を切り替えて体験します。</p></div><button id="export" class="secondary">デモ履歴をJSON出力</button></div>
-<div class="tabs" id="tabs" role="group" aria-label="業種選択"></div>
-<div class="statrow"><div class="stat"><strong id="manualCount">0</strong><span>登録手順</span></div><div class="stat"><strong id="trainingCount">0</strong><span>研修完了</span></div><div class="stat"><strong id="caseCount">0</strong><span>作成Case</span></div></div>
-<div class="layout">
-<section class="panel"><h2>01 / 現場マニュアルを探す</h2><input type="search" id="search" aria-label="マニュアル検索" placeholder="例：転倒・引き継ぎ・避難・設備"><div id="manualList"></div><hr><h2>02 / 承認済み手順のサンプル</h2><div id="detail" class="detail" aria-live="polite"></div></section>
-<div><section class="panel"><h2>03 / 模擬研修</h2><div id="training"></div></section><section class="panel" style="margin-top:18px"><div class="row"><h2>04 / Caseと記録</h2><button class="secondary" id="reset">デモを初期化</button></div><p style="font-size:12px;color:var(--muted)">このページのCase遷移は説明用の簡易モデルです。本番CareOpsの状態遷移・監査基盤には未接続です。</p><div id="cases"></div><h3 style="font-size:13px">イベント履歴（最新8件）</h3><pre id="events">まだイベントはありません。</pre></section></div>
+<div id="app">
+  <p class="fw-banner fw-banner-demo">Synthetic demo only — 本番運用不可。架空のデモです。実在の人物・施設・記録は含まれず、実際の通知は送信されません。実際の事故・災害・医療の判断や対応には使用できません。</p>
+  <p class="fw-loading">読み込み中…</p>
+  <noscript><p class="fw-loading">このデモの表示には JavaScript が必要です。</p></noscript>
 </div>
-<footer>© Mimamori Framework Lab — Synthetic demo only. No server-side database, clinical assessment or emergency dispatch.</footer>
-</main>
-<script>
-"use strict";
-const catalog={
-care:{label:"介護・福祉",manuals:[{id:"care-fall",title:"転倒発生時の連絡・記録訓練",tags:"転倒 事故 連絡 記録",version:"1.0",steps:["現場の安全を確保し、施設の緊急対応手順を確認する","責任者・適切な専門職へ連絡する","担当・連絡経過をCaseに記録する","引き継ぎ先の受諾と対応完了を確認する"],quiz:"対応を完了したと判断する前に必要なのは？",options:["手順を開いた事実だけ","担当者・結果・引き継ぎの確認"],answer:1},{id:"care-handoff",title:"勤務交代時の申し送り",tags:"申し送り 引き継ぎ 交代",version:"1.0",steps:["対象Caseと未完了タスクを確認する","次の担当へ必要な事項を伝える","受諾の確認と時刻を記録する"],quiz:"申し送りの完了確認として適切なのは？",options:["相手が受諾したことを確認","送信ボタンを押しただけ"],answer:0}]},
-school:{label:"学校・教育",manuals:[{id:"school-incident",title:"校内事故の報告訓練",tags:"事故 校内 安全 保護者 報告",version:"1.0",steps:["安全確保と学校の承認済み手順を確認する","管理職・担当職員への連絡経路を確認する","対応と連絡の事実を記録する","未完了事項を引き継ぐ"],quiz:"担当者不在のときの適切な行動は？",options:["報告を取りやめる","代替の責任者・連絡経路を確認する"],answer:1}]},
-hospital:{label:"病院・施設運営",manuals:[{id:"hospital-facility",title:"設備故障の連絡・引き継ぎ訓練",tags:"設備 停電 故障 施設 管理",version:"1.0",steps:["設備の異常を把握し、立入等の安全上のルールを確認する","設備管理担当への連絡経路を確認する","実施した連絡・対応を記録する","復旧担当へ引き継ぎ、完了確認を行う"],quiz:"対応状況の記録として必要なのは？",options:["担当・時刻・結果を残す","記録を残さず口頭だけにする"],answer:0}]},
-municipality:{label:"自治体・行政",manuals:[{id:"municipality-drill",title:"避難所開設の模擬訓練",tags:"避難 防災 訓練 自治体 BCP",version:"1.0",steps:["訓練開始の指示と承認済み手順を確認する","担当班と連絡先を確認する","訓練で実施したタスクを記録する","引き継ぎと振り返りを記録する"],quiz:"部署をまたぐ対応で必要なのは？",options:["引き継ぎの担当と受諾を明確にする","前の担当が完了扱いにすれば十分"],answer:0}]}
-};
-const key="mimamori-framework-synthetic-v1";const states=["NEW","ACKNOWLEDGED","IN_PROGRESS","COMPLETED"];
-let sector="care",selected="care-fall",memory={cases:[],events:[],training:[]};
-try{const saved=JSON.parse(localStorage.getItem(key)||"null");if(saved&&Array.isArray(saved.cases)&&Array.isArray(saved.events)&&Array.isArray(saved.training))memory=saved}catch{}
-function persist(){try{localStorage.setItem(key,JSON.stringify(memory))}catch{document.querySelector(".notice").textContent="ブラウザ保存が利用できません。デモ状態は画面を閉じると失われます。実データを入力しないでください。"}}
-function manual(){return Object.values(catalog).flatMap(x=>x.manuals).find(x=>x.id===selected)}
-function element(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e}
-function btn(title,fn,cls="secondary"){const b=element("button",cls,title);b.addEventListener("click",fn);return b}
-function addEvent(caseId,type){memory.events.unshift({caseId,type,at:new Date().toISOString(),actor:"SYNTHETIC_DEMO"});persist()}
-function renderTabs(){const root=document.getElementById("tabs");root.replaceChildren();for(const [id,info] of Object.entries(catalog)){const b=btn(info.label,()=>{sector=id;selected=info.manuals[0].id;document.getElementById("search").value="";render() },"tab");b.setAttribute("aria-pressed",String(id===sector));root.append(b)}}
-function renderManuals(){const root=document.getElementById("manualList");root.replaceChildren();const query=document.getElementById("search").value.trim().toLowerCase();const result=catalog[sector].manuals.filter(m=>(m.title+" "+m.tags).toLowerCase().includes(query));if(!result.length){root.append(element("p","", "一致する手順はありません。"));return}
-for(const m of result){const card=element("article","manual");card.append(element("h3","",m.title),element("p","",m.tags));const meta=element("div","meta");meta.append(element("span","pill","架空・訓練用 v"+m.version));card.append(meta,btn("手順を開く",()=>{selected=m.id;renderDetail();renderTraining()}));root.append(card)}}
-function renderDetail(){const root=document.getElementById("detail");root.replaceChildren();const m=manual();root.append(element("h3","",m.title),element("p","","承認済み手順の表示例です。実在する施設の承認を意味しません。"));const ol=element("ol");for(const s of m.steps)ol.append(element("li","",s));root.append(ol);const actions=element("div","actions");actions.append(btn("この手順から模擬Caseを作成",()=>{const id="DEMO-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,5);memory.cases.unshift({id,sector,manualId:m.id,manualVersion:m.version,status:"NEW",createdAt:new Date().toISOString()});addEvent(id,"CREATED");render()},"primary"));root.append(actions)}
-function renderTraining(){const root=document.getElementById("training");root.replaceChildren();const m=manual();root.append(element("p","",m.quiz));const q=element("div","quiz"),name="quizAnswer";m.options.forEach((option,i)=>{const label=element("label");const inp=document.createElement("input");inp.type="radio";inp.name=name;inp.value=String(i);label.append(inp,document.createTextNode(option));q.append(label)});root.append(q,btn("模擬回答を採点",()=>{const checked=q.querySelector("input:checked");const old=root.querySelector(".results");if(old)old.remove();const response=element("p","results");if(!checked){response.textContent="回答を選んでください。"}else if(Number(checked.value)===m.answer){memory.training.push({manualId:m.id,sector,version:m.version,passed:true,at:new Date().toISOString()});persist();response.textContent="正解：訓練記録を保存しました。";renderStats()}else{response.textContent="再確認してください。承認された手順と責任管理が重要です。"}root.append(response)},"primary"))}
-function nextState(c){const i=states.indexOf(c.status);if(i<0||i>=states.length-1)return;c.status=states[i+1];addEvent(c.id,"STATE_"+c.status);render()}
-function renderCases(){const root=document.getElementById("cases");root.replaceChildren();const arr=memory.cases.filter(c=>c.sector===sector);if(!arr.length){root.append(element("p","", "この業種の模擬Caseはありません。"));return}for(const c of arr){const box=element("div","case");box.append(element("strong","",c.id+"  /  "+c.status),element("small","",c.manualId+"  v"+c.manualVersion));if(c.status!=="COMPLETED")box.append(btn("次の状態へ進める",()=>nextState(c)));root.append(box)}}
-function renderStats(){document.getElementById("manualCount").textContent=String(Object.values(catalog).reduce((n,x)=>n+x.manuals.length,0));document.getElementById("trainingCount").textContent=String(memory.training.length);document.getElementById("caseCount").textContent=String(memory.cases.length)}
-function renderEvents(){document.getElementById("events").textContent=memory.events.length?memory.events.slice(0,8).map(e=>e.at+" "+e.caseId+" "+e.type).join("\n"):"まだイベントはありません。"}
-function render(){renderTabs();renderManuals();renderDetail();renderTraining();renderCases();renderStats();renderEvents()}
-document.getElementById("search").addEventListener("input",renderManuals);
-document.getElementById("reset").addEventListener("click",()=>{if(!confirm("このブラウザのデモ記録を初期化しますか？"))return;memory={cases:[],events:[],training:[]};persist();render()});
-document.getElementById("export").addEventListener("click",()=>{const payload={demo:true,schema:"mimamori.synthetic.v1",exportedAt:new Date().toISOString(),...memory};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download="mimamori-synthetic-demo.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
-render();
-</script>
-</body></html>
+</body>
+</html>

@@ -40,10 +40,11 @@ P5: separately approved cross-organization handoff + audit.
 ## Release gates
 - No medical decisions, automatic emergency triage, or guarantee of LINE delivery.
 - No real personal information, secrets, or live databases in Hugging Face Space.
-- Static demo uses localStorage only; a backend database is not implied.
+- Static demo keeps state in memory only (lost on reload); a backend database is not implied.
 - Require signed-off safety protocol, disaster fallback, staff identity, tenant boundaries, PostgreSQL transaction proof, and real-device tests before operational launch.
 - Do not modify GitHub Actions; preserve existing app, workflows, auth, notification and CareOps API.
 
 ## Public demo
-`demo/mimamori-framework/index.html` is a dependency-free static app.
-It tests the concept but does not substitute for production API, data persistence or audit trails.
+`demo/mimamori-framework/index.html` loads the real engine compiled for the browser (see `docs/framework.md`,
+"Public demo (P4)"). It runs the same CaseService, RBAC and Framework services in memory with fictional data and
+cannot reach any server (CSP `connect-src 'none'`). It does not substitute for production API, data persistence or audit trails.
