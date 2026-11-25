@@ -11,6 +11,7 @@ import type {
 import {
   assertActiveMembership,
   assertAssignableTarget,
+  assertCanReportManualSignal,
   assertCanExecuteCommand,
   assertCanReadCase,
   assertCanReadCaseAggregate,
@@ -39,9 +40,12 @@ import type {
   CaseOperationResult,
   CaseQueryInput,
   ExecuteCaseCommandInput,
+  ManualSignalInput,
 } from "./types.ts";
+import { MANUAL_SIGNAL_SOURCE_ADAPTER } from "./types.ts";
 
 export type Clock = () => string;
+export type CaseIdFactory = () => string;
 
 function bindActor(
   command: CaseCommandIntent,
@@ -128,6 +132,35 @@ export class CaseService {
       event: stored.event,
       created: stored.created,
     };
+  }
+
+  /**
+   * Opens a Case from a signal reported by an authenticated staff member.
+   * Membership and role are checked before any write; idempotency remains the
+   * repository's `tenantId + sourceAdapter + sourceSignalId` boundary, so a
+   * retried report returns the original Case instead of creating another.
+   */
+  async openManualSignal(
+    input: ManualSignalInput,
+    newCaseId: CaseIdFactory = () => crypto.randomUUID(),
+  ): Promise<CaseOpenResult> {
+    const membership = await this.membershipFor(
+      input.tenantId,
+      input.principalId,
+    );
+    assertCanReportManualSignal(membership);
+
+    return this.openFromSignal(
+      {
+        id: input.signalId,
+        tenantId: input.tenantId,
+        sourceAdapter: MANUAL_SIGNAL_SOURCE_ADAPTER,
+        subjectId: input.subjectId,
+        type: "manual",
+        priority: input.priority,
+      },
+      newCaseId(),
+    );
   }
 
   private async membershipFor(

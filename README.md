@@ -24,6 +24,7 @@ What is already implemented and tested:
 - production identity boundary + persistent tenant membership
 - audited membership provisioning / revocation control plane
 - authenticated Care Ops HTTP boundary for Queue / Case / metrics / commands
+- LINE access-token identity provider and authenticated staff manual-signal intake (ADR 0019)
 - server-only Supabase runtime composition with explicit credential routing
 - browser-safe Care Ops API client with per-request token provider
 - ephemeral browser session coordinator with explicit 401/reauth handling

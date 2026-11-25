@@ -17,8 +17,10 @@ import type {
 } from "./capabilities.ts";
 import type {
   CaseCommandIntent,
+  CaseOpenResult,
   CaseOperationResult,
 } from "./types.ts";
+import type { CasePriority } from "../core/index.ts";
 import type { CaseService } from "./case-service.ts";
 import type { CaseQueueService } from "./queue-service.ts";
 
@@ -36,6 +38,13 @@ export interface AuthenticatedCaseCommandRequest
 extends AuthenticatedCaseRequest {
   expectedVersion: number;
   command: CaseCommandIntent;
+}
+
+export interface AuthenticatedManualSignalRequest
+extends AuthenticatedRequest {
+  signalId: string;
+  subjectId: string;
+  priority: CasePriority;
 }
 
 export interface AuthenticatedCareOpsGatewayOptions {
@@ -85,6 +94,20 @@ export class AuthenticatedCareOpsGateway {
       tenantId: input.tenantId,
       caseId: input.caseId,
       principalId: principal.principalId,
+    });
+  }
+
+  async openManualSignal(
+    input: AuthenticatedManualSignalRequest,
+  ): Promise<CaseOpenResult> {
+    const principal = await this.authenticate(input.accessToken);
+
+    return this.caseService.openManualSignal({
+      tenantId: input.tenantId,
+      principalId: principal.principalId,
+      signalId: input.signalId,
+      subjectId: input.subjectId,
+      priority: input.priority,
     });
   }
 

@@ -25,7 +25,10 @@ import {
 import type {
   AccessTokenProvider,
   CareOpsClient,
+  CareOpsSignalReporter,
   CareOpsHttpClientOptions,
+  ManualSignalReport,
+  ManualSignalResult,
 } from "./types.ts";
 
 const SAFE_IDENTIFIER = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -250,7 +253,7 @@ async function jsonBody(
 }
 
 export class CareOpsHttpClient
-implements CareOpsClient {
+implements CareOpsClient, CareOpsSignalReporter {
   readonly #baseUrl: string;
   readonly #accessTokenProvider: AccessTokenProvider;
   readonly #fetchImpl: typeof fetch;
@@ -419,6 +422,49 @@ implements CareOpsClient {
       `/api/care-ops/tenants/${encodeURIComponent(tenant)}/cases/${encodeURIComponent(caseIdentity)}/metrics`,
       { method: "GET" },
     ) as unknown as CaseMetrics;
+  }
+
+  async openManualSignal(
+    tenantId: string,
+    report: ManualSignalReport,
+  ): Promise<ManualSignalResult> {
+    const tenant = identifier(
+      tenantId,
+      "tenantId",
+    );
+    const signalId = identifier(
+      report.signalId,
+      "signalId",
+    );
+
+    const value = asRecord(
+      await this.request(
+        `/api/care-ops/tenants/${encodeURIComponent(tenant)}/manual-signals`,
+        {
+          method: "POST",
+          body: {
+            signalId,
+            subjectId: report.subjectId,
+            priority: report.priority,
+          },
+        },
+      ),
+    );
+    const aggregate = asRecord(value?.aggregate);
+
+    if (
+      !aggregate ||
+      typeof aggregate.id !== "string" ||
+      typeof aggregate.version !== "number" ||
+      typeof value?.created !== "boolean"
+    ) {
+      throw new CareOpsHttpProtocolError();
+    }
+
+    return {
+      aggregate: aggregate as unknown as ManualSignalResult["aggregate"],
+      created: value.created,
+    };
   }
 
   async execute(
