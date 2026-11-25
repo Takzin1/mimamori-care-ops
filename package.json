@@ -11,7 +11,8 @@
     "test": "node --test tests/*.test.ts",
     "test:coverage": "node --test --experimental-test-coverage tests/*.test.ts",
     "test:postgres": "node --test tests/postgres-real.integration.test.ts tests/identity-postgres.integration.test.ts tests/framework-postgres.integration.test.ts",
-    "test:demo": "node --check demo/responder-console/app.js",
+    "test:demo": "node --check demo/responder-console/app.js && node scripts/build-framework-demo.ts",
+    "build:framework-demo": "node scripts/build-framework-demo.ts",
     "preflight:staging": "node scripts/staging-preflight.ts",
     "config:validate": "node scripts/deployment-config-validate.ts"
   },

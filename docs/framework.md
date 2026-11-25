@@ -50,6 +50,44 @@ Supabase Auth or the LINE authenticator from ADR 0019). Errors use the Care Ops 
 
 Case transitions (acknowledge, assign, start, handoff, complete, close) use the existing Care Ops routes.
 
+## Field UI (P3)
+
+`src/framework/ui/` — a dependency-free, mobile-first screen set (navy / teal / gold, ≥ 48 px targets, 18 px base text)
+used by both the public demo and production hosts. Entry: `mountFrameworkApp(root, { client })`.
+
+| Home entry | Screen |
+|---|---|
+| 1. マニュアルを探す | keyword + category search over approved, effective procedures; shows search time |
+| 2. 研修を受ける | courses → quiz / scenario drill (mock Case in an isolated training tenant) |
+| 3. 対応を開始する（sector wording） | pick a procedure → subject key + priority → Case opened via `manuals/{m}/cases` |
+| 4. 対応中のケースを確認する（sector wording） | Care Ops queue (responders see only their own / handoff Cases) |
+| 5. 記録・履歴を見る | own training records, Case history where available, JSON export |
+
+The Case screen renders only the **server-projected capabilities** (`capabilities.commands`); every transition is a
+Care Ops `execute` with `expectedVersion`. Step checklist, event timeline and evidence JSON come from the Framework API.
+
+- `FrameworkClient` (`client.ts`) is the only dependency of the screens. `HttpFrameworkClient` calls the Framework and
+  Care Ops APIs with the host's bearer token; `LocalDemoClient` runs the same services in memory for the public demo.
+- Writes are reported as done only after the backend confirmed them. Failures are shown in plain Japanese
+  (`labels.ts#failureMessage`) as *not saved* / *not confirmed*; retries are explicit and reuse the same idempotency key
+  (`signalId`, `attemptId`), so a lost response never creates a duplicate.
+- A reporter who is not yet the assignee sees a confirmation (Care Ops RBAC hides unassigned Cases from responders).
+- DOM is built with `textContent` only; no inline styles or handlers, so hosts can run it under `script-src 'self'`
+  / `style-src 'self'`. Styles ship as `FRAMEWORK_UI_CSS`.
+
+## Public demo (P4)
+
+`npm run build:framework-demo` compiles the real engine + UI (`tsconfig.demo.json`, `rewriteRelativeImportExtensions`)
+into `dist/framework-demo/` and runs the publish gate (`scripts/build-framework-demo.ts#verifyDemo`): allowed file types
+only, no network APIs, no secret-like strings (service_role, JWTs, `hf_`/`sk-`/GitHub tokens, private keys, Supabase
+project URLs), CSP present, valid Space metadata. `npm run test:demo` runs it in CI.
+
+The page's CSP is `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; …`, so the demo cannot
+reach any server. Data lives in memory and disappears on reload; there is no database. Personas (staff / lead /
+colleague) can be switched to walk a Case through acknowledge → assign → start → handoff → complete → close.
+
+Publishing (manual, never from CI): `scripts/publish-framework-hf.sh` after `hf auth login`.
+
 ## Database
 
 Apply in order: `db/case_store.sql` → `db/framework_store.sql` → `db/framework_records.sql` (all re-runnable).
@@ -59,6 +97,7 @@ Production use requires a backup and staging run first; nothing in this reposito
 ## Verification
 
 - `npm test` — unit, service and HTTP tests (`tests/framework-*.test.ts`)
+- `npm run test:demo` — builds and verifies the public demo bundle
 - `npm run test:postgres` (needs `DATABASE_URL`) — `tests/framework-postgres.integration.test.ts` creates its own
   database and drives the real PostgREST adapters into PostgreSQL through a psql-backed PostgREST stand-in as
   `service_role`, then checks privileges and constraints directly; it also reports search latency.
