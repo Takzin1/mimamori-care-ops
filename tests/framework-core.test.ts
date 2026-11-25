@@ -277,3 +277,16 @@ test("HTTP boundary: auth, tenant membership, validation, status codes and no id
   assert.equal((await call("DELETE", `${base}/manuals`, "tok-resp-a")).status, 405);
   assert.equal((await call("GET", `${base}/nothing`, "tok-resp-a")).status, 404);
 });
+
+test("a directory returning another tenant's or principal's membership is treated as no membership", async () => {
+  const { framework, memberships } = world();
+  await provision(framework);
+  const original = memberships.findByPrincipal.bind(memberships);
+  memberships.findByPrincipal = async (tenantId: string, principalId: string) => {
+    if (tenantId === "school-b") return original("facility-a", "p-sup-a1"); // broken adapter
+    if (principalId === "p-resp-a") return original("facility-a", "p-sup-a1");
+    return original(tenantId, principalId);
+  };
+  await assert.rejects(framework.search("p-sup-a1", "school-b", { text: "防災" }), CaseAccessDeniedError);
+  await assert.rejects(framework.installPackTemplates("p-resp-a", "facility-a"), CaseAccessDeniedError);
+});

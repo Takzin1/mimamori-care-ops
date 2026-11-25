@@ -40,3 +40,18 @@ export function assertFrameworkPermission(
     throw new CaseAccessDeniedError("command_forbidden");
   }
 }
+
+/**
+ * Defense in depth: never trust a membership merely because the lookup used the
+ * tenant and principal. A directory (or adapter) bug returning another tenant's or
+ * principal's row is treated as "no membership" (same idea as care-ops #79, applied
+ * locally so the Framework does not depend on that unmerged change).
+ */
+export function boundMembership(
+  membership: TenantMembership | null,
+  tenantId: string,
+  principalId: string,
+): TenantMembership | null {
+  if (!membership) return null;
+  return membership.tenantId === tenantId && membership.principalId === principalId ? membership : null;
+}

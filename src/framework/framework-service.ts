@@ -16,7 +16,7 @@ import {
   type ManualContentInput,
 } from "./manual-rules.ts";
 import { industryPack, templateRef } from "./packs/index.ts";
-import { assertFrameworkPermission, hasFrameworkPermission } from "./policy.ts";
+import { assertFrameworkPermission, boundMembership, hasFrameworkPermission } from "./policy.ts";
 import type { FrameworkStore, ManualVersionWrite, ManualWrite } from "./store/types.ts";
 import { normalizeSearchText, searchTerms } from "./text.ts";
 import {
@@ -83,8 +83,8 @@ export class FrameworkService {
     this.newId = options.newId ?? (() => crypto.randomUUID());
   }
 
-  private membership(tenantId: string, principalId: string): Promise<TenantMembership | null> {
-    return this.memberships.findByPrincipal(tenantId, principalId);
+  private async membership(tenantId: string, principalId: string): Promise<TenantMembership | null> {
+    return boundMembership(await this.memberships.findByPrincipal(tenantId, principalId), tenantId, principalId);
   }
 
   private async profileAndPack(tenantId: string): Promise<{ profile: TenantProfile; pack: IndustryPack }> {
