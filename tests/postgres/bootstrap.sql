@@ -1,9 +1,7 @@
--- Roles are cluster-global and the Postgres integration test files run in
--- parallel. Serialize this check-then-create block so concurrent bootstraps on a
--- fresh cluster cannot race into duplicate role creation.
 do $$
 begin
-  perform pg_advisory_xact_lock(hashtext('mimamori-care-ops:test-role-bootstrap'));
+  -- Serialize role initialization across parallel real-Postgres test suites.
+  perform pg_catalog.pg_advisory_xact_lock(246801753);
 
   if not exists (
     select 1 from pg_roles where rolname = 'anon'
