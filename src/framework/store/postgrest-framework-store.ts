@@ -7,12 +7,15 @@ import {
 } from "../errors.ts";
 import type {
   CaseManualLink,
+  CaseStepCheck,
   FrameworkManual,
   FrameworkManualVersion,
   ManualSearchHit,
   TenantProfile,
+  TrainingAttempt,
 } from "../types.ts";
 import type {
+  TrainingAttemptFilter,
   FieldSearchQuery,
   FrameworkStore,
   ManualVersionWrite,
@@ -166,6 +169,36 @@ export class PostgrestFrameworkStore implements FrameworkStore {
   async getCaseLinkBySignal(tenantId: string, signalId: string) {
     return ((await this.rpc("framework_get_case_link", { tenantId, signalId })).link ?? null) as CaseManualLink | null;
   }
+
+  async recordTrainingAttempt(attempt: TrainingAttempt) {
+    const result = await this.rpc("framework_record_training_attempt", { attempt });
+    return { created: result.created === true, attempt: normalizeAttempt(result.attempt as TrainingAttempt) };
+  }
+
+  async listTrainingAttempts(tenantId: string, filter: TrainingAttemptFilter) {
+    return PostgrestFrameworkStore.array<TrainingAttempt>(
+      (await this.rpc("framework_list_training_attempts", { tenantId, ...filter })).attempts,
+    ).map(normalizeAttempt);
+  }
+
+  async recordStepCheck(check: CaseStepCheck) {
+    const result = await this.rpc("framework_record_step_check", { check });
+    return { created: result.created === true, check: normalizeCheck(result.check as CaseStepCheck) };
+  }
+
+  async listStepChecks(tenantId: string, caseId: string) {
+    return PostgrestFrameworkStore.array<CaseStepCheck>(
+      (await this.rpc("framework_list_step_checks", { tenantId, caseId })).checks,
+    ).map(normalizeCheck);
+  }
+}
+
+function normalizeAttempt(attempt: TrainingAttempt): TrainingAttempt {
+  return { ...attempt, completedAt: isoOrNull(attempt.completedAt) ?? attempt.completedAt };
+}
+
+function normalizeCheck(check: CaseStepCheck): CaseStepCheck {
+  return { ...check, checkedAt: isoOrNull(check.checkedAt) ?? check.checkedAt };
 }
 
 /** PostgreSQL returns timestamptz as `2026-11-21T13:10:00+00:00`; keep ISO-8601 `Z` form. */

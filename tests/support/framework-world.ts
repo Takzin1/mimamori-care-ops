@@ -13,6 +13,7 @@ import {
   type TenantMembership,
 } from "../../src/index.ts";
 import {
+  FrameworkRecordsService,
   FrameworkService,
   InMemoryFrameworkStore,
   type FrameworkStore,
@@ -67,7 +68,8 @@ export function world(options: { store?: FrameworkStore; repository?: CaseReposi
     now: clock.now,
     newId: () => `id${String(++id).padStart(4, "0")}`,
   });
-  return { clock, repository, memberships, caseService, store, framework };
+  const records = new FrameworkRecordsService({ store, memberships, caseService, now: clock.now });
+  return { clock, repository, memberships, caseService, store, framework, records };
 }
 
 /** Configure both tenants and approve every template (author sup-x1, reviewer sup-x2). */

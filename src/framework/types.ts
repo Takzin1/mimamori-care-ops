@@ -187,3 +187,53 @@ export interface CaseManualLink {
   linkedBy: string;
   linkedAt: string;
 }
+
+// ── P2: training records, step checks (evidence inputs) ───────────────
+
+export interface Improvement {
+  itemId: string;
+  prompt: string;
+  correctAction: string;
+  explanation: string;
+  stepRef: string | null;
+  critical: boolean;
+}
+
+export interface TrainingMetrics {
+  timeToAcknowledgeMs: number | null;
+  timeToAssignmentMs: number | null;
+  timeToFirstActionMs: number | null;
+  timeToCompletionMs: number | null;
+  handoffCount: number;
+  reopenCount: number;
+}
+
+/**
+ * Append-only training record. Training never creates real Cases; `simulated`
+ * is always true and the drill's mock Case lives only in memory during evaluation.
+ */
+export interface TrainingAttempt {
+  tenantId: string;
+  attemptId: string;
+  courseId: string;
+  manualId: string;
+  manualVersion: number;
+  actorId: string;
+  mode: "quiz" | "scenario";
+  score: number;
+  passed: boolean;
+  criticalErrors: number;
+  answers: Record<string, string>;
+  improvements: Improvement[];
+  metrics: TrainingMetrics | null;
+  completedAt: string;
+  simulated: true;
+}
+
+export interface CaseStepCheck {
+  tenantId: string;
+  caseId: string;
+  stepId: string;
+  checkedBy: string;
+  checkedAt: string;
+}

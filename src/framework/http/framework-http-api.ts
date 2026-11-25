@@ -16,6 +16,7 @@ import {
   FrameworkValidationError,
 } from "../errors.ts";
 import type { FrameworkService } from "../framework-service.ts";
+import type { FrameworkRecordsService } from "../records-service.ts";
 
 /**
  * Authenticated Framework HTTP boundary (`/api/framework/tenants/{tenantId}/...`).
@@ -255,4 +256,43 @@ export class FrameworkHttpApi {
       return frameworkErrorResponse(failure, requestId);
     }
   }
+}
+
+/** Training, step-check and evidence routes (P2). */
+export function recordRoutes(records: FrameworkRecordsService): FrameworkRouteHandler {
+  return async ({ request, url, tenantId, segments, principalId, body }) => {
+    const method = request.method;
+    const [a, b, c, d] = segments;
+    if (a === "training") {
+      if (b === "courses" && segments.length === 2 && method === "GET") {
+        return { status: 200, body: { courses: await records.listCourses(principalId, tenantId) } };
+      }
+      if (b === "courses" && segments.length === 3 && method === "GET") {
+        return { status: 200, body: await records.courseDetail(principalId, tenantId, c!) };
+      }
+      if (b === "courses" && segments.length === 4 && method === "POST" && d === "quiz") {
+        const input = await body();
+        const result = await records.submitQuiz(principalId, tenantId, c!, { attemptId: input.attemptId, answers: input.answers });
+        return { status: result.recorded ? 201 : 200, body: result };
+      }
+      if (b === "courses" && segments.length === 4 && method === "POST" && d === "scenario") {
+        const input = await body();
+        const result = await records.scenario(principalId, tenantId, c!, { attemptId: input.attemptId, answers: input.answers, final: input.final });
+        return { status: result.recorded ? 201 : 200, body: result };
+      }
+      if (b === "attempts" && segments.length === 2 && method === "GET") {
+        return { status: 200, body: { attempts: await records.attempts(principalId, tenantId, url.searchParams.get("scope") ?? "mine") } };
+      }
+    }
+    if (a === "cases" && segments.length === 3) {
+      if (c === "steps" && method === "GET") return { status: 200, body: await records.listStepChecks(principalId, tenantId, b!) };
+      if (c === "steps" && method === "POST") {
+        const input = await body();
+        const result = await records.checkStep(principalId, tenantId, b!, input.stepId);
+        return { status: result.created ? 201 : 200, body: result };
+      }
+      if (c === "evidence" && method === "GET") return { status: 200, body: await records.evidence(principalId, tenantId, b!) };
+    }
+    return null;
+  };
 }
