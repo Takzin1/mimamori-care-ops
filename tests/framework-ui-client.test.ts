@@ -212,3 +212,23 @@ test("failure wording never claims a write succeeded", () => {
   }
   assert.match(failureMessage(new FrameworkClientError("conflict", "case_version"), true), /最新の状態/);
 });
+
+test("http client: staff list comes from the host, unsafe entries are dropped", async () => {
+  const withDirectory = new HttpFrameworkClient({
+    baseUrl: "https://ops.example.test",
+    tenantId: "t1",
+    accessTokenProvider: () => "tok",
+    fetchImpl: (async () => { throw new Error("no network expected"); }) as typeof fetch,
+    staffDirectory: async () => [
+      { actorId: "resp-a", label: "早番A" },
+      { actorId: "../evil", label: "x" },
+      { actorId: "resp-b", label: "長い表示名".repeat(30) },
+    ],
+  });
+  const options = await withDirectory.staffOptions();
+  assert.deepEqual(options.map((o) => o.actorId), ["resp-a", "resp-b"]);
+  assert.ok(options[1]!.label.length <= 60);
+
+  const without = new HttpFrameworkClient({ baseUrl: "https://ops.example.test", tenantId: "t1", accessTokenProvider: () => "tok" });
+  assert.deepEqual(await without.staffOptions(), [], "without a host list the UI asks for an actor ID");
+});
