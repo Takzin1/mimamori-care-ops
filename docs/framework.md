@@ -88,6 +88,12 @@ colleague) can be switched to walk a Case through acknowledge → assign → sta
 
 Publishing (manual, never from CI): `scripts/publish-framework-hf.sh` after `hf auth login`.
 
+## Deployment
+
+Off by default. `CARE_OPS_FRAMEWORK_ENABLED=true` mounts `/api/framework/` in `createCareOpsDeployment`, and
+`CARE_OPS_LINE_CHANNEL_ID` lets LINE field staff authenticate (tokens routed by claimed issuer, one provider per token).
+See [ADR 0021](adr/0021-deployment-identity-routing-and-framework-mount.md) and `docs/deployment-environment.md`.
+
 ## Database
 
 Apply in order: `db/case_store.sql` → `db/framework_store.sql` → `db/framework_records.sql` (all re-runnable).

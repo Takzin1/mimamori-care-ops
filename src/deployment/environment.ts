@@ -20,6 +20,10 @@ export interface CareOpsDeploymentEnvironment {
   slaPolicies: Readonly<Record<string, CaseSlaPolicy>>;
   outboundTimeoutMs: number;
   maxCommandBodyBytes: number;
+  /** LINE Login channel ID; when set, LINE access tokens are accepted (ADR 0019 / 0021). */
+  lineChannelId: string | null;
+  /** Mounts the Framework API under /api/framework/ (ADR 0020 / 0021). */
+  frameworkEnabled: boolean;
 }
 
 export type DeploymentEnvironmentInput =
@@ -375,6 +379,43 @@ function assertSecretSeparation(
   }
 }
 
+function parseLineChannelId(
+  input: DeploymentEnvironmentInput,
+): string | null {
+  const raw = input.CARE_OPS_LINE_CHANNEL_ID?.trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  if (!/^[0-9]{6,20}$/.test(raw)) {
+    throw new Error(
+      "CARE_OPS_LINE_CHANNEL_ID must be a numeric LINE Login channel ID",
+    );
+  }
+
+  return raw;
+}
+
+function optionalFlag(
+  input: DeploymentEnvironmentInput,
+  name: string,
+): boolean {
+  const raw = input[name]?.trim();
+
+  if (!raw || raw === "false") {
+    return false;
+  }
+
+  if (raw === "true") {
+    return true;
+  }
+
+  throw new Error(
+    `deployment environment variable ${name} must be true or false`,
+  );
+}
+
 export function parseCareOpsDeploymentEnvironment(
   input: DeploymentEnvironmentInput,
 ): CareOpsDeploymentEnvironment {
@@ -420,6 +461,13 @@ export function parseCareOpsDeploymentEnvironment(
         DEFAULT_MAX_COMMAND_BODY_BYTES,
         1_024,
         1_048_576,
+      ),
+    lineChannelId:
+      parseLineChannelId(input),
+    frameworkEnabled:
+      optionalFlag(
+        input,
+        "CARE_OPS_FRAMEWORK_ENABLED",
       ),
   };
 }

@@ -145,6 +145,13 @@ Optional bounded values:
 | `CARE_OPS_OUTBOUND_TIMEOUT_MS` | 5000 | 100..60000 |
 | `CARE_OPS_MAX_COMMAND_BODY_BYTES` | 32768 | 1024..1048576 |
 
+Optional features (off by default, ADR 0021):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CARE_OPS_LINE_CHANNEL_ID` | unset | numeric LINE Login channel ID of the field app. When set, bearer tokens whose unverified `iss` is not this project's Supabase Auth issuer are verified with LINE (`line:<userId>` principals); Supabase-issued tokens are still verified only by Supabase Auth. |
+| `CARE_OPS_FRAMEWORK_ENABLED` | `false` | `true` mounts the Framework API under `/api/framework/`. Apply `db/framework_store.sql` and `db/framework_records.sql` first; otherwise those routes answer `503 FRAMEWORK_UNAVAILABLE`. |
+
 The parser rejects:
 
 - non-HTTPS Supabase URLs in staging/production
@@ -185,6 +192,7 @@ The command reads only `process.env`, runs the same fail-closed deployment parse
 - tenant SLA policy count
 - effective outbound timeout
 - effective command body limit
+- whether LINE identity and the Framework API are enabled (never the channel ID value)
 
 It never prints publishable/service-role key values. A tracked `.env.example` documents the variable names while leaving credential values blank.
 

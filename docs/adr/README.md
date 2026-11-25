@@ -41,3 +41,4 @@ Add an ADR when changing:
 | [0019](0019-line-identity-and-staff-manual-signals.md) | LINE identity provider and staff manual-signal intake | Accepted |
 | [0020](0020-framework-module-boundary.md) | Mimamori Framework module boundary | Accepted |
 | [0018](0018-strict-browser-origin-boundary.md) | Strict browser origin boundary | Accepted |
+| [0021](0021-deployment-identity-routing-and-framework-mount.md) | Deployment identity routing and Framework mount | Proposed |

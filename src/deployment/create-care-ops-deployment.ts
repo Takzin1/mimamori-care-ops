@@ -53,6 +53,10 @@ export function createCareOpsDeployment(
         config.outboundTimeoutMs,
       maxCommandBodyBytes:
         config.maxCommandBodyBytes,
+      lineChannelId:
+        config.lineChannelId,
+      frameworkEnabled:
+        config.frameworkEnabled,
       fetchImpl:
         options.fetchImpl,
       requestIdFactory:

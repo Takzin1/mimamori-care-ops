@@ -77,6 +77,8 @@ test("deployment validation summary exposes only non-secret metadata", () => {
     tenantPolicyCount: 1,
     outboundTimeoutMs: 5000,
     maxCommandBodyBytes: 32768,
+    lineIdentityEnabled: false,
+    frameworkEnabled: false,
   });
 
   assert.equal(

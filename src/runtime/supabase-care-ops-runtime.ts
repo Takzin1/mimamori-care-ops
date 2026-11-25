@@ -28,6 +28,29 @@ import type {
 import {
   PostgrestCaseRepository,
 } from "../persistence/postgrest-case-repository.ts";
+import type {
+  PrincipalAuthenticator,
+} from "../identity/types.ts";
+import {
+  LineAccessTokenAuthenticator,
+} from "../identity/line-access-token-authenticator.ts";
+import {
+  IssuerRoutingAuthenticator,
+  supabaseAuthIssuer,
+} from "../identity/issuer-routing-authenticator.ts";
+import {
+  FrameworkHttpApi,
+  recordRoutes,
+} from "../framework/http/framework-http-api.ts";
+import {
+  FrameworkService,
+} from "../framework/framework-service.ts";
+import {
+  FrameworkRecordsService,
+} from "../framework/records-service.ts";
+import {
+  PostgrestFrameworkStore,
+} from "../framework/store/postgrest-framework-store.ts";
 
 type FetchLike = (
   input: string | URL,
@@ -47,7 +70,13 @@ export interface SupabaseCareOpsRuntimeOptions {
   maxCommandBodyBytes?: number;
   requestIdFactory?: RequestIdFactory;
   clock?: RuntimeClock;
+  /** When set, LINE Login access tokens are also accepted (ADR 0019 / 0021). */
+  lineChannelId?: string | null;
+  /** Mounts the Framework API under /api/framework/ (ADR 0020 / 0021). Off by default. */
+  frameworkEnabled?: boolean;
 }
+
+const FRAMEWORK_PATH_PREFIX = "/api/framework/";
 
 function requiredText(
   value: string,
@@ -96,6 +125,7 @@ function assertRuntimeConfig(
 
 export class SupabaseCareOpsRuntime {
   readonly #http: CareOpsHttpApi;
+  readonly #framework: FrameworkHttpApi | null;
 
   constructor(
     options: SupabaseCareOpsRuntimeOptions,
@@ -106,7 +136,7 @@ export class SupabaseCareOpsRuntime {
       options.clock ??
       (() => new Date().toISOString());
 
-    const authenticator =
+    const supabaseAuthenticator =
       new SupabaseAuthAuthenticator({
         baseUrl: options.supabaseUrl,
         publishableKey:
@@ -115,6 +145,28 @@ export class SupabaseCareOpsRuntime {
         requestTimeoutMs:
           options.outboundTimeoutMs,
       });
+
+    // Without a LINE channel the runtime behaves exactly as before (Supabase Auth only).
+    const authenticator: PrincipalAuthenticator =
+      options.lineChannelId
+        ? new IssuerRoutingAuthenticator({
+            supabaseIssuer:
+              supabaseAuthIssuer(
+                options.supabaseUrl,
+              ),
+            supabase:
+              supabaseAuthenticator,
+            fallback:
+              new LineAccessTokenAuthenticator({
+                channelId:
+                  options.lineChannelId,
+                fetchImpl:
+                  options.fetchImpl,
+                requestTimeoutMs:
+                  options.outboundTimeoutMs,
+              }),
+          })
+        : supabaseAuthenticator;
 
     const memberships =
       new PostgrestTenantMembershipDirectory({
@@ -170,11 +222,61 @@ export class SupabaseCareOpsRuntime {
       requestIdFactory:
         options.requestIdFactory,
     });
+
+    if (options.frameworkEnabled) {
+      const store =
+        new PostgrestFrameworkStore({
+          baseUrl: options.supabaseUrl,
+          serviceRoleKey:
+            options.serviceRoleKey,
+          fetchImpl: options.fetchImpl,
+          requestTimeoutMs:
+            options.outboundTimeoutMs,
+        });
+      const framework =
+        new FrameworkService({
+          store,
+          memberships,
+          caseService,
+          now,
+        });
+      const records =
+        new FrameworkRecordsService({
+          store,
+          memberships,
+          caseService,
+          now,
+        });
+
+      this.#framework =
+        new FrameworkHttpApi({
+          authenticator,
+          service: framework,
+          extraRoutes: [
+            recordRoutes(records),
+          ],
+          maxBodyBytes:
+            options.maxCommandBodyBytes,
+          requestIdFactory:
+            options.requestIdFactory,
+        });
+    } else {
+      this.#framework = null;
+    }
   }
 
   handle(
     request: Request,
   ): Promise<Response> {
+    if (
+      this.#framework &&
+      new URL(request.url).pathname.startsWith(
+        FRAMEWORK_PATH_PREFIX,
+      )
+    ) {
+      return this.#framework.handle(request);
+    }
+
     return this.#http.handle(request);
   }
 }
