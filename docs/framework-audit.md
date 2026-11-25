@@ -16,6 +16,14 @@ and tests in this session; unmerged PRs are **not** treated as production featur
 | kun #146 | open draft | LIFF startup/security candidate; CI green; **not real-device verified**. |
 | kun #147–#150 | open drafts (stacked on #146) | Stabilization, staff field app, training, Care Ops integration. CI green; not deployed. |
 
+Owner PRs opened after the first audit pass (re-checked 2026-11-25, all unmerged drafts on `main`):
+
+| PR | Scope | Relation to the Framework stack |
+|---|---|---|
+| #78 core-first MVP / docking | `src/framework/docking.ts` (first-party "dock" over the existing Care Ops client: queue/read/capabilities/execute), console "one next action" | Merges cleanly. Complementary: the field UI's Case operations use the same four operations, so it can become a dock once #78 lands. |
+| #79 principal/tenant/Case binding | `access/policy.ts`, `case-service.ts` (`assertMatchingPrincipalMembership`, `assertRequestedCase`) | One textual conflict with #75 in the `case-service.ts` import block; semantically compatible. The Framework applies the same membership-binding idea locally (`boundMembership`) so it does not depend on #79. |
+| #80 append-only Case events, #81 audit checkpoints | `db/case_store.sql`, `tests/postgres/bootstrap.sql`, `src/ops/audit-checkpoint.ts` | Both independently added the same bootstrap advisory lock as #75; #75 now uses the identical text, so both merge cleanly. |
+
 Merge relationships (checked with `git merge-tree`):
 
 - #74 + #75: one textual conflict in `src/access/policy.ts` (both add role lists after `hasAnyRole`). Semantically compatible: #74's `create_case`/`ingest_signal` roles equal #75's reporting roles. Resolution: keep both blocks.
