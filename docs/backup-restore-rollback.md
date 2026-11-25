@@ -36,6 +36,10 @@ Only then may the organization decide whether the restore process satisfies its 
 
 ### Case Store
 
+- Confirm the append-only Case-event trigger is installed and enabled after restoring to an isolated target; do not promote if missing
+- Confirm a synthetic privileged UPDATE/DELETE attempt is rejected before directing production traffic
+- Check for missing historical events (privileged TRUNCATE/DROP are not blocked by the row-level guard)
+
 For sampled/all affected Cases:
 
 - event sequence starts at 1

@@ -242,6 +242,40 @@ test(
       stored.snapshot,
     );
 
+    // P2-A: a privileged SQL operator must not casually rewrite an existing
+    // event record. The normal transactional RPC has already inserted two.
+    const originalEvent = sql(
+      "select event::text from public.care_case_events " +
+      "where tenant_id='provider-db' and case_id='case-db-001' " +
+      "and sequence=1;",
+    );
+    assert.throws(
+      () => sql(
+        "update public.care_case_events " +
+        "set event='{}'::jsonb " +
+        "where tenant_id='provider-db' and case_id='case-db-001' " +
+        "and sequence=1;",
+      ),
+      /Case event history is append-only/,
+    );
+    assert.throws(
+      () => sql(
+        "delete from public.care_case_events " +
+        "where tenant_id='provider-db' and case_id='case-db-001' " +
+        "and sequence=1;",
+      ),
+      /Case event history is append-only/,
+    );
+    assert.equal(sql(
+      "select event::text from public.care_case_events " +
+      "where tenant_id='provider-db' and case_id='case-db-001' " +
+      "and sequence=1;",
+    ), originalEvent);
+    assert.equal(sql(
+      "select count(*) from public.care_case_events " +
+      "where tenant_id='provider-db' and case_id='case-db-001';",
+    ), "2");
+
     const initialOutboxKeys = JSON.parse(
       sql(
         "select coalesce(json_agg(delivery_key order by id),'[]'::json)::text " +
