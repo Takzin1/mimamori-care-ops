@@ -11,6 +11,8 @@ export interface CareOpsDeploymentValidationSummary {
   tenantPolicyCount: number;
   outboundTimeoutMs: number;
   maxCommandBodyBytes: number;
+  lineIdentityEnabled: boolean;
+  frameworkEnabled: boolean;
 }
 
 export function validateCareOpsDeploymentEnvironment(
@@ -36,5 +38,9 @@ export function validateCareOpsDeploymentEnvironment(
       config.outboundTimeoutMs,
     maxCommandBodyBytes:
       config.maxCommandBodyBytes,
+    lineIdentityEnabled:
+      config.lineChannelId !== null,
+    frameworkEnabled:
+      config.frameworkEnabled,
   };
 }
